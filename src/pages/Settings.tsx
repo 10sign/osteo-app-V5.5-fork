@@ -49,8 +49,22 @@ const Settings: React.FC = () => {
     setShowSaveModal(false);
     
     try {
-      // Simulation de sauvegarde des paramètres généraux
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Sauvegarde réelle des paramètres généraux dans Firestore
+      if (!auth.currentUser) {
+        throw new Error('Utilisateur non authentifié');
+      }
+
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      await updateDoc(userRef, {
+        cabinetName: generalSettings.cabinetName,
+        firstName: generalSettings.firstName,
+        lastName: generalSettings.lastName,
+        email: generalSettings.email,
+        phone: generalSettings.phone,
+        address: generalSettings.address,
+        language: generalSettings.language,
+        updatedAt: new Date().toISOString()
+      });
       
       // Journalisation de la modification des paramètres
       await AuditLogger.log(
