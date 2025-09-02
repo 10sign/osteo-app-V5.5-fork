@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Lock, Database, Eye, EyeOff, Save, RefreshCw, CheckCircle, AlertTriangle, Info } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { Shield, Lock, Database, Eye, EyeOff, Save, RefreshCw, CheckCircle, AlertTriangle, Info, User } from 'lucide-react';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { auth, db, hdsConfig } from '../firebase/config';
 import { Button } from '../components/ui/Button';
 import HDSComplianceBadge from '../components/ui/HDSComplianceBadge';
@@ -14,16 +14,17 @@ const Settings: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean | null>(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [generalSettings, setGeneralSettings] = useState({
-    cabinetName: "Cabinet d'Ostéopathie",
-    firstName: "Julie",
-    lastName: "Boddaert",
-    email: "julie.boddaert@hotmail.fr",
-    phone: "06 12 34 56 78",
-    address: "123 rue de la Santé, 75014 Paris",
-    language: "fr"
+  const [loading, setLoading] = useState(true);
+  const [generalSettings, setGeneralSettings] = useState({ // Initialisation par défaut
+    cabinetName: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    address: '',
+    language: 'fr'
   });
-  
+
   // Paramètres de sécurité (simulés)
   const [securitySettings, setSecuritySettings] = useState({
     mfaEnabled: false,
@@ -34,16 +35,51 @@ const Settings: React.FC = () => {
   });
   
   const handleGeneralSettingsChange = (field: string, value: string) => {
+    // Empêcher la modification de l'email via ce formulaire
+    if (field === 'email') return;
     setGeneralSettings(prev => ({
       ...prev,
       [field]: value
     }));
   };
   
+  // Fonction pour charger les paramètres généraux de l'utilisateur
+  const loadUserSettings = async () => {
+    if (!auth.currentUser) {
+      console.warn('No authenticated user to load settings for.');
+      setLoading(false);
+      return;
+    }
+    try {
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      const userDoc = await getDoc(userRef);
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        setGeneralSettings(prev => ({
+          ...prev,
+          cabinetName: userData.cabinetName || prev.cabinetName,
+          firstName: userData.firstName || prev.firstName,
+          lastName: userData.lastName || prev.lastName,
+          phone: userData.phone || prev.phone,
+          address: userData.address || prev.address,
+          language: userData.language || prev.language,
+          email: auth.currentUser.email || prev.email // L'email vient de l'auth, pas du document
+        }));
+      } else {
+        // Si le document n'existe pas, utiliser les valeurs par défaut et l'email de l'utilisateur
+        setGeneralSettings(prev => ({ ...prev, email: auth.currentUser.email || prev.email }));
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des paramètres utilisateur:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSaveGeneralSettings = () => {
     setShowSaveModal(true);
   };
-  
+
   const confirmSaveSettings = async () => {
     setIsSaving(true);
     setSaveSuccess(null);
@@ -55,7 +91,7 @@ const Settings: React.FC = () => {
         throw new Error('Utilisateur non authentifié');
       }
 
-      const userRef = doc(db, 'users', auth.currentUser.uid);
+      const userRef = doc(db, 'users', auth.currentUser.uid); // Cible le document utilisateur
       await updateDoc(userRef, {
         cabinetName: generalSettings.cabinetName,
         firstName: generalSettings.firstName,
@@ -63,7 +99,7 @@ const Settings: React.FC = () => {
         email: generalSettings.email,
         phone: generalSettings.phone,
         address: generalSettings.address,
-        language: generalSettings.language,
+        language: generalSettings.language, // Assurez-vous que ce champ est bien géré
         updatedAt: new Date().toISOString()
       });
       
@@ -99,12 +135,12 @@ const Settings: React.FC = () => {
     }
   };
   
-  const handleSaveSettings = async () => {
+  // Fonction pour sauvegarder les paramètres de sécurité (simulation)
+  const handleSaveSecuritySettings = async () => {
     setIsSaving(true);
     setSaveSuccess(null);
     
     try {
-      // Simulation de sauvegarde
       await new Promise(resolve => setTimeout(resolve, 1500));
       
       // Journalisation de la modification des paramètres
@@ -138,6 +174,19 @@ const Settings: React.FC = () => {
       setIsSaving(false);
     }
   };
+  
+  // Charger les paramètres utilisateur au montage du composant
+  useEffect(() => {
+    loadUserSettings();
+  }, [auth.currentUser]); // Dépendance à auth.currentUser pour recharger si l'utilisateur change
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
   
   return (
     <div className="space-y-6">
@@ -188,13 +237,14 @@ const Settings: React.FC = () => {
             
             <div className="space-y-4">
               <div>
-                <label htmlFor="displayName" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="cabinetName" className="block text-sm font-medium text-gray-700">
                   Nom du cabinet
                 </label>
                 <input
                   type="text"
-                  id="displayName"
+                  id="cabinetName"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 input"
+                  placeholder="Nom de votre cabinet"
                   value={generalSettings.cabinetName}
                   onChange={(e) => handleGeneralSettingsChange('cabinetName', e.target.value)}
                 />
@@ -209,6 +259,7 @@ const Settings: React.FC = () => {
                     type="text"
                     id="firstName"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 input"
+                    placeholder="Votre prénom"
                     value={generalSettings.firstName}
                     onChange={(e) => handleGeneralSettingsChange('firstName', e.target.value)}
                   />
@@ -222,6 +273,7 @@ const Settings: React.FC = () => {
                     type="text"
                     id="lastName"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 input"
+                    placeholder="Votre nom"
                     value={generalSettings.lastName}
                     onChange={(e) => handleGeneralSettingsChange('lastName', e.target.value)}
                   />
@@ -235,8 +287,9 @@ const Settings: React.FC = () => {
                 <input
                   type="email"
                   id="email"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 input"
-                  value={generalSettings.email}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 input bg-gray-100"
+                  value={auth.currentUser?.email || generalSettings.email} // L'email vient de l'auth
+                  readOnly // L'email ne doit pas être modifiable ici
                   onChange={(e) => handleGeneralSettingsChange('email', e.target.value)}
                 />
               </div>
@@ -249,6 +302,7 @@ const Settings: React.FC = () => {
                   type="tel"
                   id="phone"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 input"
+                  placeholder="Votre numéro de téléphone"
                   value={generalSettings.phone}
                   onChange={(e) => handleGeneralSettingsChange('phone', e.target.value)}
                   placeholder="06 12 34 56 78"
@@ -264,6 +318,7 @@ const Settings: React.FC = () => {
                   rows={3}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 input"
                   value={generalSettings.address}
+                  placeholder="Votre adresse de cabinet"
                   onChange={(e) => handleGeneralSettingsChange('address', e.target.value)}
                   placeholder="123 rue de la Santé, 75014 Paris"
                 />
@@ -301,13 +356,13 @@ const Settings: React.FC = () => {
                 
                 <Button
                   variant="outline"
-                  onClick={() => setGeneralSettings({
-                    cabinetName: "Cabinet d'Ostéopathie",
-                    firstName: "Julie",
-                    lastName: "Boddaert",
-                    email: "julie.boddaert@hotmail.fr",
-                    phone: "06 12 34 56 78",
-                    address: "123 rue de la Santé, 75014 Paris",
+                  onClick={() => setGeneralSettings({ // Réinitialiser aux valeurs par défaut
+                    cabinetName: '',
+                    firstName: '',
+                    lastName: '',
+                    email: auth.currentUser?.email || '', // L'email vient de l'auth
+                    phone: '',
+                    address: '',
                     language: "fr"
                   })}
                 >
@@ -510,7 +565,7 @@ const Settings: React.FC = () => {
               
               <Button
                 variant="primary"
-                onClick={handleSaveSettings}
+                onClick={handleSaveSecuritySettings} // Appel de la fonction de sauvegarde de sécurité
                 isLoading={isSaving}
                 loadingText="Enregistrement..."
                 leftIcon={isSaving ? <RefreshCw size={16} /> : <Save size={16} />}
