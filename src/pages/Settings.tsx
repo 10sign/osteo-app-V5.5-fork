@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Lock, Database, Eye, EyeOff, Save, RefreshCw, CheckCircle, AlertTriangle, Info } from 'lucide-react';
+import { doc, updateDoc } from 'firebase/firestore';
+import { auth, db, hdsConfig } from '../firebase/config';
 import { Button } from '../components/ui/Button';
 import HDSComplianceBadge from '../components/ui/HDSComplianceBadge';
 import HDSComplianceInfo from '../components/ui/HDSComplianceInfo';
-import { hdsConfig, auth, db } from '../firebase/config';
-import { doc, updateDoc } from 'firebase/firestore';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 
 const Settings: React.FC = () => {
