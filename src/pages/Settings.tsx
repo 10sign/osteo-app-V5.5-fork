@@ -4,7 +4,8 @@ import { Shield, Lock, Database, Eye, EyeOff, Save, RefreshCw, CheckCircle, Aler
 import { Button } from '../components/ui/Button';
 import HDSComplianceBadge from '../components/ui/HDSComplianceBadge';
 import HDSComplianceInfo from '../components/ui/HDSComplianceInfo';
-import { hdsConfig } from '../firebase/config';
+import { hdsConfig, auth, db } from '../firebase/config';
+import { doc, updateDoc } from 'firebase/firestore';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 
 const Settings: React.FC = () => {
