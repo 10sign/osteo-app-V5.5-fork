@@ -25,7 +25,8 @@ import {
   RefreshCw,
   Shield,
   Pill,
-  AlertTriangle
+  AlertTriangle,
+  Image as ImageIcon
 } from 'lucide-react';
 import { doc, getDoc, collection, query, where, getDocs, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
@@ -40,6 +41,7 @@ import NewConsultationModal from '../../components/modals/NewConsultationModal';
 import EditConsultationModal from '../../components/modals/EditConsultationModal';
 import ViewConsultationModal from '../../components/modals/ViewConsultationModal';
 import DeleteConsultationModal from '../../components/modals/DeleteConsultationModal';
+import DocumentUploadManager from '../../components/ui/DocumentUploadManager';
 import { Patient, Consultation, Invoice } from '../../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -53,7 +55,7 @@ import { patientCache } from '../../utils/patientCache';
 import { trackEvent } from '../../lib/clarityClient';
 import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
 import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
-import { deleteDocument } from '../../utils/documentStorage';
+import { DocumentMetadata, deleteDocument } from '../../utils/documentStorage';
 import { uploadPatientFile, UploadProgress } from '../../utils/fileUpload';
 
 const PatientDetail: React.FC = () => {
@@ -96,6 +98,10 @@ const PatientDetail: React.FC = () => {
   const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState<number | null>(null);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+  const [documentSuccess, setDocumentSuccess] = useState<string | null>(null);
 
   // Mise à jour de l'heure actuelle toutes les secondes
   useEffect(() => {
@@ -413,6 +419,70 @@ const PatientDetail: React.FC = () => {
     }
   };
 
+  // Handle document upload success
+  const handleDocumentsUpdate = (documents: DocumentMetadata[]) => {
+    if (patient) {
+      setPatient(prev => prev ? { ...prev, documents } : null);
+      setDocumentSuccess('Document ajouté avec succès');
+      setTimeout(() => setDocumentSuccess(null), 3000);
+    }
+  };
+
+  // Handle document upload error
+  const handleDocumentError = (error: string) => {
+    setDocumentError(error);
+    setTimeout(() => setDocumentError(null), 5000);
+  };
+
+  // Handle document edit
+  const handleEditDocument = (index: number) => {
+    // For now, just show a placeholder - this would open an edit modal
+    console.log('Edit document at index:', index);
+  };
+
+  // Handle document deletion
+  const handleDeleteDocumentNew = async (index: number) => {
+    if (!patient || !patient.documents || !patient.documents[index]) return;
+
+    const document = patient.documents[index];
+    setIsDeleting(index);
+    setDocumentError(null);
+
+    try {
+      // Delete from storage if URL exists
+      if (document.url) {
+        // Extract file path from URL or use folder/name
+        const filePath = `${document.folder}/${document.name}`;
+        await deleteDocument(filePath);
+      }
+
+      // Update patient data - remove document from array
+      const updatedDocuments = patient.documents.filter((_, i) => i !== index);
+      
+      // Update in Firestore
+      const patientRef = doc(db, 'patients', patient.id);
+      await updateDoc(patientRef, {
+        documents: updatedDocuments,
+        updatedAt: new Date().toISOString()
+      });
+
+      // Update local state
+      setPatient(prev => prev ? { ...prev, documents: updatedDocuments } : null);
+      
+      // Show success message
+      setDocumentSuccess('Document supprimé');
+      setTimeout(() => setDocumentSuccess(null), 3000);
+
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      setDocumentError('Erreur lors de la suppression du document');
+      setTimeout(() => setDocumentError(null), 5000);
+    } finally {
+      setIsDeleting(null);
+      setShowDeleteConfirm(null);
+    }
+  };
+
   // Invoice handlers
   const handleEditInvoice = (invoiceId: string) => {
     setSelectedInvoiceId(invoiceId);
@@ -722,6 +792,21 @@ const PatientDetail: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Document Success/Error Messages */}
+      {documentSuccess && (
+        <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center">
+          <CheckCircle size={16} className="text-green-500 mr-2" />
+          <span className="text-green-700 text-sm">{documentSuccess}</span>
+        </div>
+      )}
+
+      {documentError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center">
+          <AlertCircle size={16} className="text-red-500 mr-2" />
+          <span className="text-red-700 text-sm">{documentError}</span>
+        </div>
+      )}
 
       {/* Patient overview card */}
       <div className="bg-white rounded-xl shadow p-6">
@@ -1862,106 +1947,119 @@ const PatientDetail: React.FC = () => {
         )}
 
         {activeTab === 'documents' && (
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-medium text-gray-900">Documents</h3>
-              <Button
-                variant="primary"
-                leftIcon={<Upload size={16} />}
-                onClick={() => setIsAddDocumentModalOpen(true)}
-              >
-                Ajouter un document
-              </Button>
+          <div className="space-y-6">
+            {/* Document Upload Section */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Documents médicaux</h3>
+              <DocumentUploadManager
+                patientId={patient.id}
+                initialDocuments={patient.documents || []}
+                onUploadSuccess={handleDocumentsUpdate}
+                onUploadError={handleDocumentError}
+                disabled={false}
+              />
             </div>
 
-            {/* Success/Error messages */}
-            {deleteSuccess && (
-              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-                {deleteSuccess}
+            {/* Documents List */}
+            <div className="bg-white rounded-lg shadow">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Documents du patient</h3>
               </div>
-            )}
-            
-            {deleteError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                {deleteError}
-              </div>
-            )}
-
-            {patient.documents && patient.documents.length > 0 ? (
-              <div className="space-y-4">
-                {patient.documents.map((document, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                    <div className="flex items-center">
-                      <FileText size={20} className="text-gray-400 mr-3" />
-                      <div>
-                        <div className="font-medium text-gray-900">{document.name}</div>
-                        <div className="text-sm text-gray-500">
-                          Ajouté le {formatDate(document.uploadedAt)}
+              <div className="p-6">
+                {patient.documents && patient.documents.length > 0 ? (
+                  <div className="space-y-4">
+                    {patient.documents.map((document, index) => (
+                      <div key={index} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <div className="flex-shrink-0">
+                            {document.type?.startsWith('image/') ? (
+                              <ImageIcon size={24} className="text-blue-500" />
+                            ) : (
+                              <FileText size={24} className="text-gray-500" />
+                            )}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-900">
+                              {document.originalName || document.name}
+                            </h4>
+                            <p className="text-sm text-gray-500">
+                              {document.size ? `${(document.size / (1024 * 1024)).toFixed(2)} MB` : 'Taille inconnue'}
+                              {document.category && ` • ${document.category}`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(document.url, '_blank')}
+                            leftIcon={<Eye size={14} />}
+                          >
+                            Voir
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const link = document.createElement('a');
+                              link.href = document.url;
+                              link.download = document.originalName || document.name;
+                              link.click();
+                            }}
+                            leftIcon={<Download size={14} />}
+                          >
+                            Télécharger
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditDocument(index)}
+                            leftIcon={<Edit size={14} />}
+                          >
+                            Modifier
+                          </Button>
+                          {showDeleteConfirm === index ? (
+                            <div className="flex space-x-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowDeleteConfirm(null)}
+                              >
+                                Annuler
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteDocumentNew(index)}
+                                isLoading={isDeleting === index}
+                                className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
+                              >
+                                Confirmer
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowDeleteConfirm(index)}
+                              leftIcon={<Trash2 size={14} />}
+                              className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
+                            >
+                              Supprimer
+                            </Button>
+                          )}
                         </div>
                       </div>
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        leftIcon={<Eye size={16} />}
-                        onClick={() => window.open(document.url, '_blank')}
-                      >
-                        Voir
-                      </Button>
-                      <a
-                        href={document.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary-600 hover:text-primary-700 text-sm"
-                      >
-                        Télécharger
-                      </a>
-                      
-                      {deleteConfirmId === document.id ? (
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => setDeleteConfirmId(null)}
-                            className="text-gray-600 hover:text-gray-800 text-sm"
-                          >
-                            Annuler
-                          </button>
-                          <button
-                            onClick={() => handleDeleteDocument(document.id, document.url)}
-                            disabled={deletingDocumentId === document.id}
-                            className="text-red-600 hover:text-red-800 text-sm font-medium"
-                          >
-                            {deletingDocumentId === document.id ? 'Suppression...' : 'Confirmer'}
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setDeleteConfirmId(document.id)}
-                          className="text-red-600 hover:text-red-800 text-sm"
-                        >
-                          Supprimer
-                        </button>
-                      )}
-                    </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <FileText size={48} className="mx-auto mb-4 text-gray-300" />
+                    <p>Aucun document médical</p>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="text-center py-12">
-                <FileText size={48} className="mx-auto text-gray-300 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-1">Aucun document</h3>
-                <p className="text-gray-500 mb-4">
-                  Aucun document n'a encore été ajouté pour ce patient.
-                </p>
-                <Button
-                  variant="primary"
-                  leftIcon={<Upload size={16} />}
-                  onClick={() => setIsAddDocumentModalOpen(true)}
-                >
-                  Ajouter le premier document
-                </Button>
-              </div>
-            )}
+            </div>
           </div>
         )}
       </div>
