@@ -27,7 +27,7 @@ import {
   Pill,
   AlertTriangle
 } from 'lucide-react';
-import { doc, getDoc, collection, query, where, getDocs, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../../components/ui/Button';
 import EditPatientModal from '../../components/modals/EditPatientModal';
@@ -53,6 +53,8 @@ import { patientCache } from '../../utils/patientCache';
 import { trackEvent } from '../../lib/clarityClient';
 import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
 import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
+import { deleteDocument } from '../../utils/documentStorage';
+import { uploadPatientFile, UploadProgress } from '../../utils/fileUpload';
 
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -88,6 +90,12 @@ const PatientDetail: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress>({ progress: 0, status: 'uploading' });
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Mise à jour de l'heure actuelle toutes les secondes
   useEffect(() => {
@@ -366,6 +374,43 @@ const PatientDetail: React.FC = () => {
     setIsAddDocumentModalOpen(false);
     // Reload patient data to show new document
     loadPatientData();
+  };
+
+  const handleDeleteDocument = async (documentId: string, documentUrl: string) => {
+    if (!patient) return;
+    
+    setDeletingDocumentId(documentId);
+    setDeleteError(null);
+    
+    try {
+      // Delete from Firebase Storage
+      await deleteDocument(documentUrl);
+      
+      // Update patient data to remove document reference
+      const updatedDocuments = patient.documents?.filter(doc => doc.id !== documentId) || [];
+      
+      await updateDoc(doc(db, 'patients', patient.id), {
+        documents: updatedDocuments,
+        updatedAt: new Date().toISOString()
+      });
+      
+      // Update local state
+      setPatient(prev => prev ? {
+        ...prev,
+        documents: updatedDocuments
+      } : null);
+      
+      setDeleteSuccess('Document supprimé');
+      setTimeout(() => setDeleteSuccess(null), 3000);
+      
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      setDeleteError('Erreur lors de la suppression du document');
+      setTimeout(() => setDeleteError(null), 5000);
+    } finally {
+      setDeletingDocumentId(null);
+      setDeleteConfirmId(null);
+    }
   };
 
   // Invoice handlers
@@ -1829,6 +1874,19 @@ const PatientDetail: React.FC = () => {
               </Button>
             </div>
 
+            {/* Success/Error messages */}
+            {deleteSuccess && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+                {deleteSuccess}
+              </div>
+            )}
+            
+            {deleteError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {deleteError}
+              </div>
+            )}
+
             {patient.documents && patient.documents.length > 0 ? (
               <div className="space-y-4">
                 {patient.documents.map((document, index) => (
@@ -1851,19 +1909,39 @@ const PatientDetail: React.FC = () => {
                       >
                         Voir
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        leftIcon={<Download size={16} />}
-                        onClick={() => {
-                          const link = document.createElement('a');
-                          link.href = document.url;
-                          link.download = document.originalName;
-                          link.click();
-                        }}
+                      <a
+                        href={document.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary-600 hover:text-primary-700 text-sm"
                       >
                         Télécharger
-                      </Button>
+                      </a>
+                      
+                      {deleteConfirmId === document.id ? (
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => setDeleteConfirmId(null)}
+                            className="text-gray-600 hover:text-gray-800 text-sm"
+                          >
+                            Annuler
+                          </button>
+                          <button
+                            onClick={() => handleDeleteDocument(document.id, document.url)}
+                            disabled={deletingDocumentId === document.id}
+                            className="text-red-600 hover:text-red-800 text-sm font-medium"
+                          >
+                            {deletingDocumentId === document.id ? 'Suppression...' : 'Confirmer'}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setDeleteConfirmId(document.id)}
+                          className="text-red-600 hover:text-red-800 text-sm"
+                        >
+                          Supprimer
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
