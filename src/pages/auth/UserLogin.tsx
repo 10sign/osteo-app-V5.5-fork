@@ -188,7 +188,7 @@ const UserLogin: React.FC = () => {
               value={formData.phone}
               onChange={handleChange}
               className="input"
-              placeholder="06 16 53 13 76"
+              placeholder="Numéro de téléphone"
               disabled={loading}
             />
             <p className="mt-1 text-xs text-gray-500">
