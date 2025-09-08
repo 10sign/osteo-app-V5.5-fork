@@ -315,6 +315,54 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       // Update cache
       patientCache.set(patientId, patientData as Patient);
 
+      // Move documents from temp folder to patient's permanent folder
+      if (patientDocuments.length > 0) {
+        console.log('Moving documents from temp folder to patient folder...');
+        const updatedDocuments: DocumentMetadata[] = [];
+        
+        for (const doc of patientDocuments) {
+          try {
+            // Check if document is in temp folder
+            if (doc.folder.includes('/temp/')) {
+              const oldPath = `${doc.folder}/${doc.name}`;
+              const newFolder = createFolderStructure(auth.currentUser.uid, 'patient', patientId);
+              const newPath = `${newFolder}/${doc.name}`;
+              
+              console.log(`Moving document from ${oldPath} to ${newPath}`);
+              
+              // Move file in Firebase Storage
+              const { moveFile } = await import('../../utils/documentStorage');
+              const newUrl = await moveFile(oldPath, newPath);
+              
+              // Update document metadata
+              const updatedDoc: DocumentMetadata = {
+                ...doc,
+                url: newUrl,
+                folder: newFolder
+              };
+              
+              updatedDocuments.push(updatedDoc);
+              console.log(`Document moved successfully: ${doc.name}`);
+            } else {
+              // Document is already in correct location
+              updatedDocuments.push(doc);
+            }
+          } catch (error) {
+            console.error(`Error moving document ${doc.name}:`, error);
+            // Keep original document metadata if move fails
+            updatedDocuments.push(doc);
+          }
+        }
+        
+        // Update patient data with corrected document paths
+        if (updatedDocuments.length > 0) {
+          patientData.documents = updatedDocuments;
+          
+          // Update Firestore with corrected document paths
+          await setDoc(doc(db, 'patients', patientId), patientData);
+          console.log('Patient document paths updated in Firestore');
+        }
+      }
       setProgress(100);
 
       // Afficher le message de succès
