@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { doc, getDoc, collection, query, where, getDocs, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
+import { deleteDocument } from '../../utils/documentStorage';
 import { Button } from '../../components/ui/Button';
 import EditPatientModal from '../../components/modals/EditPatientModal';
 import DeletePatientModal from '../../components/modals/DeletePatientModal';
@@ -43,7 +44,7 @@ import DeleteConsultationModal from '../../components/modals/DeleteConsultationM
 import { Patient, Consultation, Invoice } from '../../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { HDSCompliance } from '../../utils/hdsCompliance';
+import { doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { PatientService } from '../../services/patientService';
 import { ConsultationService } from '../../services/consultationService';
@@ -66,10 +67,6 @@ const PatientDetail: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isAddDocumentModalOpen, setIsAddDocumentModalOpen] = useState(false);
-  const [isDeletingDocument, setIsDeletingDocument] = useState(false);
-  const [documentToDelete, setDocumentToDelete] = useState<any>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
   const [isNewInvoiceModalOpen, setIsNewInvoiceModalOpen] = useState(false);
   const [isEditInvoiceModalOpen, setIsEditInvoiceModalOpen] = useState(false);
   const [isDeleteInvoiceModalOpen, setIsDeleteInvoiceModalOpen] = useState(false);
