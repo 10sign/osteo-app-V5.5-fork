@@ -290,7 +290,6 @@ const Settings: React.FC = () => {
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 input bg-gray-100"
                   value={auth.currentUser?.email || generalSettings.email} // L'email vient de l'auth
                   readOnly // L'email ne doit pas être modifiable ici
-                  onChange={(e) => handleGeneralSettingsChange('email', e.target.value)}
                 />
               </div>
               
@@ -307,6 +306,11 @@ const Settings: React.FC = () => {
                   onChange={(e) => handleGeneralSettingsChange('phone', e.target.value)}
                   placeholder="06 12 34 56 78"
                 />
+                {auth.currentUser?.email === 'julie.boddaert@hotmail.fr' && (
+                  <p className="mt-1 text-xs text-blue-600">
+                    Ce numéro peut être utilisé pour l'authentification renforcée
+                  </p>
+                )}
               </div>
               
               <div>

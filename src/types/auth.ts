@@ -4,6 +4,7 @@ export interface User {
   displayName?: string;
   firstName?: string;
   lastName?: string;
+  phone?: string;
   role: 'user' | 'admin' | 'substitute';
   permissions: string[];
   linkedTo?: string; // Pour les remplaçants : ID de l'ostéopathe titulaire
@@ -22,6 +23,7 @@ export interface AuthState {
 export interface LoginCredentials {
   email: string;
   password: string;
+  phone?: string;
   rememberMe?: boolean;
 }
 

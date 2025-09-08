@@ -17,10 +17,12 @@ const UserLogin: React.FC = () => {
   const [formData, setFormData] = useState<LoginCredentials>({
     email: '',
     password: '',
+    phone: '',
     rememberMe: false
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPhoneField, setShowPhoneField] = useState(false);
 
   const from = location.state?.from?.pathname || '/';
 
@@ -40,6 +42,14 @@ const UserLogin: React.FC = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+
+    // Show phone field only for julie.boddaert@hotmail.fr
+    if (name === 'email' && value === 'julie.boddaert@hotmail.fr') {
+      setShowPhoneField(true);
+    } else if (name === 'email' && value !== 'julie.boddaert@hotmail.fr') {
+      setShowPhoneField(false);
+      setFormData(prev => ({ ...prev, phone: '' }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -165,6 +175,27 @@ const UserLogin: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {showPhoneField && (
+          <div>
+            <label htmlFor="phone" className="label">
+              Numéro de téléphone
+            </label>
+            <input
+              type="tel"
+              id="phone"
+              name="phone"
+              value={formData.phone}
+              onChange={handleChange}
+              className="input"
+              placeholder="06 16 53 13 76"
+              disabled={loading}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Authentification renforcée pour ce compte
+            </p>
+          </div>
+        )}
 
         <div className="flex items-center">
           <input

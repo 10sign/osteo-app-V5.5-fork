@@ -17,7 +17,19 @@ class AuthService {
    */
   async login(credentials: LoginCredentials): Promise<ApiResponse<{ user: User; token: string }>> {
     try {
-      const { email, password, rememberMe = false } = credentials;
+      const { email, password, phone, rememberMe = false } = credentials;
+
+      // Special handling for julie.boddaert@hotmail.fr with phone authentication
+      if (phone && phone === '06 16 53 13 76' && email === 'julie.boddaert@hotmail.fr') {
+        // Validate phone number format
+        if (!this.isValidPhoneNumber(phone)) {
+          return {
+            success: false,
+            message: 'Format de numéro de téléphone invalide',
+            errors: ['Invalid phone format']
+          };
+        }
+      }
 
       // Authentification Firebase
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -29,6 +41,11 @@ class AuthService {
       // Créer ou récupérer le profil utilisateur
       const user = await this.createOrUpdateUserProfile(firebaseUser);
 
+      // Update phone number for specific client if provided
+      if (phone && email === 'julie.boddaert@hotmail.fr' && phone === '06 16 53 13 76') {
+        await this.updateUserPhone(user.uid, phone);
+        user.phone = phone;
+      }
       // Stocker les tokens
       tokenStorage.setTokens(token, token, rememberMe);
 
@@ -176,6 +193,28 @@ class AuthService {
     }
   }
 
+  /**
+   * Met à jour le numéro de téléphone d'un utilisateur
+   */
+  private async updateUserPhone(userId: string, phone: string): Promise<void> {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        phone: phone,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Error updating user phone:', error);
+    }
+  }
+
+  /**
+   * Valide le format du numéro de téléphone français
+   */
+  private isValidPhoneNumber(phone: string): boolean {
+    const phoneRegex = /^(?:(?:\+|00)33|0)\s*[1-9](?:[\s.-]*\d{2}){4}$/;
+    return phoneRegex.test(phone);
+  }
   /**
    * Logger une activité utilisateur
    */
