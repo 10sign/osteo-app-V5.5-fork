@@ -1,0 +1,824 @@
+/* ========================================
+   COMPOSANTS UI OSTEOAPP
+   ======================================== */
+
+/* Variables CSS pour cohérence */
+:root {
+  /* Couleurs principales */
+  --primary-50: #E5F2FF;
+  --primary-100: #CCE5FF;
+  --primary-200: #99CAFF;
+  --primary-300: #66B0FF;
+  --primary-400: #3395FF;
+  --primary-500: #0A84FF;
+  --primary-600: #0969C6;
+  --primary-700: #074F9E;
+  --primary-800: #053566;
+  --primary-900: #021A33;
+
+  --secondary-50: #E7F9F0;
+  --secondary-100: #CFF3E0;
+  --secondary-200: #9FE7C2;
+  --secondary-300: #6FDBA3;
+  --secondary-400: #3FCF85;
+  --secondary-500: #30D158;
+  --secondary-600: #26A746;
+  --secondary-700: #1D7D35;
+  --secondary-800: #135423;
+  --secondary-900: #0A2A12;
+
+  --accent-50: #FFF1E5;
+  --accent-100: #FFE3CC;
+  --accent-200: #FFC799;
+  --accent-300: #FFAB66;
+  --accent-400: #FF8F33;
+  --accent-500: #FF9500;
+  --accent-600: #CC7600;
+  --accent-700: #995700;
+  --accent-800: #663A00;
+  --accent-900: #331D00;
+
+  --success: #30D158;
+  --warning: #FF9F0A;
+  --error: #FF453A;
+
+  --gray-50: #F9FAFB;
+  --gray-100: #F3F4F6;
+  --gray-200: #E5E7EB;
+  --gray-300: #D1D5DB;
+  --gray-400: #9CA3AF;
+  --gray-500: #6B7280;
+  --gray-600: #4B5563;
+  --gray-700: #374151;
+  --gray-800: #1F2937;
+  --gray-900: #111827;
+
+  /* Espacements */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+
+  /* Rayons */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* Ombres */
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.08);
+  --shadow-card-hover: 0 4px 24px rgba(0, 0, 0, 0.12);
+  --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* ========================================
+   BOUTONS
+   ======================================== */
+
+.osteo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  text-decoration: none;
+  font-family: inherit;
+}
+
+/* Tailles de boutons */
+.osteo-btn-sm {
+  height: 2rem;
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+}
+
+.osteo-btn-md {
+  height: 2.5rem;
+  padding: 0 1rem;
+  font-size: 0.875rem;
+}
+
+.osteo-btn-lg {
+  height: 3rem;
+  padding: 0 1.5rem;
+  font-size: 1rem;
+}
+
+/* Variantes de boutons */
+.osteo-btn-primary {
+  background-color: var(--primary-500);
+  color: white;
+}
+
+.osteo-btn-primary:hover {
+  background-color: var(--primary-600);
+}
+
+.osteo-btn-primary:focus {
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
+}
+
+.osteo-btn-secondary {
+  background-color: var(--gray-100);
+  color: var(--gray-900);
+}
+
+.osteo-btn-secondary:hover {
+  background-color: var(--gray-200);
+}
+
+.osteo-btn-outline {
+  background-color: transparent;
+  color: var(--gray-900);
+  border: 1px solid var(--gray-300);
+}
+
+.osteo-btn-outline:hover {
+  background-color: var(--gray-100);
+}
+
+.osteo-btn-danger {
+  background-color: var(--error);
+  color: white;
+}
+
+.osteo-btn-danger:hover {
+  background-color: #E53E3E;
+}
+
+.osteo-btn-ghost {
+  background-color: transparent;
+  color: var(--gray-700);
+}
+
+.osteo-btn-ghost:hover {
+  background-color: var(--gray-100);
+}
+
+/* États des boutons */
+.osteo-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.osteo-btn-loading {
+  position: relative;
+  color: transparent;
+}
+
+.osteo-btn-loading::after {
+  content: '';
+  position: absolute;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* ========================================
+   CHAMPS DE FORMULAIRE
+   ======================================== */
+
+.osteo-input {
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--gray-300);
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  transition: all 0.2s ease-in-out;
+  background-color: white;
+  font-family: inherit;
+}
+
+.osteo-input:focus {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.1);
+}
+
+.osteo-input:disabled {
+  background-color: var(--gray-50);
+  color: var(--gray-500);
+  cursor: not-allowed;
+}
+
+.osteo-input.error {
+  border-color: var(--error);
+}
+
+.osteo-input.error:focus {
+  border-color: var(--error);
+  box-shadow: 0 0 0 3px rgba(255, 69, 58, 0.1);
+}
+
+.osteo-label {
+  display: block;
+  margin-bottom: var(--spacing-1);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--gray-700);
+}
+
+.osteo-error-message {
+  margin-top: var(--spacing-1);
+  font-size: 0.75rem;
+  color: var(--error);
+}
+
+/* ========================================
+   CARTES
+   ======================================== */
+
+.osteo-card {
+  background-color: white;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.2s ease-in-out;
+}
+
+.osteo-card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+.osteo-card-header {
+  margin-bottom: var(--spacing-4);
+  padding-bottom: var(--spacing-4);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.osteo-card-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--gray-900);
+  margin: 0;
+}
+
+.osteo-card-subtitle {
+  font-size: 0.875rem;
+  color: var(--gray-600);
+  margin-top: var(--spacing-1);
+}
+
+/* ========================================
+   MODALES
+   ======================================== */
+
+.osteo-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.osteo-modal {
+  background-color: white;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-modal);
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.osteo-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-6);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.osteo-modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.osteo-modal-close {
+  color: var(--gray-400);
+  transition: color 0.2s ease-in-out;
+  cursor: pointer;
+  padding: var(--spacing-2);
+  border-radius: var(--radius-md);
+}
+
+.osteo-modal-close:hover {
+  color: var(--gray-600);
+  background-color: var(--gray-100);
+}
+
+.osteo-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-6);
+}
+
+.osteo-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-3);
+  padding: var(--spacing-6);
+  border-top: 1px solid var(--gray-200);
+  background-color: var(--gray-50);
+}
+
+/* ========================================
+   BADGES ET STATUTS
+   ======================================== */
+
+.osteo-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.osteo-badge-primary {
+  background-color: var(--primary-100);
+  color: var(--primary-800);
+}
+
+.osteo-badge-secondary {
+  background-color: var(--secondary-100);
+  color: var(--secondary-800);
+}
+
+.osteo-badge-success {
+  background-color: #DCFCE7;
+  color: #166534;
+}
+
+.osteo-badge-warning {
+  background-color: #FEF3C7;
+  color: #92400E;
+}
+
+.osteo-badge-error {
+  background-color: #FEE2E2;
+  color: #991B1B;
+}
+
+.osteo-badge-gray {
+  background-color: var(--gray-100);
+  color: var(--gray-800);
+}
+
+/* ========================================
+   NAVIGATION ET ONGLETS
+   ======================================== */
+
+.osteo-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.osteo-tab {
+  padding: var(--spacing-4) var(--spacing-6);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--gray-500);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.osteo-tab:hover {
+  color: var(--gray-700);
+  border-bottom-color: var(--gray-300);
+}
+
+.osteo-tab.active {
+  color: var(--primary-600);
+  border-bottom-color: var(--primary-500);
+}
+
+/* ========================================
+   LISTES ET TABLEAUX
+   ======================================== */
+
+.osteo-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: white;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.osteo-table th {
+  background-color: var(--gray-50);
+  padding: var(--spacing-3) var(--spacing-6);
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.osteo-table td {
+  padding: var(--spacing-4) var(--spacing-6);
+  border-top: 1px solid var(--gray-200);
+}
+
+.osteo-table tr:hover {
+  background-color: var(--gray-50);
+}
+
+/* ========================================
+   ALERTES ET MESSAGES
+   ======================================== */
+
+.osteo-alert {
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: flex-start;
+}
+
+.osteo-alert-success {
+  background-color: #F0FDF4;
+  border: 1px solid #BBF7D0;
+  color: #166534;
+}
+
+.osteo-alert-warning {
+  background-color: #FFFBEB;
+  border: 1px solid #FED7AA;
+  color: #92400E;
+}
+
+.osteo-alert-error {
+  background-color: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: #991B1B;
+}
+
+.osteo-alert-info {
+  background-color: var(--primary-50);
+  border: 1px solid var(--primary-200);
+  color: var(--primary-800);
+}
+
+.osteo-alert-icon {
+  margin-right: var(--spacing-3);
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+/* ========================================
+   ZONES DE DRAG & DROP
+   ======================================== */
+
+.osteo-dropzone {
+  border: 2px dashed var(--gray-300);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-8);
+  text-align: center;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  background-color: white;
+}
+
+.osteo-dropzone:hover {
+  border-color: var(--primary-500);
+  background-color: var(--primary-50);
+}
+
+.osteo-dropzone.dragover {
+  border-color: var(--primary-500);
+  background-color: var(--primary-50);
+}
+
+.osteo-dropzone-icon {
+  color: var(--gray-400);
+  margin-bottom: var(--spacing-4);
+}
+
+.osteo-dropzone-text {
+  color: var(--gray-600);
+  font-size: 0.875rem;
+}
+
+.osteo-dropzone-help {
+  color: var(--gray-400);
+  font-size: 0.75rem;
+  margin-top: var(--spacing-2);
+}
+
+/* ========================================
+   LOADERS ET SPINNERS
+   ======================================== */
+
+.osteo-spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid var(--gray-200);
+  border-top: 2px solid var(--primary-500);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.osteo-spinner-sm {
+  width: 1rem;
+  height: 1rem;
+  border-width: 1px;
+}
+
+.osteo-spinner-lg {
+  width: 3rem;
+  height: 3rem;
+  border-width: 3px;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Skeleton loading */
+.osteo-skeleton {
+  background: linear-gradient(90deg, var(--gray-200) 25%, var(--gray-100) 50%, var(--gray-200) 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: var(--radius-md);
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ========================================
+   PROGRESS BARS
+   ======================================== */
+
+.osteo-progress {
+  width: 100%;
+  height: 0.5rem;
+  background-color: var(--gray-200);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.osteo-progress-bar {
+  height: 100%;
+  background-color: var(--primary-500);
+  transition: width 0.3s ease-in-out;
+  border-radius: 9999px;
+}
+
+.osteo-progress-success .osteo-progress-bar {
+  background-color: var(--success);
+}
+
+.osteo-progress-warning .osteo-progress-bar {
+  background-color: var(--warning);
+}
+
+.osteo-progress-error .osteo-progress-bar {
+  background-color: var(--error);
+}
+
+/* ========================================
+   TOOLTIPS
+   ======================================== */
+
+.osteo-tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.osteo-tooltip-content {
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--gray-900);
+  color: white;
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease-in-out;
+  z-index: 10;
+}
+
+.osteo-tooltip:hover .osteo-tooltip-content {
+  opacity: 1;
+  visibility: visible;
+}
+
+.osteo-tooltip-content::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: var(--gray-900);
+}
+
+/* ========================================
+   AVATARS ET INITIALES
+   ======================================== */
+
+.osteo-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 500;
+  background-color: var(--primary-100);
+  color: var(--primary-700);
+}
+
+.osteo-avatar-sm {
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.75rem;
+}
+
+.osteo-avatar-md {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 0.875rem;
+}
+
+.osteo-avatar-lg {
+  width: 3rem;
+  height: 3rem;
+  font-size: 1rem;
+}
+
+/* ========================================
+   RESPONSIVE UTILITIES
+   ======================================== */
+
+/* Masquer sur mobile */
+@media (max-width: 767px) {
+  .osteo-hidden-mobile {
+    display: none !important;
+  }
+}
+
+/* Masquer sur desktop */
+@media (min-width: 768px) {
+  .osteo-hidden-desktop {
+    display: none !important;
+  }
+}
+
+/* Grilles responsives */
+.osteo-grid-responsive {
+  display: grid;
+  gap: var(--spacing-4);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .osteo-grid-responsive {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .osteo-grid-responsive {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ========================================
+   ANIMATIONS SPÉCIALES
+   ======================================== */
+
+/* Animation de fade in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.osteo-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Animation de slide in */
+@keyframes slideIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.osteo-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Hover effects */
+.osteo-hover-lift {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.osteo-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* ========================================
+   FOCUS STATES
+   ======================================== */
+
+.osteo-focus-ring {
+  outline: none;
+}
+
+.osteo-focus-ring:focus {
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
+}
+
+.osteo-focus-ring:focus-visible {
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
+}
+
+/* ========================================
+   ÉTATS INTERACTIFS
+   ======================================== */
+
+.osteo-interactive {
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.osteo-interactive:hover {
+  transform: translateY(-1px);
+}
+
+.osteo-interactive:active {
+  transform: translateY(0);
+}
+
+/* ========================================
+   UTILITAIRES DE LAYOUT
+   ======================================== */
+
+.osteo-flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.osteo-flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.osteo-flex-start {
+  display: flex;
+  align-items: flex-start;
+}
+
+.osteo-flex-end {
+  display: flex;
+  align-items: flex-end;
+}
+
+/* ========================================
+   SCROLLBARS PERSONNALISÉES
+   ======================================== */
+
+.osteo-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.osteo-scrollbar::-webkit-scrollbar-track {
+  background: var(--gray-100);
+  border-radius: 4px;
+}
+
+.osteo-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--gray-300);
+  border-radius: 4px;
+}
+
+.osteo-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-400);
+}
