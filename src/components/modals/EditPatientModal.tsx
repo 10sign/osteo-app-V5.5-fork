@@ -19,6 +19,12 @@ interface EditPatientModalProps {
   patient: Patient;
 }
 
+interface PastAppointment {
+  date: string;
+  time: string;
+  notes: string;
+}
+
 const COMMON_PATHOLOGIES = [
   'Lombalgie',
   'Cervicalgie',
@@ -44,6 +50,13 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [treatmentHistory, setTreatmentHistory] = useState<TreatmentHistoryEntry[]>(
     patient.treatmentHistory || []
+  );
+  const [pastAppointments, setPastAppointments] = useState<PastAppointment[]>(
+    patient.pastAppointments?.map(app => ({
+      date: app.date.split('T')[0],
+      time: app.date.split('T')[1]?.slice(0, 5) || '',
+      notes: app.notes || ''
+    })) || []
   );
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>(
     patient.documents || []
@@ -104,6 +117,11 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
         // Set other state values
         setSelectedTags(patient.tags || []);
         setTreatmentHistory(patient.treatmentHistory || []);
+        setPastAppointments(patient.pastAppointments?.map(app => ({
+          date: app.date.split('T')[0],
+          time: app.date.split('T')[1]?.slice(0, 5) || '',
+          notes: app.notes || ''
+        })) || []);
         setPatientDocuments(patient.documents || []);
         
         // Trigger validation after initialization
@@ -174,6 +192,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
       saveFormData(formId, {
         formData,
         selectedTags,
+        pastAppointments,
         treatmentHistory
       });
     };
@@ -188,7 +207,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
       clearInterval(intervalId);
       saveData(); // Save on unmount
     };
-  }, [isOpen, watch, selectedTags, treatmentHistory, formId]);
+  }, [isOpen, watch, selectedTags, pastAppointments, treatmentHistory, formId]);
 
   // Fonction pour ajouter un traitement à l'historique
   const addTreatmentHistoryEntry = () => {
@@ -205,6 +224,21 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
     const updatedHistory = [...treatmentHistory];
     updatedHistory[index] = { ...updatedHistory[index], [field]: value };
     setTreatmentHistory(updatedHistory);
+  };
+
+  // Fonctions pour gérer les rendez-vous passés
+  const addPastAppointment = () => {
+    setPastAppointments([...pastAppointments, { date: '', time: '', notes: '' }]);
+  };
+
+  const removePastAppointment = (index: number) => {
+    setPastAppointments(pastAppointments.filter((_, i) => i !== index));
+  };
+
+  const updatePastAppointment = (index: number, field: keyof PastAppointment, value: string) => {
+    const updatedAppointments = [...pastAppointments];
+    updatedAppointments[index] = { ...updatedAppointments[index], [field]: value };
+    setPastAppointments(updatedAppointments);
   };
 
   const handleDocumentsUpdate = (documents: DocumentMetadata[]) => {
@@ -264,6 +298,19 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
       // Only add treatmentHistory if it has entries to avoid undefined
       if (treatmentHistory.length > 0) {
         updatedData.treatmentHistory = treatmentHistory;
+      }
+
+      // Format past appointments
+      const formattedPastAppointments = pastAppointments
+        .filter(app => app.date && app.time) // Only include appointments with date and time
+        .map(app => ({
+          date: `${app.date}T${app.time}:00`,
+          notes: app.notes,
+          isHistorical: true
+        }));
+
+      if (formattedPastAppointments.length > 0) {
+        updatedData.pastAppointments = formattedPastAppointments;
       }
 
       // Ajouter les documents si présents
@@ -665,6 +712,82 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                   ) : (
                     <p className="text-sm text-gray-500 italic">
                       Aucun historique de traitement enregistré
+                    </p>
+                  )}
+                </div>
+
+                {/* Rendez-vous passés */}
+                <div className="border-t pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Rendez-vous passés
+                    </label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addPastAppointment}
+                      leftIcon={<Plus size={16} />}
+                    >
+                      Ajouter un rendez-vous passé
+                    </Button>
+                  </div>
+
+                  {pastAppointments.length > 0 ? (
+                    <div className="space-y-4">
+                      {pastAppointments.map((appointment, index) => (
+                        <div key={index} className="border border-gray-200 rounded-lg p-4 relative">
+                          <button
+                            type="button"
+                            onClick={() => removePastAppointment(index)}
+                            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Date
+                              </label>
+                              <input
+                                type="date"
+                                value={appointment.date}
+                                onChange={(e) => updatePastAppointment(index, 'date', e.target.value)}
+                                className="input w-full"
+                                max={new Date().toISOString().split('T')[0]}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Heure
+                              </label>
+                              <input
+                                type="time"
+                                value={appointment.time}
+                                onChange={(e) => updatePastAppointment(index, 'time', e.target.value)}
+                                className="input w-full"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Notes
+                            </label>
+                            <textarea
+                              value={appointment.notes}
+                              onChange={(e) => updatePastAppointment(index, 'notes', e.target.value)}
+                              className="input w-full resize-none"
+                              rows={2}
+                              placeholder="Motif du rendez-vous, traitement effectué..."
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">
+                      Aucun rendez-vous passé enregistré
                     </p>
                   )}
                 </div>
