@@ -983,7 +983,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                 {/* Prochain rendez-vous */}
                 <div>
                   <label htmlFor="nextAppointment" className="block text-sm font-medium text-gray-700 mb-1">
-                    Prochaine consultation
+                    Jour et heure de consultation
                   </label>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
