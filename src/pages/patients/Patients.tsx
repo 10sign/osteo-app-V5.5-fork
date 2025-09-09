@@ -130,6 +130,20 @@ const Patients: React.FC = () => {
     setSelectedFilter(filter);
   };
 
+  const isUpcomingAppointment = (date: string) => {
+    try {
+      const appointmentDate = new Date(date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      // Vérifier que le rendez-vous est vraiment dans le futur (pas juste aujourd'hui)
+      const now = new Date();
+      return appointmentDate > now;
+    } catch (error) {
+      console.error('Error checking upcoming appointment:', date);
+      return false;
+    }
+  };
+
   // ✅ Client-side filtering and sorting
   const filteredPatients = patients.filter(patient => {
     const fullName = `${patient.firstName} ${patient.lastName}`.toLowerCase();
@@ -200,20 +214,6 @@ const Patients: React.FC = () => {
     } catch (error) {
       console.error('Error formatting appointment date:', date);
       return 'Date invalide';
-    }
-  };
-
-  const isUpcomingAppointment = (date: string) => {
-    try {
-      const appointmentDate = new Date(date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      // Vérifier que le rendez-vous est vraiment dans le futur (pas juste aujourd'hui)
-      const now = new Date();
-      return appointmentDate > now;
-    } catch (error) {
-      console.error('Error checking upcoming appointment:', date);
-      return false;
     }
   };
 
