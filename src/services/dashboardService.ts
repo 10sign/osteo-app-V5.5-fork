@@ -139,7 +139,7 @@ export class DashboardService {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      // Utiliser une requête simple pour éviter l'erreur d'index manquant
+      // Récupérer les consultations du jour (pas les appointments)
       const consultationsRef = collection(db, 'consultations');
       const q = query(
         consultationsRef,
@@ -150,7 +150,28 @@ export class DashboardService {
       
       // Filtrer manuellement par date
       const todayConsultations = snapshot.docs.filter(doc => {
-        const consultationDate = doc.data().date?.toDate ? doc.data().date.toDate() : new Date(doc.data().date);
+        const data = doc.data();
+        let consultationDate: Date;
+        
+        // Gestion robuste des formats de date
+        if (data.date?.toDate) {
+          consultationDate = data.date.toDate();
+        } else if (data.date?.seconds) {
+          consultationDate = new Date(data.date.seconds * 1000);
+        } else if (typeof data.date === 'string') {
+          consultationDate = new Date(data.date);
+        } else if (data.date instanceof Date) {
+          consultationDate = data.date;
+        } else {
+          console.warn('Invalid date format in consultation:', doc.id, data.date);
+          return false;
+        }
+        
+        if (isNaN(consultationDate.getTime())) {
+          console.warn('Invalid date value in consultation:', doc.id, data.date);
+          return false;
+        }
+        
         return consultationDate >= today && consultationDate < tomorrow;
       });
       
@@ -158,32 +179,7 @@ export class DashboardService {
     } catch (error) {
       console.error('Error getting today consultations:', error);
       
-      // Fallback: utiliser getDocs si getCountFromServer échoue
-      try {
-        const consultationsRef = collection(db, 'consultations');
-        const q = query(
-          consultationsRef,
-          where('osteopathId', '==', userId)
-        );
-        
-        const snapshot = await getDocs(q);
-        
-        // Filtrer manuellement par date
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        
-        const todayConsultations = snapshot.docs.filter(doc => {
-          const consultationDate = doc.data().date?.toDate ? doc.data().date.toDate() : new Date(doc.data().date);
-          return consultationDate >= today && consultationDate < tomorrow;
-        });
-        
-        return todayConsultations.length;
-      } catch (fallbackError) {
-        console.error('Fallback error getting today consultations:', fallbackError);
-        return 0;
-      }
+      return 0;
     }
   }
   

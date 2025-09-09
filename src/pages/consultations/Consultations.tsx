@@ -294,6 +294,13 @@ const Consultations: React.FC = () => {
         try {
           const consultationData = docSnapshot.data();
           
+          console.log('📋 Processing consultation:', docSnapshot.id, {
+            patientId: consultationData.patientId,
+            date: consultationData.date,
+            status: consultationData.status,
+            osteopathId: consultationData.osteopathId
+          });
+          
           if (!consultationData.patientId) {
             console.warn('❌ Missing patientId for consultation:', docSnapshot.id);
             invalidConsultations.push({ id: docSnapshot.id, reason: 'Missing patientId' });
@@ -321,6 +328,7 @@ const Consultations: React.FC = () => {
           let endTime: Date;
 
           try {
+            // Gestion robuste des formats de date
             if (consultationData.date?.toDate) {
               consultationDate = consultationData.date.toDate();
             } else if (consultationData.date?.seconds) {
@@ -330,10 +338,12 @@ const Consultations: React.FC = () => {
             } else if (consultationData.date instanceof Date) {
               consultationDate = consultationData.date;
             } else {
+              console.warn('Invalid date format for consultation:', docSnapshot.id, consultationData.date);
               throw new Error('Invalid date format');
             }
 
             if (isNaN(consultationDate.getTime())) {
+              console.warn('Invalid date value for consultation:', docSnapshot.id, consultationData.date);
               throw new Error('Invalid date value');
             }
 
@@ -353,7 +363,7 @@ const Consultations: React.FC = () => {
             continue;
           }
 
-          // ✅ Validation optionnelle du patient (ne pas bloquer si le patient n'existe plus)
+          // Validation du patient
           let patientExists = true;
           let patientName = consultationData.patientName || 'Patient inconnu';
 
@@ -366,7 +376,6 @@ const Consultations: React.FC = () => {
               } else {
                 console.warn('⚠️ Patient not found for consultation:', docSnapshot.id, consultationData.patientId);
                 patientExists = false;
-                // Ne pas exclure la consultation, juste marquer le patient comme inconnu
                 patientName = consultationData.patientName || 'Patient supprimé';
               }
             } catch (patientError) {
@@ -376,7 +385,7 @@ const Consultations: React.FC = () => {
             }
           }
 
-          // ✅ Création de l'objet rendez-vous mappé depuis la consultation
+          // Création de l'objet rendez-vous mappé depuis la consultation
           const mappedAppointment: Appointment = {
             id: docSnapshot.id,
             patientId: consultationData.patientId || '',
@@ -411,7 +420,7 @@ const Consultations: React.FC = () => {
         }
       }
 
-      // ✅ Tri par date (ascendant pour un meilleur affichage dans le calendrier)
+      // Tri par date (ascendant pour un meilleur affichage dans le calendrier)
       mappedConsultationsData.sort((a, b) => a.date.getTime() - b.date.getTime());
 
       console.log('📈 Final consultations summary:', {
