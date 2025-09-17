@@ -269,6 +269,62 @@ export class InvoiceService {
   }
   
   /**
+   * Vérifie si une facture existe déjà pour une consultation
+   */
+  static async hasInvoiceForConsultation(consultationId: string): Promise<boolean> {
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    try {
+      const invoicesRef = collection(db, 'invoices');
+      const q = query(
+        invoicesRef,
+        where('consultationId', '==', consultationId),
+        where('osteopathId', '==', auth.currentUser.uid)
+      );
+      
+      const snapshot = await getDocs(q);
+      return !snapshot.empty;
+    } catch (error) {
+      console.error('❌ Failed to check invoice for consultation:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Récupère la facture associée à une consultation
+   */
+  static async getInvoiceByConsultationId(consultationId: string): Promise<any | null> {
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    try {
+      const invoicesRef = collection(db, 'invoices');
+      const q = query(
+        invoicesRef,
+        where('consultationId', '==', consultationId),
+        where('osteopathId', '==', auth.currentUser.uid)
+      );
+      
+      const snapshot = await getDocs(q);
+      if (snapshot.empty) {
+        return null;
+      }
+      
+      const doc = snapshot.docs[0];
+      return {
+        id: doc.id,
+        ...doc.data()
+      };
+    } catch (error) {
+      console.error('❌ Failed to get invoice for consultation:', error);
+      return null;
+    }
+  }
+
+  /**
    * Vérifie si un patient a des factures
    */
   static async hasPatientInvoices(patientId: string): Promise<boolean> {
