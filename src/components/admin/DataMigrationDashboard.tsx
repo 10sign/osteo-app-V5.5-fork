@@ -30,7 +30,6 @@ const DataMigrationDashboard: React.FC = () => {
   const [integrityLoading, setIntegrityLoading] = useState(false);
   const [repairLoading, setRepairLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [retroactiveCreationResult, setRetroactiveCreationResult] = useState<any>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [step, setStep] = useState<'report' | 'migrate' | 'verify' | 'repair' | 'complete'>('report');
   const [cleanupStats, setCleanupStats] = useState<any>(null);
@@ -161,29 +160,6 @@ const DataMigrationDashboard: React.FC = () => {
     }
   };
 
-  // Créer rétroactivement consultations et factures
-  const createRetroactiveData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      setSuccess(null);
-      setRetroactiveCreationResult(null);
-
-      const results = await DataMigrationService.createRetroactiveConsultationsAndInvoices();
-      setRetroactiveCreationResult(results);
-      setSuccess('Création rétroactive terminée avec succès.');
-
-      // Recharger le rapport de migration pour refléter les nouvelles données
-      await loadMigrationReport();
-
-    } catch (error) {
-      console.error('Error creating retroactive data:', error);
-      setError('Erreur lors de la création rétroactive des données.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Nettoyer les données de test
   const cleanupTestData = async () => {
     try {
@@ -233,7 +209,6 @@ const DataMigrationDashboard: React.FC = () => {
     trackMatomoEvent('Data Migration', 'Report Exported');
     trackGAEvent('migration_report_exported');
   };
-
 
   return (
     <div className="space-y-6">
@@ -563,35 +538,6 @@ const DataMigrationDashboard: React.FC = () => {
           </Button>
         </div>
       )}
-
-      {/* Section pour la création rétroactive */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-          <Calendar size={20} className="mr-2 text-primary-600" />
-          Création rétroactive de consultations et factures
-        </h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Cette action va parcourir tous les patients existants et créer une consultation et une facture de 55€
-          pour la date de création de leur dossier, si elles n'existent pas déjà.
-        </p>
-        <Button
-          variant="primary"
-          onClick={createRetroactiveData}
-          isLoading={loading && !retroactiveCreationResult}
-          loadingText="Création en cours..."
-          disabled={loading && !retroactiveCreationResult}
-        >
-          Lancer la création rétroactive
-        </Button>
-        {retroactiveCreationResult && (
-          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-            <CheckCircle size={16} className="mr-2" />
-            {`Traitement terminé : ${retroactiveCreationResult.consultationsCreated} consultations et ${retroactiveCreationResult.invoicesCreated} factures créées.`}
-          </div>
-        )}
-      </div>
-
-
 
       {/* Résultats de migration */}
       {migrationStats && (

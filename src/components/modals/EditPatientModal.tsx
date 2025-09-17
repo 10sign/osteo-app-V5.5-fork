@@ -61,22 +61,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>(
     patient.documents || []
   );
-  const [clickCount, setClickCount] = useState(0);
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
   const formId = `edit_patient_${patient.id}`;
-  
-  // État initial pour comparaison
-  const [initialState, setInitialState] = useState({
-    tags: patient.tags || [],
-    treatmentHistory: patient.treatmentHistory || [],
-    pastAppointments: patient.pastAppointments?.map(app => ({
-      date: app.date.split('T')[0],
-      time: app.date.split('T')[1]?.slice(0, 5) || '',
-      notes: app.notes || ''
-    })) || [],
-    documents: patient.documents || []
-  });
 
   const handleAddTag = (tag: string) => {
     if (!selectedTags.includes(tag)) {
@@ -96,7 +81,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
     }
   };
 
-  const { register, handleSubmit, formState: { errors, isValid, isDirty }, reset, trigger, watch, setValue } = useForm({
+  const { register, handleSubmit, formState: { errors, isValid }, reset, trigger, watch, setValue } = useForm({
     mode: 'onChange',
     defaultValues: {
       firstName: patient.firstName || '',
@@ -201,38 +186,9 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   useEffect(() => {
     if (!isOpen) return;
 
-    // Détecter les changements par rapport à l'état initial
-    const detectChanges = () => {
-      // Utiliser isDirty de react-hook-form pour les champs du formulaire
-      const hasFormChanges = isDirty;
-      
-      // Comparer les listes avec leur état initial
-      const hasTagChanges = JSON.stringify(selectedTags.sort()) !== JSON.stringify(initialState.tags.sort());
-      const hasTreatmentChanges = JSON.stringify(treatmentHistory) !== JSON.stringify(initialState.treatmentHistory);
-      const hasAppointmentChanges = JSON.stringify(pastAppointments) !== JSON.stringify(initialState.pastAppointments);
-      const hasDocumentChanges = patientDocuments.length !== initialState.documents.length;
-      
-      const hasAnyChanges = hasFormChanges || hasTagChanges || hasTreatmentChanges || hasAppointmentChanges || hasDocumentChanges;
-      
-      console.log('Edit patient - Changes detection:', {
-        hasFormChanges,
-        hasTagChanges,
-        hasTreatmentChanges,
-        hasAppointmentChanges,
-        hasDocumentChanges,
-        isDirty,
-        hasAnyChanges
-      });
-      
-      setHasChanges(hasAnyChanges);
-      return hasAnyChanges;
-    };
-    
-    // Détecter immédiatement
-    detectChanges();
+    const formData = watch();
     
     const saveData = () => {
-      const formData = watch();
       saveFormData(formId, {
         formData,
         selectedTags,
@@ -251,116 +207,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
       clearInterval(intervalId);
       saveData(); // Save on unmount
     };
-  }, [isOpen, watch, selectedTags, pastAppointments, treatmentHistory, patientDocuments, isDirty, initialState]);
-
-  // Gérer le clic extérieur avec double-clic
-  const handleBackdropClick = () => {
-    if (!hasChanges) {
-      // Pas de changements, fermer directement
-      onClose();
-      return;
-    }
-
-    setClickCount(prev => {
-      const newCount = prev + 1;
-      
-      if (newCount === 1) {
-        // Premier clic - ne rien faire, juste incrémenter
-        setTimeout(() => setClickCount(0), 2000); // Reset après 2 secondes
-        return newCount;
-      } else if (newCount >= 2) {
-        // Deuxième clic - afficher la confirmation
-        setShowConfirmation(true);
-        return 0; // Reset le compteur
-      }
-      
-      return newCount;
-    });
-  };
-
-  // Gérer la fermeture avec vérification
-  const handleClose = () => {
-    if (!hasChanges) {
-      // Pas de changements, fermer directement
-      onClose();
-      return;
-    }
-
-    // Il y a des changements, afficher la confirmation
-    setShowConfirmation(true);
-  };
-
-  // Confirmer la fermeture sans sauvegarder
-  const handleConfirmClose = () => {
-    console.log('User confirmed close without saving edits');
-    setShowConfirmation(false);
-    
-    // Clear saved form data
-    try {
-      clearFormData(formId);
-      console.log('Cleared form data on confirmed close');
-    } catch (error) {
-      console.error('Error clearing form data:', error);
-    }
-    
-    // Reset state
-    setShowConfirmation(false);
-    setHasChanges(false);
-    setClickCount(0);
-    
-    onClose();
-  };
-
-  // Annuler la fermeture et continuer l'édition
-  const handleCancelClose = () => {
-    console.log('User cancelled close, continuing editing');
-    setShowConfirmation(false);
-    setClickCount(0);
-  };
-
-  // Fonction pour obtenir la valeur originale d'un champ
-  const getOriginalValue = (key: string) => {
-    switch (key) {
-      case 'firstName':
-        return patient.firstName || '';
-      case 'lastName':
-        return patient.lastName || '';
-      case 'dateOfBirth':
-        return patient.dateOfBirth || '';
-      case 'profession':
-        return patient.profession || '';
-      case 'gender':
-        return patient.gender || '';
-      case 'email':
-        return patient.email || '';
-      case 'address':
-        return patient.address?.street || '';
-      case 'phone':
-        return patient.phone || '';
-      case 'medicalHistory':
-        return patient.medicalHistory || '';
-      case 'insurance':
-        return patient.insurance?.provider || '';
-      case 'insuranceNumber':
-        return patient.insurance?.policyNumber || '';
-      case 'notes':
-        return patient.notes || '';
-      case 'nextAppointment':
-        return patient.nextAppointment ? patient.nextAppointment.split('T')[0] : '';
-      case 'nextAppointmentTime':
-        return patient.nextAppointment ? patient.nextAppointment.split('T')[1]?.slice(0, 5) : '';
-      case 'currentTreatment':
-        return patient.currentTreatment || '';
-      case 'consultationReason':
-        return patient.consultationReason || '';
-      case 'medicalAntecedents':
-        return patient.medicalAntecedents || '';
-      case 'osteopathicTreatment':
-        return patient.osteopathicTreatment || '';
-      default:
-        return '';
-    }
-  };
+  }, [isOpen, watch, selectedTags, pastAppointments, treatmentHistory, formId]);
 
   // Fonction pour ajouter un traitement à l'historique
   const addTreatmentHistoryEntry = () => {
@@ -446,40 +293,61 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
         currentTreatment: data.currentTreatment,
         consultationReason: data.consultationReason,
         medicalAntecedents: data.medicalAntecedents,
-        treatmentHistory: treatmentHistory.filter(entry => entry.date && entry.treatment),
-        pastAppointments: pastAppointments
-          .filter(app => app.date && app.notes)
-          .map(app => ({
-            date: `${app.date}T${app.time || '00:00'}:00`,
-            notes: app.notes
-          })),
-        documents: patientDocuments
       };
-
-      console.log('Updating patient with data:', updatedData);
-
-      const patientRef = doc(db, 'patients', patient.id);
-      await updateDoc(patientRef, updatedData);
-
-      console.log('Patient updated successfully');
-      setSuccess('Dossier patient mis à jour avec succès !');
       
-      // Clear saved form data after successful submission
-      try {
-        clearFormData(formId);
-        console.log('Cleared form data after successful update');
-      } catch (error) {
-        console.error('Error clearing form data:', error);
+      // Only add treatmentHistory if it has entries to avoid undefined
+      if (treatmentHistory.length > 0) {
+        updatedData.treatmentHistory = treatmentHistory;
       }
 
-      setTimeout(() => {
-        onSuccess();
-        onClose();
-      }, 1500);
+      // Format past appointments
+      const formattedPastAppointments = pastAppointments
+        .filter(app => app.date && app.time) // Only include appointments with date and time
+        .map(app => ({
+          date: `${app.date}T${app.time}:00`,
+          notes: app.notes,
+          isHistorical: true
+        }));
 
-    } catch (error) {
+      if (formattedPastAppointments.length > 0) {
+        updatedData.pastAppointments = formattedPastAppointments;
+      }
+
+      // Ajouter les documents si présents
+      if (patientDocuments.length > 0) {
+        updatedData.documents = patientDocuments.map(doc => ({
+          ...doc
+        }));
+      }
+
+      console.log('Updating patient document...', { patientId: patient.id, updatedData });
+      
+      const patientRef = doc(db, 'patients', patient.id);
+      
+      try {
+        await updateDoc(patientRef, updatedData);
+        console.log('Patient updated successfully:', patient.id);
+
+        // Afficher le message de succès
+        setSuccess('Les modifications ont été enregistrées avec succès');
+        
+        // Clear saved form data
+        clearFormData(formId);
+        
+        // Attendre 2 secondes avant de fermer le modal
+        setTimeout(() => {
+          onSuccess();
+          onClose();
+        }, 2000);
+      } catch (updateError: any) {
+        console.error('Error updating patient document:', updateError);
+        setError(`Erreur lors de la mise à jour du document patient: ${updateError.message}`);
+      }
+    } catch (error: any) {
       console.error('Error updating patient:', error);
-      setError('Erreur lors de la mise à jour du dossier patient. Veuillez réessayer.');
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      setError('Erreur lors de la mise à jour du dossier patient: ' + error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -494,7 +362,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={handleBackdropClick}
+            onClick={onClose}
           />
 
           <motion.div
@@ -507,7 +375,10 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">Modifier le dossier patient</h2>
               <button
-                onClick={handleClose}
+                onClick={() => {
+                  // Keep form data on close
+                  onClose();
+                }}
                 className="text-gray-400 hover:text-gray-500 transition-colors"
               >
                 <X size={20} />
@@ -1012,7 +883,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
 
                 <div>
                   <label htmlFor="nextAppointment" className="block text-sm font-medium text-gray-700 mb-1">
-                    Jour et heure de consultation
+                    Prochaine consultation
                   </label>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -1065,7 +936,10 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
               <Button
                 variant="outline"
-                onClick={handleClose}
+                onClick={() => {
+                  // Keep form data on cancel
+                  onClose();
+                }}
                 disabled={isSubmitting}
               >
                 Annuler
@@ -1084,57 +958,6 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
           </motion.div>
         </div>
       )}
-      
-      {/* Modal de confirmation pour fermeture */}
-      <AnimatePresence>
-        {showConfirmation && (
-          <div className="fixed inset-0 z-60 flex items-center justify-center">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ type: 'spring', duration: 0.5 }}
-              className="relative w-full max-w-md bg-white rounded-xl shadow-2xl"
-            >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Confirmer la fermeture</h3>
-              </div>
-
-              <div className="px-6 py-4">
-                <p className="text-gray-700 mb-4">
-                  Vous avez modifié des informations dans ce dossier patient. 
-                  Voulez-vous vraiment fermer et perdre ces modifications ?
-                </p>
-                <p className="text-sm text-gray-600 mb-2">
-                  <strong>Astuce :</strong> Cliquez deux fois à l'extérieur du formulaire pour afficher cette confirmation.
-                </p>
-              </div>
-
-              <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
-                <Button
-                  variant="outline"
-                  onClick={handleCancelClose}
-                >
-                  Continuer l'édition
-                </Button>
-                <Button
-                  variant="danger"
-                  onClick={handleConfirmClose}
-                >
-                  Fermer et perdre les modifications
-                </Button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </AnimatePresence>
   );
 };

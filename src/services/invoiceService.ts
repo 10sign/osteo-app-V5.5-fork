@@ -27,21 +27,6 @@ export class InvoiceService {
     }
 
     try {
-      // Vérifier qu'il n'y a pas déjà une facture pour cette consultation
-      if (invoiceData.consultationId) {
-        const existingInvoicesRef = collection(db, 'invoices');
-        const existingQuery = query(
-          existingInvoicesRef,
-          where('consultationId', '==', invoiceData.consultationId),
-          where('osteopathId', '==', auth.currentUser.uid)
-        );
-        const existingSnapshot = await getDocs(existingQuery);
-        
-        if (!existingSnapshot.empty) {
-          throw new Error('Une facture existe déjà pour cette consultation');
-        }
-      }
-
       // 1. Vérifier que le patient existe
       const patientRef = doc(db, 'patients', invoiceData.patientId);
       const patientDoc = await getDoc(patientRef);
@@ -56,8 +41,6 @@ export class InvoiceService {
       
       const invoiceWithMetadata = {
         ...invoiceData,
-        status: invoiceData.status === 'draft' ? 'paid' : (invoiceData.status || 'paid'), // Convertir draft en paid
-        paidAt: invoiceData.paidAt || new Date().toISOString(),
         osteopathId: userId,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -268,62 +251,6 @@ export class InvoiceService {
     }
   }
   
-  /**
-   * Vérifie si une facture existe déjà pour une consultation
-   */
-  static async hasInvoiceForConsultation(consultationId: string): Promise<boolean> {
-    if (!auth.currentUser) {
-      throw new Error('Utilisateur non authentifié');
-    }
-
-    try {
-      const invoicesRef = collection(db, 'invoices');
-      const q = query(
-        invoicesRef,
-        where('consultationId', '==', consultationId),
-        where('osteopathId', '==', auth.currentUser.uid)
-      );
-      
-      const snapshot = await getDocs(q);
-      return !snapshot.empty;
-    } catch (error) {
-      console.error('❌ Failed to check invoice for consultation:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Récupère la facture associée à une consultation
-   */
-  static async getInvoiceByConsultationId(consultationId: string): Promise<any | null> {
-    if (!auth.currentUser) {
-      throw new Error('Utilisateur non authentifié');
-    }
-
-    try {
-      const invoicesRef = collection(db, 'invoices');
-      const q = query(
-        invoicesRef,
-        where('consultationId', '==', consultationId),
-        where('osteopathId', '==', auth.currentUser.uid)
-      );
-      
-      const snapshot = await getDocs(q);
-      if (snapshot.empty) {
-        return null;
-      }
-      
-      const doc = snapshot.docs[0];
-      return {
-        id: doc.id,
-        ...doc.data()
-      };
-    } catch (error) {
-      console.error('❌ Failed to get invoice for consultation:', error);
-      return null;
-    }
-  }
-
   /**
    * Vérifie si un patient a des factures
    */

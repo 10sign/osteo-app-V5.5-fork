@@ -160,15 +160,7 @@ const InvoiceDetail: React.FC = () => {
       // If marking as paid, add payment date
       if (newStatus === 'paid' && invoice.status !== 'paid') {
         updateData.paymentDate = new Date().toISOString();
-        updateData.paidAt = new Date().toISOString();
         updateData.paymentMethod = 'Carte bancaire'; // Default payment method
-      }
-      
-      // If marking as unpaid, remove payment date
-      if (newStatus === 'unpaid') {
-        updateData.paymentDate = null;
-        updateData.paidAt = null;
-        updateData.paymentMethod = null;
       }
 
       await updateDoc(doc(db, 'invoices', invoice.id), updateData);
@@ -201,10 +193,14 @@ const InvoiceDetail: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'draft':
+        return 'bg-red-200 text-red-800'; // Rouge clair (#FFB3B3)
+      case 'sent':
+        return 'bg-green-200 text-green-800'; // Vert clair (#90EE90)
       case 'paid':
         return 'bg-blue-200 text-blue-800'; // Bleu clair (#ADD8E6)
-      case 'unpaid':
-        return 'bg-red-200 text-red-800'; // Rouge clair
+      case 'overdue':
+        return 'bg-error/10 text-error';
       default:
         return 'bg-gray-100 text-gray-700';
     }
@@ -212,10 +208,14 @@ const InvoiceDetail: React.FC = () => {
 
   const getStatusText = (status: string) => {
     switch (status) {
+      case 'draft':
+        return 'Brouillon';
+      case 'sent':
+        return 'Envoyée';
       case 'paid':
         return 'Payée';
-      case 'unpaid':
-        return 'Impayée';
+      case 'overdue':
+        return 'En retard';
       default:
         return status;
     }
@@ -411,8 +411,9 @@ const InvoiceDetail: React.FC = () => {
                   disabled={isUpdatingStatus}
                   className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
+                  <option value="draft">Brouillon</option>
+                  <option value="sent">Envoyée</option>
                   <option value="paid">Payée</option>
-                  <option value="unpaid">Impayée</option>
                 </select>
               </div>
             </div>
