@@ -365,10 +365,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                       <div 
                         key={appointment.id}
                         draggable
-                        onDragStart={(e) => handleDragStart(e, appointment.id)}
+                        onDragStart={(e) => !appointment.isHistorical && handleDragStart(e, appointment.id)}
                         className={`absolute inset-1 rounded-lg p-1 sm:p-2 text-xs border cursor-move hover:shadow-md transition-shadow group ${
                           getAppointmentColor(appointment)
                         } ${draggedAppointment === appointment.id ? 'opacity-50' : ''}`}
+                        style={{ cursor: appointment.isHistorical ? 'default' : 'move' }}
                       >
                         <div className="flex items-center justify-between mb-1 relative">
                           <div className="flex items-center text-xs truncate flex-1">
@@ -381,7 +382,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                           
                           {/* Desktop actions */}
                           {!isMobileScreen && (
-                          <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className={`flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity ${appointment.isHistorical ? 'hidden' : ''}`}>
                             {appointment.status !== 'completed' && !appointment.consultationId && !appointment.isHistorical && (
                               <button
                                 onClick={(e) => {
@@ -417,8 +418,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                           </div>
                           )}
                           
-                          {/* Mobile actions */}
-                          {isMobileScreen && (
+                          {/* Mobile actions - only for editable appointments */}
+                          {isMobileScreen && !appointment.isHistorical && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -430,9 +431,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                             </button>
                           )}
                         </div>
-                        
+
                         <div className="font-medium truncate text-xs">{appointment.patientName}</div>
-                        {!isMobileScreen && (
+                        {isMobileScreen && showMobileActions === appointment.id && !appointment.isHistorical && (
                           <div className="text-xs opacity-75 truncate">{appointment.type}</div>
                         )}
                         {appointment.consultationId && (
@@ -442,8 +443,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                         )}
                         
                         {/* Mobile action menu */}
-                        {isMobileScreen && showMobileActions === appointment.id && (
-                          <div className="absolute top-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-2 space-y-1">
+                        {isMobileScreen && showMobileActions === appointment.id && !appointment.isHistorical && (
+                          <div className="absolute top-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-2 space-y-1" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -566,6 +567,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                       className={`group rounded-lg p-2 sm:p-3 mb-2 border cursor-move hover:shadow-md transition-shadow ${
                         getAppointmentColor(appointment)
                       } ${draggedAppointment === appointment.id ? 'opacity-50' : ''}`}
+                      style={{ cursor: appointment.isHistorical ? 'default' : 'move' }}
                     >
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
@@ -577,7 +579,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                             
                             {/* Desktop actions */}
                             {!isMobileScreen && (
-                            <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className={`flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity ${appointment.isHistorical ? 'hidden' : ''}`}>
                               {appointment.status !== 'completed' && !appointment.consultationId && !appointment.isHistorical && (
                                 <button
                                   onClick={(e) => {
@@ -614,7 +616,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                             )}
                             
                             {/* Mobile actions */}
-                            {isMobileScreen && (
+                            {isMobileScreen && !appointment.isHistorical && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -744,6 +746,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                       <div
                         key={appointment.id}
                         className={`text-xs p-1 rounded truncate flex items-center group relative ${getAppointmentColor(appointment)}`}
+                        onClick={(e) => { if (appointment.date >= new Date() && !appointment.isHistorical) { e.stopPropagation(); onAppointmentEdit(appointment.id); } }}
                       >
                         {appointment.isHistorical && <History size={10} className="mr-1 flex-shrink-0" />}
                         <span className="truncate flex-grow">
@@ -754,7 +757,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                         {!isMobileScreen && (
                         <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
                           <button
-                            onClick={(e) => {
+                            onClick={(e) => { // This button is only visible if isEditable is true
                               e.stopPropagation();
                               onAppointmentEdit(appointment.id);
                             }}
@@ -764,7 +767,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                             <Edit size={10} />
                           </button>
                           <button
-                            onClick={(e) => {
+                            onClick={(e) => { // This button is only visible if isEditable is true
                               e.stopPropagation();
                               onAppointmentDelete(appointment.id);
                             }}
@@ -777,7 +780,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                         )}
                         
                         {/* Mobile tap to edit */}
-                        {isMobileScreen && (
+                        {isMobileScreen && !appointment.isHistorical && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
