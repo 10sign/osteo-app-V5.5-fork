@@ -207,7 +207,7 @@ const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
         subtotal,
         tax,
         total,
-        status: 'paid', // Facture payée par défaut
+        status: 'paid', // Toutes les factures sont payées par défaut
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };

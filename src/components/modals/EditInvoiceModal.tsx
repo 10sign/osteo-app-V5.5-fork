@@ -269,9 +269,9 @@ const EditInvoiceModal: React.FC<EditInvoiceModalProps> = ({
                         className={`input w-full ${errors.status ? 'border-error focus:border-error focus:ring-error' : ''}`}
                         {...register('status', { required: 'Ce champ est requis' })}
                       >
+                        <option value="paid">Payée</option>
                         <option value="draft">Brouillon</option>
                         <option value="sent">Envoyée</option>
-                        <option value="paid">Payée</option>
                       </select>
                       {errors.status && (
                         <p className="mt-1 text-sm text-error">{errors.status.message}</p>
