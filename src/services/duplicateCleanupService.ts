@@ -11,6 +11,9 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
+import { ConsultationService } from './consultationService';
+import { InvoiceService } from './invoiceService';
+import { AppointmentService } from './appointmentService';
 
 /**
  * Service pour nettoyer les doublons de patients et fusionner leurs données

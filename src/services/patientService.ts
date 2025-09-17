@@ -126,54 +126,6 @@ export class PatientService {
     }
     
     try {
-      // Vérifier si un patient avec les mêmes informations existe déjà
-      const patientsRef = collection(db, 'patients');
-      
-      // Recherche par nom, prénom et date de naissance
-      const nameQuery = query(
-        patientsRef,
-        where('osteopathId', '==', auth.currentUser.uid),
-        where('firstName', '==', patientData.firstName),
-        where('lastName', '==', patientData.lastName),
-        where('dateOfBirth', '==', patientData.dateOfBirth)
-      );
-      
-      const nameSnapshot = await getDocs(nameQuery);
-      
-      // Si des patients avec le même nom existent, vérifier le téléphone ou l'email
-      if (!nameSnapshot.empty) {
-        for (const docSnap of nameSnapshot.docs) {
-          const existingPatient = docSnap.data();
-          
-          // Vérifier si le téléphone ou l'email correspondent
-          const samePhone = patientData.phone && existingPatient.phone && 
-                           patientData.phone === existingPatient.phone;
-          const sameEmail = patientData.email && existingPatient.email && 
-                           patientData.email.toLowerCase() === existingPatient.email.toLowerCase();
-          
-          if (samePhone || sameEmail) {
-            // Patient identique trouvé, retourner l'ID existant au lieu de créer un doublon
-            console.log(`✅ Patient existant trouvé: ${existingPatient.firstName} ${existingPatient.lastName} (${docSnap.id})`);
-            
-            // Journaliser que nous avons évité un doublon
-            await AuditLogger.log(
-              AuditEventType.DATA_ACCESS,
-              `patients/${docSnap.id}`,
-              'duplicate_prevented',
-              SensitivityLevel.SENSITIVE,
-              'success',
-              { 
-                attemptedPatient: `${patientData.firstName} ${patientData.lastName}`,
-                existingPatient: `${existingPatient.firstName} ${existingPatient.lastName}`,
-                matchedBy: samePhone ? 'phone' : 'email'
-              }
-            );
-            
-            return docSnap.id;
-          }
-        }
-      }
-
       // Génération d'un ID unique
       const patientId = crypto.randomUUID();
       
