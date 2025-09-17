@@ -171,6 +171,72 @@ const PatientDetail: React.FC = () => {
         id: patientDoc.id
       };
 
+      // Vérifier si le patient a une consultation, sinon en créer une rétroactivement
+      const consultationsRef = collection(db, 'consultations');
+      const existingConsultationsQuery = query(
+        consultationsRef,
+        where('patientId', '==', id),
+        where('osteopathId', '==', auth.currentUser.uid)
+      );
+      const existingConsultations = await getDocs(existingConsultationsQuery);
+      
+      if (existingConsultations.empty) {
+        try {
+          // Créer une consultation rétroactive
+          const creationDate = patientData.createdAt ? new Date(patientData.createdAt) : new Date();
+          
+          const consultationData = {
+            patientId: id,
+            patientName: `${decryptedData.firstName} ${decryptedData.lastName}`,
+            osteopathId: auth.currentUser.uid,
+            date: creationDate,
+            reason: 'Première consultation',
+            treatment: 'Évaluation initiale et anamnèse',
+            notes: 'Consultation générée rétroactivement lors de la mise à jour du système.',
+            duration: 60,
+            price: 55,
+            status: 'completed',
+            examinations: [],
+            prescriptions: []
+          };
+          
+          const consultationId = await ConsultationService.createConsultation(consultationData);
+          
+          // Créer une facture liée à cette consultation
+          const invoiceNumber = `F-${creationDate.getFullYear()}${String(creationDate.getMonth() + 1).padStart(2, '0')}${String(creationDate.getDate()).padStart(2, '0')}-${id.substring(0, 6)}`;
+          
+          const invoiceData = {
+            number: invoiceNumber,
+            patientId: id,
+            patientName: `${decryptedData.firstName} ${decryptedData.lastName}`,
+            osteopathId: auth.currentUser.uid,
+            issueDate: creationDate.toISOString().split('T')[0],
+            dueDate: new Date(creationDate.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            items: [{
+              id: crypto.randomUUID(),
+              description: 'Première consultation',
+              quantity: 1,
+              unitPrice: 55,
+              amount: 55
+            }],
+            subtotal: 55,
+            tax: 0,
+            total: 55,
+            status: 'draft',
+            notes: 'Facture générée rétroactivement pour la première consultation.',
+            consultationId: consultationId,
+            createdAt: creationDate.toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          await InvoiceService.createInvoice(invoiceData);
+          
+          console.log('✅ Created retroactive consultation and invoice for patient:', id);
+        } catch (retroError) {
+          console.warn('⚠️ Could not create retroactive consultation and invoice:', retroError);
+        }
+      }
+
       setPatient(patient);
       
       // Update cache
@@ -365,7 +431,20 @@ const PatientDetail: React.FC = () => {
       trackEvent("patient_deleted", { patient_id: patient.id });
       trackMatomoEvent('Patient', 'Deleted', patient.id);
       trackGAEvent('delete_patient', { patient_id: patient.id });
+      try {
+        await PatientService.deletePatient(patient.id);
+      } catch (deleteError: any) {
+        // Si le patient n'est pas trouvé, c'est que la suppression a déjà eu lieu
+        // ou que le patient n'existe plus - dans tous les cas, rediriger vers la liste
+        if (deleteError.message === 'Patient non trouvé') {
+          console.log('Patient already deleted or not found, redirecting to patient list');
+        } else {
+          // Pour les autres erreurs, les relancer
+          throw deleteError;
+        }
+      }
       
+      // Rediriger vers la liste des patients dans tous les cas
       navigate('/patients');
     } catch (error) {
       console.error('Error deleting patient:', error);

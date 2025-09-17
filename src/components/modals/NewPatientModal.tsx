@@ -421,6 +421,53 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       
       setProgress(80);
 
+      // Créer automatiquement une consultation initiale
+      const initialConsultationData = {
+        patientId: patientId,
+        patientName: `${data.firstName.trim()} ${data.lastName.trim()}`,
+        osteopathId: auth.currentUser.uid,
+        date: new Date(),
+        reason: 'Première consultation',
+        treatment: 'Évaluation initiale et anamnèse',
+        notes: 'Consultation générée automatiquement lors de la création du patient.',
+        duration: 60,
+        price: 55,
+        status: 'completed',
+        examinations: [],
+        prescriptions: []
+      };
+
+      const initialConsultationId = await ConsultationService.createConsultation(initialConsultationData);
+
+      // Créer automatiquement une facture liée à cette consultation
+      const invoiceNumber = `F-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
+      
+      const invoiceData = {
+        number: invoiceNumber,
+        patientId: patientId,
+        patientName: `${data.firstName.trim()} ${data.lastName.trim()}`,
+        osteopathId: auth.currentUser.uid,
+        issueDate: new Date().toISOString().split('T')[0],
+        dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        items: [{
+          id: crypto.randomUUID(),
+          description: 'Première consultation',
+          quantity: 1,
+          unitPrice: 55,
+          amount: 55
+        }],
+        subtotal: 55,
+        tax: 0,
+        total: 55,
+        status: 'draft',
+        notes: 'Facture générée automatiquement pour la première consultation.',
+        consultationId: initialConsultationId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await InvoiceService.createInvoice(invoiceData);
+
       // Update cache
       patientCache.set(patientId, patientData as Patient);
 
@@ -506,8 +553,6 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
 
   // Clear form data when modal closes
   const handleModalClose = () => {
-    console.log('Attempting to close modal, hasUnsavedChanges:', hasUnsavedChanges);
-    
     // Vérifier une dernière fois s'il y a des changements non enregistrés
     const formData = watch();
     const hasFormData = Object.values(formData).some(value => 
@@ -519,18 +564,20 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                         patientDocuments.length > 0;
     const currentlyHasChanges = hasFormData || hasListData || isDirty;
     
+    console.log('Attempting to close modal, hasUnsavedChanges:', currentlyHasChanges);
+    
     console.log('Final unsaved changes check:', {
       hasFormData,
       hasListData,
       isDirty,
       currentlyHasChanges,
-      showUnsavedWarning
+      showConfirmation
     });
     
     // Si des données non sauvegardées existent et qu'on n'a pas encore montré l'avertissement
-    if (currentlyHasChanges && !showUnsavedWarning) {
+    if (currentlyHasChanges && !showConfirmation) {
       console.log('Showing unsaved warning modal');
-      setShowUnsavedWarning(true);
+      setShowConfirmation(true);
       return;
     }
     
@@ -554,21 +601,6 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
     console.log('New patient modal closed - all data cleared');
     
     // Close the modal
-    onClose();
-  };
-
-  const handleConfirmClose = () => {
-    console.log('User confirmed close without saving');
-    setShowUnsavedWarning(false);
-    setHasUnsavedChanges(false);
-    
-    // Clear any saved form data when closing
-    try {
-      clearFormData(FORM_ID);
-      console.log('Cleared form data on confirmed close');
-    } catch (error) {
-      console.error('Error clearing form data:', error);
-    }
     onClose();
   };
 
