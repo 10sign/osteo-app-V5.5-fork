@@ -79,35 +79,46 @@ export class ConsultationService {
       const docRef = await addDoc(collection(db, 'consultations'), dataToStore);
       
       // Créer automatiquement une facture pour cette consultation
-      try {
-        const invoiceData = {
-          patientId: consultationData.patientId,
-          patientName: consultationData.patientName,
-          osteopathId: userId,
-          consultationId: docRef.id,
-          number: `INV-${Date.now().toString().slice(-6)}`,
-          issueDate: new Date(consultationData.date).toISOString().split('T')[0],
-          dueDate: new Date(consultationData.date).toISOString().split('T')[0],
-          items: [{ 
-            id: 'item1', 
-            description: consultationData.reason || 'Consultation ostéopathique', 
-            quantity: 1, 
-            unitPrice: consultationData.price || 60, 
-            amount: consultationData.price || 60 
-          }],
-          subtotal: consultationData.price || 60,
-          tax: 0,
-          total: consultationData.price || 60,
-          status: 'paid',
-          paidAt: new Date().toISOString(),
-          notes: `Facture générée automatiquement pour la consultation du ${new Date(consultationData.date).toLocaleDateString('fr-FR')}.`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        
-        await InvoiceService.createInvoice(invoiceData);
-      } catch (invoiceError) {
-        console.warn('⚠️ Erreur lors de la création automatique de la facture:', invoiceError);
+      // Vérifier qu'il n'y a pas déjà une facture pour cette consultation
+      const existingInvoicesRef = collection(db, 'invoices');
+      const existingInvoicesQuery = query(
+        existingInvoicesRef,
+        where('consultationId', '==', docRef.id),
+        where('osteopathId', '==', userId)
+      );
+      const existingInvoicesSnapshot = await getDocs(existingInvoicesQuery);
+      
+      if (existingInvoicesSnapshot.empty) {
+        try {
+          const invoiceData = {
+            patientId: consultationData.patientId,
+            patientName: consultationData.patientName,
+            osteopathId: userId,
+            consultationId: docRef.id,
+            number: `INV-${Date.now().toString().slice(-6)}`,
+            issueDate: new Date(consultationData.date).toISOString().split('T')[0],
+            dueDate: new Date(consultationData.date).toISOString().split('T')[0],
+            items: [{ 
+              id: 'item1', 
+              description: consultationData.reason || 'Consultation ostéopathique', 
+              quantity: 1, 
+              unitPrice: consultationData.price || 60, 
+              amount: consultationData.price || 60 
+            }],
+            subtotal: consultationData.price || 60,
+            tax: 0,
+            total: consultationData.price || 60,
+            status: 'paid',
+            paidAt: new Date().toISOString(),
+            notes: `Facture générée automatiquement pour la consultation du ${new Date(consultationData.date).toLocaleDateString('fr-FR')}.`,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          await addDoc(collection(db, 'invoices'), invoiceData);
+        } catch (invoiceError) {
+          console.warn('⚠️ Erreur lors de la création automatique de la facture:', invoiceError);
+        }
       }
       
       // Synchroniser le prochain rendez-vous du patient après création
@@ -320,177 +331,43 @@ export class ConsultationService {
       const q = query(
         consultationsRef,
         where('osteopathId', '==', auth.currentUser.uid),
-        where('patientId', '==', consultationData.patientId)
+        orderBy('date', 'desc')
       );
       
       const querySnapshot = await getDocs(q);
-      const existingConsultations = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date?.toDate?.() || new Date(doc.data().date)
-      }));
-      
-      const consultationDate = new Date(consultationData.date);
-      
-      // Vérifier les doublons (tolérance 45 minutes)
-      for (const existing of existingConsultations) {
-        if (this.areConsultationsWithin45Minutes(
-          { date: consultationDate },
-  /**
-   * Ajoute une consultation à l'historique des rendez-vous passés du patient
-   */
-  private static async addConsultationToPatientHistory(
-    patientId: string,
-    appointmentData: {
-      date: string;
-      notes: string;
-      isHistorical: boolean;
-    }
-  ): Promise<void> {
-    if (!auth.currentUser) {
-      throw new Error('Utilisateur non authentifié');
-    }
-
-    try {
-      const patientRef = doc(db, 'patients', patientId);
-      const patientDoc = await getDoc(patientRef);
-      
-      if (!patientDoc.exists()) {
-        console.warn(`⚠️ Patient ${patientId} non trouvé pour mise à jour de l'historique`);
-        return;
-      }
-      
-      const patientData = patientDoc.data();
-      const currentPastAppointments = patientData.pastAppointments || [];
-      
-      // Vérifier si cette consultation n'est pas déjà dans l'historique
-      const existingAppointment = currentPastAppointments.find((app: any) => 
-        app.date === appointmentData.date
-      );
-      
-      if (!existingAppointment) {
-        // Ajouter la nouvelle consultation à l'historique
-        const updatedPastAppointments = [...currentPastAppointments, appointmentData];
+      const consultations = querySnapshot.docs.map(doc => {
+        const data = doc.data();
         
-        // Trier par date décroissante (plus récent en premier)
-        updatedPastAppointments.sort((a, b) => 
-          new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
+        // Déchiffrement des données sensibles pour l'affichage
+        const decryptedData = HDSCompliance.decryptDataForDisplay(data, 'consultations', auth.currentUser!.uid);
         
-        await updateDoc(patientRef, {
-          pastAppointments: updatedPastAppointments,
-          updatedAt: new Date().toISOString()
-        });
-        
-        console.log(`✅ Consultation ajoutée à l'historique du patient ${patientId}`);
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de l\'ajout à l\'historique du patient:', error);
-    }
-  }
-
-          { date: existing.date }
-        )) {
-          throw new Error('Une consultation existe déjà dans cette plage horaire (±45 minutes)');
-        }
-      }
-
-      const userId = auth.currentUser.uid;
-      const now = new Date();
+        return {
+          id: doc.id,
+          ...decryptedData,
+          date: data.date?.toDate?.() || new Date(data.date)
+        };
+      });
       
-      // Préparation des données avec chiffrement HDS
-      const dataToStore = HDSCompliance.prepareDataForStorage({
-        ...consultationData,
-        osteopathId: userId,
-        date: Timestamp.fromDate(new Date(consultationData.date)),
-        createdAt: Timestamp.fromDate(now),
-        updatedAt: Timestamp.fromDate(now)
-      }, 'consultations', userId);
-      
-      const docRef = await addDoc(collection(db, 'consultations'), dataToStore);
-      
-      // Créer automatiquement une facture pour cette consultation
-      // Vérifier qu'il n'y a pas déjà une facture pour cette consultation
-      const existingInvoicesRef = collection(db, 'invoices');
-      const existingInvoicesQuery = query(
-        existingInvoicesRef,
-        where('consultationId', '==', docRef.id),
-        where('osteopathId', '==', userId)
-      );
-      const existingInvoicesSnapshot = await getDocs(existingInvoicesQuery);
-      
-      if (existingInvoicesSnapshot.empty) {
-        try {
-          const invoiceData = {
-            patientId: consultationData.patientId,
-            patientName: consultationData.patientName,
-            osteopathId: userId,
-            consultationId: docRef.id,
-            number: `INV-${Date.now().toString().slice(-6)}`,
-            issueDate: new Date(consultationData.date).toISOString().split('T')[0],
-            dueDate: new Date(consultationData.date).toISOString().split('T')[0],
-            items: [{ 
-              id: 'item1', 
-              description: consultationData.reason || 'Consultation ostéopathique', 
-              quantity: 1, 
-              unitPrice: consultationData.price || 60, 
-              amount: consultationData.price || 60 
-            }],
-            subtotal: consultationData.price || 60,
-            tax: 0,
-            total: consultationData.price || 60,
-            status: 'paid',
-            paidAt: new Date().toISOString(),
-            notes: `Facture générée automatiquement pour la consultation du ${new Date(consultationData.date).toLocaleDateString('fr-FR')}.`,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-          
-          await addDoc(collection(db, 'invoices'), invoiceData);
-        } catch (invoiceError) {
-          console.warn('⚠️ Erreur lors de la création automatique de la facture:', invoiceError);
-        }
-      }
-      
-      // Synchroniser le prochain rendez-vous du patient après création
-      if (consultationData.patientId) {
-        try {
-          const { AppointmentService } = await import('./appointmentService');
-          await AppointmentService.syncPatientNextAppointment(consultationData.patientId);
-          
-          // Si la consultation est terminée, l'ajouter à l'historique du patient
-          if (consultationData.status === 'completed') {
-            await this.addConsultationToPatientHistory(consultationData.patientId, {
-              date: new Date(consultationData.date).toISOString(),
-              notes: `${consultationData.reason} - ${consultationData.treatment}`,
-              isHistorical: true
-            });
-          }
-        } catch (syncError) {
-          console.warn('⚠️ Erreur lors de la synchronisation du patient:', syncError);
-        }
-      }
-      
-      // Journalisation de la création
+      // Journalisation de l'accès aux données
       await AuditLogger.log(
-        AuditEventType.DATA_CREATION,
-        `consultations/${docRef.id}`,
-        'create',
+        AuditEventType.DATA_ACCESS,
+        'consultations',
+        'read',
         SensitivityLevel.SENSITIVE,
         'success',
-        { patientId: consultationData.patientId }
+        { count: consultations.length }
       );
       
-      return docRef.id;
+      return consultations;
       
     } catch (error) {
-      console.error('❌ Erreur lors de la création de la consultation:', error);
+      console.error('❌ Erreur lors de la récupération des consultations:', error);
       
       // Journalisation de l'erreur
       await AuditLogger.log(
-        AuditEventType.DATA_CREATION,
+        AuditEventType.DATA_ACCESS,
         'consultations',
-        'create',
+        'read',
         SensitivityLevel.SENSITIVE,
         'failure',
         { error: (error as Error).message }
@@ -666,7 +543,7 @@ export class ConsultationService {
   /**
    * Ajoute une consultation à l'historique des rendez-vous passés du patient
    */
-  private static async addConsultationToPatientHistory(
+  static async addConsultationToPatientHistory(
     patientId: string,
     appointmentData: {
       date: string;
@@ -715,6 +592,7 @@ export class ConsultationService {
       console.error('❌ Erreur lors de l\'ajout à l\'historique du patient:', error);
     }
   }
+
   /**
    * Récupère une consultation par son ID
    */
