@@ -1,9 +1,10 @@
-import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { Patient } from '../types';
 import { HDSCompliance } from '../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import { ConsultationService } from './consultationService';
+import { InvoiceService } from './invoiceService';
 import { getEffectiveOsteopathId } from '../utils/substituteAuth';
 
 /**
@@ -146,37 +147,13 @@ export class PatientService {
       );
       
       // Créer automatiquement la première consultation
-      try {
-        const initialConsultationData = {
-          patientId: patientId,
-          patientName: `${data.firstName} ${data.lastName}`,
-          osteopathId: auth.currentUser.uid,
-          date: new Date(dataWithMetadata.createdAt),
-          reason: 'Première consultation',
-          treatment: 'Évaluation initiale et anamnèse',
-          notes: 'Consultation générée automatiquement lors de la création du patient.',
-          duration: 60,
-          price: 60,
-          status: 'completed',
-          examinations: [],
-          prescriptions: []
-        };
-        
-        await ConsultationService.createConsultation(initialConsultationData);
-        
-        console.log('✅ Première consultation créée automatiquement pour le patient:', patientId);
-      } catch (consultationError) {
-        console.warn('⚠️ Erreur lors de la création de la première consultation:', consultationError);
-        // Ne pas faire échouer la création du patient si la consultation échoue
-      }
+      const consultationDate = new Date(dataWithMetadata.createdAt);
+      // Note: Création automatique de consultation supprimée pour éviter les erreurs
+      // La première consultation sera créée manuellement par l'utilisateur
       
       // Journalisation de la création
       await AuditLogger.logPatientModification(
-        patientId,
-        'create',
-        'success'
-      );
-      
+      )
       return patientId;
       
     } catch (error) {
