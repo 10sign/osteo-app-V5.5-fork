@@ -365,7 +365,20 @@ const PatientDetail: React.FC = () => {
       trackEvent("patient_deleted", { patient_id: patient.id });
       trackMatomoEvent('Patient', 'Deleted', patient.id);
       trackGAEvent('delete_patient', { patient_id: patient.id });
+      try {
+        await PatientService.deletePatient(patient.id);
+      } catch (deleteError: any) {
+        // Si le patient n'est pas trouvé, c'est que la suppression a déjà eu lieu
+        // ou que le patient n'existe plus - dans tous les cas, rediriger vers la liste
+        if (deleteError.message === 'Patient non trouvé') {
+          console.log('Patient already deleted or not found, redirecting to patient list');
+        } else {
+          // Pour les autres erreurs, les relancer
+          throw deleteError;
+        }
+      }
       
+      // Rediriger vers la liste des patients dans tous les cas
       navigate('/patients');
     } catch (error) {
       console.error('Error deleting patient:', error);
