@@ -148,48 +148,8 @@ export class PatientService {
       
       // Créer automatiquement la première consultation
       const consultationDate = new Date(dataWithMetadata.createdAt);
-      const consultationsRef = collection(db, 'consultations');
-      const existingConsultationQuery = query(
-        consultationsRef,
-        where('patientId', '==', patientId),
-        where('osteopathId', '==', auth.currentUser.uid),
-        where('date', '==', Timestamp.fromDate(consultationDate)),
-        where('reason', '==', 'Première consultation') // Add specific reason to avoid matching other consultations
-      );
-      const existingConsultationSnapshot = await getDocs(existingConsultationQuery);
-
-      if (existingConsultationSnapshot.empty) {
-        try {
-          const initialConsultationData = {
-            patientId: patientId,
-            patientName: `${dataWithMetadata.firstName} ${dataWithMetadata.lastName}`,
-            osteopathId: auth.currentUser.uid,
-            date: Timestamp.fromDate(consultationDate),
-            reason: 'Première consultation',
-            treatment: 'Évaluation initiale et anamnèse',
-            notes: 'Consultation générée automatiquement lors de la création du patient.',
-            duration: 60,
-            price: 55, // Prix par défaut de 55€
-            status: 'completed',
-            examinations: [],
-            prescriptions: []
-          };
-          
-          const consultationId = crypto.randomUUID();
-          await HDSCompliance.saveCompliantData(
-            'consultations',
-            consultationId,
-            initialConsultationData
-          );
-          console.log('✅ Première consultation créée automatiquement pour le patient:', patientId, 'ID:', consultationId);
-
-
-        } catch (creationError) {
-          console.warn('⚠️ Erreur lors de la création automatique de consultation/facture:', creationError);
-        }
-      } else {
-        console.log('⚠️ Consultation automatique déjà existante pour le patient:', patientId);
-      }
+      // Note: Création automatique de consultation supprimée pour éviter les erreurs
+      // La première consultation sera créée manuellement par l'utilisateur
       
       // Journalisation de la création
       await AuditLogger.logPatientModification(
