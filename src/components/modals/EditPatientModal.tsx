@@ -402,66 +402,6 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
     setError(error);
   };
 
-  const handleClose = () => {
-    console.log('Attempting to close edit modal, checking for unsaved changes...');
-    
-    // Vérifier une dernière fois s'il y a des changements non enregistrés
-    const hasFormChanges = isDirty;
-    const hasTagChanges = JSON.stringify(selectedTags.sort()) !== JSON.stringify(initialState.tags.sort());
-    const hasTreatmentChanges = JSON.stringify(treatmentHistory) !== JSON.stringify(initialState.treatmentHistory);
-    const hasAppointmentChanges = JSON.stringify(pastAppointments) !== JSON.stringify(initialState.pastAppointments);
-    const hasDocumentChanges = patientDocuments.length !== initialState.documents.length;
-    
-    const currentlyHasChanges = hasFormChanges || hasTagChanges || hasTreatmentChanges || hasAppointmentChanges || hasDocumentChanges;
-    
-    console.log('Final unsaved changes check for edit modal:', {
-      hasFormChanges,
-      hasTagChanges,
-      hasTreatmentChanges,
-      hasAppointmentChanges,
-      hasDocumentChanges,
-      isDirty,
-      currentlyHasChanges,
-      showUnsavedWarning
-    });
-    
-    // Si des données non sauvegardées existent et qu'on n'a pas encore montré l'avertissement
-    if (currentlyHasChanges && !showUnsavedWarning) {
-      console.log('Showing unsaved warning modal for edit');
-      setShowUnsavedWarning(true);
-      return;
-    }
-    
-    // Fermer normalement
-    console.log('Closing edit modal normally');
-    onClose();
-  };
-
-  const handleConfirmClose = () => {
-    console.log('User confirmed close without saving edits');
-    setShowUnsavedWarning(false);
-    setHasUnsavedChanges(false);
-    
-    // Clear saved form data
-    try {
-      clearFormData(formId);
-      console.log('Cleared form data on confirmed close');
-    } catch (error) {
-      console.error('Error clearing form data:', error);
-    }
-    
-    // Reset state
-    setShowUnsavedWarning(false);
-    setHasUnsavedChanges(false);
-    
-    onClose();
-  };
-
-  const handleCancelClose = () => {
-    console.log('User cancelled close, continuing editing');
-    setShowUnsavedWarning(false);
-  };
-
   const onSubmit = async (data: any) => {
     console.log('Starting patient update...', { patientId: patient.id, data });
     
@@ -506,6 +446,45 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
         currentTreatment: data.currentTreatment,
         consultationReason: data.consultationReason,
         medicalAntecedents: data.medicalAntecedents,
+        treatmentHistory: treatmentHistory.filter(entry => entry.date && entry.treatment),
+        pastAppointments: pastAppointments
+          .filter(app => app.date && app.notes)
+          .map(app => ({
+            date: `${app.date}T${app.time || '00:00'}:00`,
+            notes: app.notes
+          })),
+        documents: patientDocuments
+      };
+
+      console.log('Updating patient with data:', updatedData);
+
+      const patientRef = doc(db, 'patients', patient.id);
+      await updateDoc(patientRef, updatedData);
+
+      console.log('Patient updated successfully');
+      setSuccess('Dossier patient mis à jour avec succès !');
+      
+      // Clear saved form data after successful submission
+      try {
+        clearFormData(formId);
+        console.log('Cleared form data after successful update');
+      } catch (error) {
+        console.error('Error clearing form data:', error);
+      }
+
+      setTimeout(() => {
+        onSuccess();
+        onClose();
+      }, 1500);
+
+    } catch (error) {
+      console.error('Error updating patient:', error);
+      setError('Erreur lors de la mise à jour du dossier patient. Veuillez réessayer.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
