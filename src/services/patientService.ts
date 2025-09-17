@@ -183,64 +183,6 @@ export class PatientService {
           );
           console.log('✅ Première consultation créée automatiquement pour le patient:', patientId, 'ID:', consultationId);
 
-          // Check if an invoice already exists for this consultation
-          const invoicesRef = collection(db, 'invoices');
-          const existingInvoiceQuery = query(
-            invoicesRef,
-            where('patientId', '==', patientId),
-            where('osteopathId', '==', auth.currentUser.uid),
-            where('notes', '==', `Facture générée automatiquement pour la consultation ${consultationId}.`)
-          );
-          const existingInvoiceSnapshot = await getDocs(existingInvoiceQuery);
-
-          if (existingInvoiceSnapshot.empty) {
-          // Check if an invoice already exists for this consultation
-          const invoicesRef = collection(db, 'invoices');
-          const existingInvoiceQuery = query(
-            invoicesRef,
-            where('patientId', '==', patientId),
-            where('osteopathId', '==', auth.currentUser.uid),
-            where('notes', '==', `Facture générée automatiquement pour la consultation ${consultationId}.`)
-          );
-          const existingInvoiceSnapshot = await getDocs(existingInvoiceQuery);
-
-          if (existingInvoiceSnapshot.empty) {
-          // Créer la facture liée à cette consultation
-          const invoiceData = {
-            patientId: patientId,
-            patientName: `${dataWithMetadata.firstName} ${dataWithMetadata.lastName}`,
-            osteopathId: auth.currentUser.uid,
-            number: `INV-${Date.now().toString().slice(-6)}`, // Numéro de facture simple
-            issueDate: dataWithMetadata.createdAt.split('T')[0],
-            dueDate: dataWithMetadata.createdAt.split('T')[0], // Échéance le même jour
-            items: [{ id: 'item1', description: 'Consultation ostéopathique', quantity: 1, unitPrice: 55, amount: 55 }],
-            subtotal: 55,
-            tax: 0,
-            total: 55,
-            status: 'paid', // Marquer comme payée par défaut
-            paidAt: new Date().toISOString(),
-            paidAt: new Date().toISOString(), // Date de paiement
-            notes: `Facture générée automatiquement pour la consultation ${consultationId}.`,
-            createdAt: dataWithMetadata.createdAt,
-            updatedAt: dataWithMetadata.updatedAt
-          };
-          await HDSCompliance.saveCompliantData(
-            'invoices',
-            crypto.randomUUID(),
-            invoiceData
-          );
-          await HDSCompliance.saveCompliantData(
-            'invoices',
-            crypto.randomUUID(), // Generate a new ID for the invoice
-            invoiceData
-          );
-          console.log('✅ Facture automatique créée pour le patient:', patientId);
-          } else {
-            console.log('⚠️ Facture automatique déjà existante pour le patient:', patientId);
-          }
-          } else {
-            console.log('⚠️ Facture automatique déjà existante pour le patient:', patientId);
-          }
 
         } catch (creationError) {
           console.warn('⚠️ Erreur lors de la création automatique de consultation/facture:', creationError);
