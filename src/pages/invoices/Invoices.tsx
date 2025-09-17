@@ -395,13 +395,13 @@ const Invoices: React.FC = () => {
           </button>
           <button
             className={`pb-2 px-4 text-sm font-medium border-b-2 ${
-              selectedFilter === 'all'
+              selectedFilter === 'paid'
                 ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
-            onClick={() => handleFilterChange('all')}
+            onClick={() => handleFilterChange('paid')}
           >
-            Toutes ({invoices.length})
+            Payées ({invoices.filter(i => i.status === 'paid').length})
           </button>
           <button
             className={`pb-2 px-4 text-sm font-medium border-b-2 ${
