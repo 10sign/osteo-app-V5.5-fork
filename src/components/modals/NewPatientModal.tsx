@@ -506,8 +506,6 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
 
   // Clear form data when modal closes
   const handleModalClose = () => {
-    console.log('Attempting to close modal, hasUnsavedChanges:', currentlyHasChanges);
-    
     // Vérifier une dernière fois s'il y a des changements non enregistrés
     const formData = watch();
     const hasFormData = Object.values(formData).some(value => 
@@ -518,6 +516,8 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                         treatmentHistory.length > 0 ||
                         patientDocuments.length > 0;
     const currentlyHasChanges = hasFormData || hasListData || isDirty;
+    
+    console.log('Attempting to close modal, hasUnsavedChanges:', currentlyHasChanges);
     
     console.log('Final unsaved changes check:', {
       hasFormData,
