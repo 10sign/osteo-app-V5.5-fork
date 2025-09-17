@@ -435,13 +435,6 @@ const PatientDetail: React.FC = () => {
         await PatientService.deletePatient(patient.id);
       } catch (deleteError: any) {
         // Si le patient n'est pas trouvé, c'est que la suppression a déjà eu lieu
-       // Vérifier si une facture existe déjà pour cette consultation
-       const existingInvoice = await InvoiceService.hasInvoiceForConsultation(consultation.id);
-       if (existingInvoice) {
-         setError('Une facture existe déjà pour cette consultation');
-         return;
-       }
-       
         // ou que le patient n'existe plus - dans tous les cas, rediriger vers la liste
         if (deleteError.message === 'Patient non trouvé') {
           console.log('Patient already deleted or not found, redirecting to patient list');

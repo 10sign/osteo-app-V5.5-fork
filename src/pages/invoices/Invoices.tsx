@@ -265,10 +265,14 @@ const Invoices: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'draft':
+        return 'bg-red-200 text-red-800'; // Rouge clair (#FFB3B3)
+      case 'sent':
+        return 'bg-green-200 text-green-800'; // Vert clair (#90EE90)
       case 'paid':
         return 'bg-blue-200 text-blue-800'; // Bleu clair (#ADD8E6)
-      case 'unpaid':
-        return 'bg-red-200 text-red-800'; // Rouge clair
+      case 'overdue':
+        return 'bg-error/10 text-error';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -276,10 +280,14 @@ const Invoices: React.FC = () => {
 
   const getStatusText = (status: string) => {
     switch (status) {
+      case 'draft':
+        return 'Brouillon';
+      case 'sent':
+        return 'Envoyée';
       case 'paid':
         return 'Payée';
-      case 'unpaid':
-        return 'Non payée';
+      case 'overdue':
+        return 'En retard';
       default:
         return status;
     }
@@ -395,6 +403,26 @@ const Invoices: React.FC = () => {
           </button>
           <button
             className={`pb-2 px-4 text-sm font-medium border-b-2 ${
+              selectedFilter === 'draft'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+            onClick={() => handleFilterChange('draft')}
+          >
+            Brouillons ({invoices.filter(i => i.status === 'draft').length})
+          </button>
+          <button
+            className={`pb-2 px-4 text-sm font-medium border-b-2 ${
+              selectedFilter === 'sent'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+            onClick={() => handleFilterChange('sent')}
+          >
+            Envoyées ({invoices.filter(i => i.status === 'sent').length})
+          </button>
+          <button
+            className={`pb-2 px-4 text-sm font-medium border-b-2 ${
               selectedFilter === 'paid'
                 ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -402,16 +430,6 @@ const Invoices: React.FC = () => {
             onClick={() => handleFilterChange('paid')}
           >
             Payées ({invoices.filter(i => i.status === 'paid').length})
-          </button>
-          <button
-            className={`pb-2 px-4 text-sm font-medium border-b-2 ${
-              selectedFilter === 'unpaid'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-            onClick={() => handleFilterChange('unpaid')}
-          >
-            Impayées ({invoices.filter(i => i.status === 'unpaid').length})
           </button>
         </div>
       </div>

@@ -30,7 +30,6 @@ import { collection, doc, getDoc, getDocs, query, where, onSnapshot, Timestamp }
 import { db, auth } from '../../firebase/config';
 import { ConsultationService } from '../../services/consultationService';
 import { AppointmentService } from '../../services/appointmentService';
-import { HDSCompliance } from '../../utils/hdsCompliance';
 
 interface Appointment {
   id: string;
@@ -169,12 +168,7 @@ const Consultations: React.FC = () => {
       const appointmentsData: Appointment[] = [];
       for (const docSnapshot of snapshot.docs) {
         try {
-          const rawAppointmentData = docSnapshot.data();
-          const appointmentData = HDSCompliance.decryptDataForDisplay(
-            rawAppointmentData,
-            'appointments',
-            auth.currentUser.uid
-          );
+          const appointmentData = docSnapshot.data();
           
           if (!appointmentData.patientId || !appointmentData.date || !appointmentData.osteopathId) {
             continue;
@@ -252,8 +246,7 @@ const Consultations: React.FC = () => {
             },
             notes: appointmentData.notes || '',
             osteopathId: appointmentData.osteopathId,
-            consultationId: appointmentData.consultationId || undefined,
-            isHistorical: appointmentDate < new Date()
+            consultationId: appointmentData.consultationId || undefined
           };
 
           appointmentsData.push(appointment);
@@ -299,12 +292,7 @@ const Consultations: React.FC = () => {
       const invalidConsultations: any[] = [];
       for (const docSnapshot of snapshot.docs) {
         try {
-          const rawConsultationData = docSnapshot.data();
-          const consultationData = HDSCompliance.decryptDataForDisplay(
-            rawConsultationData,
-            'consultations',
-            auth.currentUser.uid
-          );
+          const consultationData = docSnapshot.data();
           
           console.log('📋 Processing consultation:', docSnapshot.id, {
             patientId: consultationData.patientId,
@@ -405,8 +393,7 @@ const Consultations: React.FC = () => {
             practitionerId: consultationData.osteopathId || auth.currentUser!.uid,
             practitionerName: auth.currentUser!.displayName || 'Ostéopathe',
             date: consultationDate,
-            endTime: endTime, // Assurez-vous que endTime est un objet Date
-            isHistorical: consultationDate < now, // Marquer comme historique si dans le passé
+            endTime: endTime,
             duration: consultationData.duration || 60,
             status: consultationData.status === 'completed' ? 'completed' : 'confirmed',
             type: consultationData.reason || 'Consultation standard',
@@ -481,12 +468,7 @@ const Consultations: React.FC = () => {
 
       for (const docSnapshot of snapshot.docs) {
         try {
-          const rawConsultationData = docSnapshot.data();
-          const consultationData = HDSCompliance.decryptDataForDisplay(
-            rawConsultationData,
-            'consultations',
-            auth.currentUser.uid
-          );
+          const consultationData = docSnapshot.data();
           console.log('📋 Processing consultation:', docSnapshot.id, {
             patientId: consultationData.patientId,
             date: consultationData.date,
