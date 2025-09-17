@@ -506,7 +506,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
 
   // Clear form data when modal closes
   const handleModalClose = () => {
-    console.log('Attempting to close modal, hasUnsavedChanges:', hasUnsavedChanges);
+    console.log('Attempting to close modal, hasUnsavedChanges:', currentlyHasChanges);
     
     // Vérifier une dernière fois s'il y a des changements non enregistrés
     const formData = watch();
@@ -524,13 +524,13 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       hasListData,
       isDirty,
       currentlyHasChanges,
-      showUnsavedWarning
+      showConfirmation
     });
     
     // Si des données non sauvegardées existent et qu'on n'a pas encore montré l'avertissement
-    if (currentlyHasChanges && !showUnsavedWarning) {
+    if (currentlyHasChanges && !showConfirmation) {
       console.log('Showing unsaved warning modal');
-      setShowUnsavedWarning(true);
+      setShowConfirmation(true);
       return;
     }
     
