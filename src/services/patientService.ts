@@ -126,6 +126,21 @@ export class PatientService {
     }
     
     try {
+      // Vérifier si un patient avec le même nom et date de naissance existe déjà
+      const patientsRef = collection(db, 'patients');
+      const duplicateQuery = query(
+        patientsRef,
+        where('osteopathId', '==', auth.currentUser.uid),
+        where('firstName', '==', patientData.firstName),
+        where('lastName', '==', patientData.lastName),
+        where('dateOfBirth', '==', patientData.dateOfBirth)
+      );
+      
+      const duplicateSnapshot = await getDocs(duplicateQuery);
+      if (!duplicateSnapshot.empty) {
+        throw new Error('Un patient avec ce nom et cette date de naissance existe déjà');
+      }
+
       // Génération d'un ID unique
       const patientId = crypto.randomUUID();
       
@@ -144,31 +159,6 @@ export class PatientService {
         patientId,
         dataWithMetadata
       );
-      
-      // Créer automatiquement la première consultation
-      try {
-        const initialConsultationData = {
-          patientId: patientId,
-          patientName: `${data.firstName} ${data.lastName}`,
-          osteopathId: auth.currentUser.uid,
-          date: new Date(dataWithMetadata.createdAt),
-          reason: 'Première consultation',
-          treatment: 'Évaluation initiale et anamnèse',
-          notes: 'Consultation générée automatiquement lors de la création du patient.',
-          duration: 60,
-          price: 60,
-          status: 'completed',
-          examinations: [],
-          prescriptions: []
-        };
-        
-        await ConsultationService.createConsultation(initialConsultationData);
-        
-        console.log('✅ Première consultation créée automatiquement pour le patient:', patientId);
-      } catch (consultationError) {
-        console.warn('⚠️ Erreur lors de la création de la première consultation:', consultationError);
-        // Ne pas faire échouer la création du patient si la consultation échoue
-      }
       
       // Journalisation de la création
       await AuditLogger.logPatientModification(

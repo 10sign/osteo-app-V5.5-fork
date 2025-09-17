@@ -215,6 +215,52 @@ export class ConsultationService {
     }
 
     try {
+      // Vérifier les doublons de consultation (même patient, même praticien, ±45 min)
+      const consultationDate = new Date(consultationData.date);
+      const startWindow = new Date(consultationDate.getTime() - 45 * 60 * 1000); // -45 min
+      const endWindow = new Date(consultationDate.getTime() + 45 * 60 * 1000); // +45 min
+      
+      const consultationsRef = collection(db, 'consultations');
+      const duplicateQuery = query(
+        consultationsRef,
+        where('osteopathId', '==', auth.currentUser.uid),
+        where('patientId', '==', consultationData.patientId)
+      );
+      
+      const duplicateSnapshot = await getDocs(duplicateQuery);
+      const existingConsultation = duplicateSnapshot.docs.find(doc => {
+        const data = doc.data();
+        const existingDate = data.date?.toDate?.() || new Date(data.date);
+        return existingDate >= startWindow && existingDate <= endWindow;
+      });
+      
+      if (existingConsultation) {
+        throw new Error('Une consultation existe déjà pour ce patient dans cette plage horaire (±45 minutes)');
+      }
+
+      // Vérifier les doublons de consultation (même patient, même praticien, ±45 min)
+      const consultationDate = new Date(consultationData.date);
+      const startWindow = new Date(consultationDate.getTime() - 45 * 60 * 1000); // -45 min
+      const endWindow = new Date(consultationDate.getTime() + 45 * 60 * 1000); // +45 min
+      
+      const consultationsRef = collection(db, 'consultations');
+      const duplicateQuery = query(
+        consultationsRef,
+        where('osteopathId', '==', auth.currentUser.uid),
+        where('patientId', '==', consultationData.patientId)
+      );
+      
+      const duplicateSnapshot = await getDocs(duplicateQuery);
+      const existingConsultation = duplicateSnapshot.docs.find(doc => {
+        const data = doc.data();
+        const existingDate = data.date?.toDate?.() || new Date(data.date);
+        return existingDate >= startWindow && existingDate <= endWindow;
+      });
+      
+      if (existingConsultation) {
+        throw new Error('Une consultation existe déjà pour ce patient dans cette plage horaire (±45 minutes)');
+      }
+
       const userId = auth.currentUser.uid;
       const now = new Date();
       
@@ -228,6 +274,78 @@ export class ConsultationService {
       }, 'consultations', userId);
       
       const docRef = await addDoc(collection(db, 'consultations'), dataToStore);
+      const consultationId = docRef.id;
+      
+      // Créer automatiquement une facture pour cette consultation
+      try {
+        const { InvoiceService } = await import('./invoiceService');
+        
+        const invoiceData = {
+          consultationId: consultationId,
+          patientId: consultationData.patientId,
+          patientName: consultationData.patientName,
+          osteopathId: userId,
+          number: `F-${Date.now()}`,
+          issueDate: new Date().toISOString().split('T')[0],
+          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // +30 jours
+          items: [{
+            id: crypto.randomUUID(),
+            description: consultationData.reason || 'Consultation ostéopathique',
+            quantity: 1,
+            unitPrice: consultationData.price || 60,
+            amount: consultationData.price || 60
+          }],
+          subtotal: consultationData.price || 60,
+          tax: 0,
+          total: consultationData.price || 60,
+          status: 'paid', // Toujours payé par défaut
+          notes: `Facture générée automatiquement pour la consultation du ${new Date(consultationData.date).toLocaleDateString('fr-FR')}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        await InvoiceService.createInvoice(invoiceData);
+        console.log('✅ Facture créée automatiquement pour la consultation:', consultationId);
+      } catch (invoiceError) {
+        console.warn('⚠️ Erreur lors de la création de la facture automatique:', invoiceError);
+        // Ne pas faire échouer la création de la consultation si la facture échoue
+      }
+      const consultationId = docRef.id;
+      
+      // Créer automatiquement une facture pour cette consultation
+      try {
+        const { InvoiceService } = await import('./invoiceService');
+        
+        const invoiceData = {
+          consultationId: consultationId,
+          patientId: consultationData.patientId,
+          patientName: consultationData.patientName,
+          osteopathId: userId,
+          number: `F-${Date.now()}`,
+          issueDate: new Date().toISOString().split('T')[0],
+          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // +30 jours
+          items: [{
+            id: crypto.randomUUID(),
+            description: consultationData.reason || 'Consultation ostéopathique',
+            quantity: 1,
+            unitPrice: consultationData.price || 60,
+            amount: consultationData.price || 60
+          }],
+          subtotal: consultationData.price || 60,
+          tax: 0,
+          total: consultationData.price || 60,
+          status: 'paid', // Toujours payé par défaut
+          notes: `Facture générée automatiquement pour la consultation du ${new Date(consultationData.date).toLocaleDateString('fr-FR')}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        await InvoiceService.createInvoice(invoiceData);
+        console.log('✅ Facture créée automatiquement pour la consultation:', consultationId);
+      } catch (invoiceError) {
+        console.warn('⚠️ Erreur lors de la création de la facture automatique:', invoiceError);
+        // Ne pas faire échouer la création de la consultation si la facture échoue
+      }
       
       // Synchroniser le prochain rendez-vous du patient après création
       if (consultationData.patientId) {
@@ -237,7 +355,7 @@ export class ConsultationService {
           
           // Si la consultation est terminée, l'ajouter à l'historique du patient
           if (consultationData.status === 'completed') {
-            await this.addConsultationToPatientHistory(consultationData.patientId, {
+            await this.addConsultationToPatientHistoryMethod(consultationData.patientId, {
               date: new Date(consultationData.date).toISOString(),
               notes: `${consultationData.reason} - ${consultationData.treatment}`,
               isHistorical: true
@@ -443,7 +561,7 @@ export class ConsultationService {
   /**
    * Ajoute une consultation à l'historique des rendez-vous passés du patient
    */
-  private static async addConsultationToPatientHistory(
+  static async addConsultationToPatientHistoryMethod(
     patientId: string,
     appointmentData: {
       date: string;

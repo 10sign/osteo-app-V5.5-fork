@@ -27,6 +27,21 @@ export class InvoiceService {
     }
 
     try {
+      // Vérifier qu'il n'existe pas déjà une facture pour cette consultation
+      if (invoiceData.consultationId) {
+        const invoicesRef = collection(db, 'invoices');
+        const existingInvoiceQuery = query(
+          invoicesRef,
+          where('consultationId', '==', invoiceData.consultationId),
+          where('osteopathId', '==', auth.currentUser.uid)
+        );
+        
+        const existingInvoiceSnapshot = await getDocs(existingInvoiceQuery);
+        if (!existingInvoiceSnapshot.empty) {
+          throw new Error('Une facture existe déjà pour cette consultation');
+        }
+      }
+
       // 1. Vérifier que le patient existe
       const patientRef = doc(db, 'patients', invoiceData.patientId);
       const patientDoc = await getDoc(patientRef);
@@ -39,8 +54,15 @@ export class InvoiceService {
       const userId = auth.currentUser.uid;
       const timestamp = Timestamp.now();
       
+      // Forcer le statut à 'paid' si c'est 'draft' ou invalide
+      let status = invoiceData.status;
+      if (status === 'draft' || !['paid', 'unpaid'].includes(status)) {
+        status = 'paid';
+      }
+      
       const invoiceWithMetadata = {
         ...invoiceData,
+        status: status,
         osteopathId: userId,
         createdAt: timestamp,
         updatedAt: timestamp,
