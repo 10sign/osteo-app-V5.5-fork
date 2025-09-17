@@ -7,7 +7,7 @@ import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import { Patient, PatientFormData, TreatmentHistoryEntry } from '../../types';
 import { validatePatientData } from '../../utils/validation';
-import AutoCapitalizeInput from '../ui/AutoCapitalizeInput';
+import { ConsultationService } from '../../services/consultationService';
 import AutoCapitalizeTextarea from '../ui/AutoCapitalizeTextarea';
 import { ConsultationService } from '../../services/consultationService';
 import { patientCache } from '../../utils/patientCache';
