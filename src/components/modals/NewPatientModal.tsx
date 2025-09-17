@@ -13,8 +13,6 @@ import { patientCache } from '../../utils/patientCache';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
 import { saveFormData, getFormData, clearFormData } from '../../utils/sessionPersistence';
-import { ConsultationService } from '../../services/consultationService';
-import { InvoiceService } from '../../services/invoiceService';
 
 interface NewPatientModalProps {
   isOpen: boolean;
@@ -422,6 +420,53 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       console.log('Patient successfully saved to Firestore');
       
       setProgress(80);
+
+      // Créer automatiquement une consultation initiale
+      const initialConsultationData = {
+        patientId: patientId,
+        patientName: `${data.firstName.trim()} ${data.lastName.trim()}`,
+        osteopathId: auth.currentUser.uid,
+        date: new Date(),
+        reason: 'Première consultation',
+        treatment: 'Évaluation initiale et anamnèse',
+        notes: 'Consultation générée automatiquement lors de la création du patient.',
+        duration: 60,
+        price: 55,
+        status: 'completed',
+        examinations: [],
+        prescriptions: []
+      };
+
+      const initialConsultationId = await ConsultationService.createConsultation(initialConsultationData);
+
+      // Créer automatiquement une facture liée à cette consultation
+      const invoiceNumber = `F-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
+      
+      const invoiceData = {
+        number: invoiceNumber,
+        patientId: patientId,
+        patientName: `${data.firstName.trim()} ${data.lastName.trim()}`,
+        osteopathId: auth.currentUser.uid,
+        issueDate: new Date().toISOString().split('T')[0],
+        dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        items: [{
+          id: crypto.randomUUID(),
+          description: 'Première consultation',
+          quantity: 1,
+          unitPrice: 55,
+          amount: 55
+        }],
+        subtotal: 55,
+        tax: 0,
+        total: 55,
+        status: 'draft',
+        notes: 'Facture générée automatiquement pour la première consultation.',
+        consultationId: initialConsultationId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await InvoiceService.createInvoice(invoiceData);
 
       // Update cache
       patientCache.set(patientId, patientData as Patient);
