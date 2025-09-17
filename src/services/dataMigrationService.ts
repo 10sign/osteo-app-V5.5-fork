@@ -361,6 +361,153 @@ export class DataMigrationService {
   }
   
   /**
+   * Nettoie les doublons de consultations et factures pour tous les patients
+   */
+  static async cleanDuplicateConsultationsAndInvoices(): Promise<{
+    consultationsCleaned: number;
+    invoicesCleaned: number;
+    errors: number;
+  }> {
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    try {
+      const results = {
+        consultationsCleaned: 0,
+        invoicesCleaned: 0,
+        errors: 0
+      };
+
+      // Récupérer tous les patients
+      const patientsRef = collection(db, 'patients');
+      const patientsQuery = query(
+        patientsRef,
+        where('osteopathId', '==', auth.currentUser.uid)
+      );
+      
+      const patientsSnapshot = await getDocs(patientsQuery);
+      
+      for (const patientDoc of patientsSnapshot.docs) {
+        const patientId = patientDoc.id;
+        const patientData = patientDoc.data();
+        const patientName = `${patientData.firstName} ${patientData.lastName}`;
+        
+        try {
+          // 1. Nettoyer les consultations en double pour ce patient
+          const consultationsRef = collection(db, 'consultations');
+          const consultationsQuery = query(
+            consultationsRef,
+            where('patientId', '==', patientId),
+            where('osteopathId', '==', auth.currentUser.uid)
+          );
+          
+          const consultationsSnapshot = await getDocs(consultationsQuery);
+          const consultations = consultationsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          
+          // Garder seulement la consultation la plus récente
+          if (consultations.length > 1) {
+            consultations.sort((a, b) => {
+              const dateA = a.date?.toDate?.() || new Date(a.date);
+              const dateB = b.date?.toDate?.() || new Date(b.date);
+              return dateB.getTime() - dateA.getTime();
+            });
+            
+            const consultationToKeep = consultations[0];
+            const consultationsToDelete = consultations.slice(1);
+            
+            // Supprimer les consultations en double
+            for (const consultation of consultationsToDelete) {
+              await deleteDoc(doc(db, 'consultations', consultation.id));
+              results.consultationsCleaned++;
+            }
+            
+            console.log(`✅ ${consultationsToDelete.length} consultations en double supprimées pour ${patientName}`);
+          }
+          
+          // 2. Nettoyer les factures en double pour ce patient
+          const invoicesRef = collection(db, 'invoices');
+          const invoicesQuery = query(
+            invoicesRef,
+            where('patientId', '==', patientId),
+            where('osteopathId', '==', auth.currentUser.uid)
+          );
+          
+          const invoicesSnapshot = await getDocs(invoicesQuery);
+          const invoices = invoicesSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          
+          // Garder seulement la facture la plus récente
+          if (invoices.length > 1) {
+            invoices.sort((a, b) => {
+              const dateA = new Date(a.issueDate);
+              const dateB = new Date(b.issueDate);
+              return dateB.getTime() - dateA.getTime();
+            });
+            
+            const invoiceToKeep = invoices[0];
+            const invoicesToDelete = invoices.slice(1);
+            
+            // Supprimer les factures en double
+            for (const invoice of invoicesToDelete) {
+              await deleteDoc(doc(db, 'invoices', invoice.id));
+              results.invoicesCleaned++;
+            }
+            
+            console.log(`✅ ${invoicesToDelete.length} factures en double supprimées pour ${patientName}`);
+            
+            // 3. Lier la facture restante à la consultation restante
+            if (consultations.length > 0) {
+              const consultationToKeep = consultations[0];
+              await updateDoc(doc(db, 'invoices', invoiceToKeep.id), {
+                consultationId: consultationToKeep.id,
+                updatedAt: new Date().toISOString()
+              });
+              
+              console.log(`✅ Facture ${invoiceToKeep.number} liée à la consultation ${consultationToKeep.id}`);
+            }
+          }
+          
+        } catch (error) {
+          console.error(`❌ Erreur lors du nettoyage pour le patient ${patientName}:`, error);
+          results.errors++;
+        }
+      }
+      
+      // Journaliser l'opération
+      await AuditLogger.log(
+        AuditEventType.DATA_MODIFICATION,
+        'all',
+        'clean_duplicates',
+        SensitivityLevel.HIGHLY_SENSITIVE,
+        'success',
+        results
+      );
+      
+      return results;
+      
+    } catch (error) {
+      console.error('❌ Failed to clean duplicates:', error);
+      
+      await AuditLogger.log(
+        AuditEventType.DATA_MODIFICATION,
+        'all',
+        'clean_duplicates',
+        SensitivityLevel.HIGHLY_SENSITIVE,
+        'failure',
+        { error: (error as Error).message }
+      );
+      
+      throw error;
+    }
+  }
+
+  /**
    * Vérifie l'intégrité des données
    */
   static async verifyDataIntegrity(): Promise<{

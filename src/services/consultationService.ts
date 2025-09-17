@@ -215,29 +215,6 @@ export class ConsultationService {
     }
 
     try {
-      // Vérifier les doublons de consultation (même patient, même praticien, ±45 min)
-      const consultationDate = new Date(consultationData.date);
-      const startWindow = new Date(consultationDate.getTime() - 45 * 60 * 1000); // -45 min
-      const endWindow = new Date(consultationDate.getTime() + 45 * 60 * 1000); // +45 min
-      
-      const consultationsRef = collection(db, 'consultations');
-      const duplicateQuery = query(
-        consultationsRef,
-        where('osteopathId', '==', auth.currentUser.uid),
-        where('patientId', '==', consultationData.patientId)
-      );
-      
-      const duplicateSnapshot = await getDocs(duplicateQuery);
-      const existingConsultation = duplicateSnapshot.docs.find(doc => {
-        const data = doc.data();
-        const existingDate = data.date?.toDate?.() || new Date(data.date);
-        return existingDate >= startWindow && existingDate <= endWindow;
-      });
-      
-      if (existingConsultation) {
-        throw new Error('Une consultation existe déjà pour ce patient dans cette plage horaire (±45 minutes)');
-      }
-
       const userId = auth.currentUser.uid;
       const now = new Date();
       
@@ -253,14 +230,29 @@ export class ConsultationService {
       const docRef = await addDoc(collection(db, 'consultations'), dataToStore);
       const consultationId = docRef.id;
       
-      // Créer automatiquement une facture pour cette consultation
+      // Créer automatiquement une facture pour cette consultation (seulement si pas déjà existante)
       try {
         const { InvoiceService } = await import('./invoiceService');
+        
+        // Vérifier qu'il n'existe pas déjà une facture pour cette consultation
+        const invoicesRef = collection(db, 'invoices');
+        const existingInvoiceQuery = query(
+          invoicesRef,
+          where('consultationId', '==', consultationId),
+          where('osteopathId', '==', userId)
+        );
+        
+        const existingInvoiceSnapshot = await getDocs(existingInvoiceQuery);
+        if (!existingInvoiceSnapshot.empty) {
+          console.log('ℹ️ Facture déjà existante pour cette consultation, pas de création');
+          return consultationId;
+        }
         
         const invoiceData = {
           patientId: consultationData.patientId,
           patientName: consultationData.patientName,
           osteopathId: userId,
+          consultationId: consultationId,
           number: `F-${Date.now()}`,
           issueDate: new Date().toISOString().split('T')[0],
           dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // +30 jours

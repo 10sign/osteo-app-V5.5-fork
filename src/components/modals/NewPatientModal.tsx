@@ -423,6 +423,27 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       
       setProgress(80);
 
+      // Créer automatiquement une consultation pour ce nouveau patient
+      try {
+        const consultationData = {
+          patientId: patientId,
+          patientName: `${data.firstName} ${data.lastName}`,
+          date: new Date(), // Date actuelle
+          reason: data.consultationReason || 'Première consultation',
+          treatment: data.osteopathicTreatment || 'Traitement ostéopathique initial',
+          notes: data.notes || 'Première consultation - nouveau patient',
+          duration: 60,
+          price: 60,
+          status: 'completed'
+        };
+        
+        await ConsultationService.createConsultation(consultationData);
+        console.log('✅ Consultation automatique créée pour le nouveau patient');
+      } catch (consultationError) {
+        console.warn('⚠️ Erreur lors de la création de la consultation automatique:', consultationError);
+        // Ne pas faire échouer la création du patient si la consultation échoue
+      }
+
       // Créer automatiquement une consultation initiale
       const initialConsultationData = {
         patientId: patientId,
@@ -523,6 +544,10 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       }
       setProgress(100);
 
+      setSuccess('Dossier patient créé avec succès !');
+      
+      // Clear saved form data after successful submission
+      
       // Afficher le message de succès
       setSuccess('Le dossier patient a été créé avec succès');
       
@@ -1035,267 +1060,4 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                       <Button
                         type="button"
                         variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (customTag.trim()) {
-                            handleAddTag(customTag.trim());
-                            setCustomTag('');
-                          }
-                        }}
-                      >
-                        <Plus size={16} />
-                      </Button>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {COMMON_PATHOLOGIES.map((pathology) => (
-                        <button
-                          key={pathology}
-                          type="button"
-                          onClick={() => handleAddTag(pathology)}
-                          className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-                            selectedTags.includes(pathology)
-                              ? 'bg-primary-50 border-primary-200 text-primary-700'
-                              : 'border-gray-200 hover:border-primary-200 hover:bg-primary-50'
-                          }`}
-                        >
-                          {pathology}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
-                    Note sur le patient
-                  </label>
-                  <AutoCapitalizeTextarea
-                    id="notes"
-                    rows={4}
-                    className="input w-full resize-none"
-                    {...register('notes')}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="osteopathicTreatment" className="block text-sm font-medium text-gray-700 mb-1">
-                    Traitement ostéopathique
-                  </label>
-                  <AutoCapitalizeTextarea
-                    id="osteopathicTreatment"
-                    rows={4}
-                    className="input w-full resize-none"
-                    {...register('osteopathicTreatment')}
-                    placeholder="Description du traitement ostéopathique effectué ou à effectuer"
-                  />
-                </div>
-
-                {/* Rendez-vous passés */}
-                <div className="border-t pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Rendez-vous passés
-                    </label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addPastAppointment}
-                      leftIcon={<Plus size={16} />}
-                    >
-                      Ajouter un rendez-vous passé
-                    </Button>
-                  </div>
-
-                  {pastAppointments.length > 0 ? (
-                    <div className="space-y-4">
-                      {pastAppointments.map((appointment, index) => (
-                        <div key={index} className="border border-gray-200 rounded-lg p-4 relative">
-                          <button
-                            type="button"
-                            onClick={() => removePastAppointment(index)}
-                            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Date
-                              </label>
-                              <input
-                                type="date"
-                                value={appointment.date}
-                                onChange={(e) => updatePastAppointment(index, 'date', e.target.value)}
-                                className="input w-full"
-                                max={new Date().toISOString().split('T')[0]}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Heure
-                              </label>
-                              <input
-                                type="time"
-                                value={appointment.time}
-                                onChange={(e) => updatePastAppointment(index, 'time', e.target.value)}
-                                className="input w-full"
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Notes
-                            </label>
-                            <textarea
-                              value={appointment.notes}
-                              onChange={(e) => updatePastAppointment(index, 'notes', e.target.value)}
-                              className="input w-full resize-none"
-                              rows={2}
-                              placeholder="Motif du rendez-vous, traitement effectué..."
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500 italic">
-                      Aucun rendez-vous passé enregistré
-                    </p>
-                  )}
-                </div>
-
-                {/* Prochain rendez-vous */}
-                <div>
-                  <label htmlFor="nextAppointment" className="block text-sm font-medium text-gray-700 mb-1">
-                    Jour et heure de consultation
-                  </label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <input
-                        type="date"
-                        id="nextAppointment"
-                        className={`input w-full ${errors.nextAppointment ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                        {...register('nextAppointment', {
-                          validate: value => {
-                            if (!value) return true;
-                            const date = new Date(value);
-                            const today = new Date();
-                            today.setHours(0, 0, 0, 0);
-                            return date >= today || 'La date doit être égale ou supérieure à aujourd\'hui';
-                          }
-                        })}
-                        min={new Date().toISOString().split('T')[0]}
-                      />
-                      {errors.nextAppointment && (
-                        <p className="mt-1 text-sm text-error">{errors.nextAppointment.message}</p>
-                      )}
-                    </div>
-                    <div>
-                      <input
-                        type="time"
-                        id="nextAppointmentTime"
-                        className={`input w-full ${errors.nextAppointmentTime ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                        {...register('nextAppointmentTime', {
-                          validate: value => {
-                            if (!watch('nextAppointment')) return true;
-                            if (!value) return 'L\'heure est requise si une date est sélectionnée';
-                            const [hours] = value.split(':').map(Number);
-                            if (hours < 8 || hours >= 18) return 'Les consultations sont possibles entre 8h et 18h';
-                            return true;
-                          }
-                        })}
-                        min="08:00"
-                        max="18:00"
-                        step="3600"
-                      />
-                      {errors.nextAppointmentTime && (
-                        <p className="mt-1 text-sm text-error">{errors.nextAppointmentTime.message}</p>
-                      )}
-                    </div>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Note: Une première consultation sera automatiquement créée lors de l'ajout du patient
-                  </p>
-                </div>
-              </form>
-            </div>
-
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
-              <Button
-                variant="outline"
-                onClick={handleModalClose}
-              >
-                Annuler
-              </Button>
-              <Button
-                type="submit"
-                form="newPatientForm"
-                variant="primary"
-                isLoading={isSubmitting}
-                loadingText="Création en cours..."
-                disabled={!isValid || isSubmitting}
-              >
-                Créer le dossier
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-      
-      {/* Modal de confirmation pour fermeture */}
-      <AnimatePresence>
-        {showConfirmation && (
-          <div className="fixed inset-0 z-60 flex items-center justify-center">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ type: 'spring', duration: 0.5 }}
-              className="relative w-full max-w-md bg-white rounded-xl shadow-2xl"
-            >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Confirmer la fermeture</h3>
-              </div>
-
-              <div className="px-6 py-4">
-                <p className="text-gray-700 mb-4">
-                  Vous avez saisi des informations dans ce formulaire. 
-                  Voulez-vous vraiment fermer et perdre ces données ?
-                </p>
-                <p className="text-sm text-gray-600 mb-2">
-                  <strong>Astuce :</strong> Cliquez deux fois à l'extérieur du formulaire pour afficher cette confirmation.
-                </p>
-              </div>
-
-              <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
-                <Button
-                  variant="outline"
-                  onClick={handleCancelClose}
-                >
-                  Continuer l'édition
-                </Button>
-                <Button
-                  variant="danger"
-                  onClick={handleConfirmClose}
-                >
-                  Fermer et perdre les données
-                </Button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </AnimatePresence>
-  );
-};
-
-export default NewPatientModal;
+                        size="

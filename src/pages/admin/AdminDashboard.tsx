@@ -278,11 +278,11 @@ const AdminDashboard: React.FC = () => {
           
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              {/* Outil de nettoyage des doublons */}
+              {/* Outil de nettoyage des doublons de patients */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
                   <Users size={20} className="mr-2 text-primary-600" />
-                  Nettoyage des doublons
+                  Nettoyage des doublons de patients
                 </h3>
                 <p className="text-sm text-gray-600 mb-4">
                   Recherche et supprime automatiquement les patients en double, en fusionnant leurs consultations et factures.
@@ -311,6 +311,37 @@ const AdminDashboard: React.FC = () => {
                   leftIcon={<Users size={16} />}
                 >
                   Nettoyer les doublons
+                </Button>
+              </div>
+              
+              {/* Outil de nettoyage des consultations et factures en double */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <Database size={20} className="mr-2 text-secondary-600" />
+                  Nettoyage des consultations et factures
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Nettoie les consultations et factures en double pour chaque patient. Garde 1 consultation et 1 facture par patient, correctement liées.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const results = await DataMigrationService.cleanDuplicateConsultationsAndInvoices();
+                      
+                      alert(`✅ Nettoyage terminé:\n- ${results.consultationsCleaned} consultations en double supprimées\n- ${results.invoicesCleaned} factures en double supprimées\n- ${results.errors} erreurs`);
+                      
+                      if (results.errors > 0) {
+                        console.warn('⚠️ Erreurs lors du nettoyage, consultez la console');
+                      }
+                    } catch (error) {
+                      console.error('❌ Erreur lors du nettoyage:', error);
+                      alert('❌ Erreur lors du nettoyage des consultations et factures');
+                    }
+                  }}
+                  leftIcon={<Database size={16} />}
+                >
+                  Nettoyer consultations et factures
                 </Button>
               </div>
               
