@@ -411,9 +411,8 @@ const InvoiceDetail: React.FC = () => {
                   disabled={isUpdatingStatus}
                   className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="draft">Brouillon</option>
-                  <option value="sent">Envoyée</option>
                   <option value="paid">Payée</option>
+                  <option value="unpaid">Impayée</option>
                 </select>
               </div>
             </div>

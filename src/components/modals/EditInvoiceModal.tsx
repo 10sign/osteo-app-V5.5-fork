@@ -55,7 +55,7 @@ const EditInvoiceModal: React.FC<EditInvoiceModalProps> = ({
     mode: 'onChange',
     defaultValues: {
       items: [{ description: 'Consultation standard', quantity: 1, unitPrice: 60, amount: 60 }],
-      status: 'draft'
+      status: 'paid'
     }
   });
 
@@ -267,9 +267,8 @@ const EditInvoiceModal: React.FC<EditInvoiceModalProps> = ({
                       <select
                         id="status"
                         className={`input w-full ${errors.status ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                        {...register('status', { required: 'Ce champ est requis' })}
-                      >
                         <option value="paid">Payée</option>
+                        <option value="unpaid">Impayée</option>
                         <option value="unpaid">Impayée</option>
                       </select>
                       {errors.status && (

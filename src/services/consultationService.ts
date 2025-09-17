@@ -14,7 +14,7 @@ import {
 import { db, auth } from '../firebase/config';
 import { Consultation, ConsultationFormData } from '../types';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
-import HDSCompliance from '../utils/hdsCompliance';
+import { HDSCompliance } from '../utils/hdsCompliance';
 
 /**
  * Service de déduplication des consultations avec tolérance de 45 minutes
@@ -474,6 +474,19 @@ export class ConsultationService {
     }
 
     try {
+      // Vérifier les doublons avant création
+      const existingConsultations = await this.getConsultationsByPatientId(consultationData.patientId);
+      const consultationDate = new Date(consultationData.date);
+      
+      for (const existing of existingConsultations) {
+        if (this.areConsultationsWithin45Minutes(
+          { date: consultationDate },
+          { date: existing.date }
+        )) {
+          throw new Error('Une consultation existe déjà dans cette plage horaire (±45 minutes)');
+        }
+      }
+
       const userId = auth.currentUser.uid;
       const now = new Date();
       
