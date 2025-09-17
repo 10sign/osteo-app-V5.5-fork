@@ -154,7 +154,6 @@ export class PatientService {
         where('patientId', '==', patientId),
         where('osteopathId', '==', auth.currentUser.uid),
         where('date', '==', Timestamp.fromDate(consultationDate)),
-        where('reason', '==', 'Première consultation')
         where('reason', '==', 'Première consultation') // Add specific reason to avoid matching other consultations
       );
       const existingConsultationSnapshot = await getDocs(existingConsultationQuery);
