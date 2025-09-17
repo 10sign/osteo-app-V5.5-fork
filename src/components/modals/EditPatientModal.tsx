@@ -95,7 +95,6 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
     }
   };
 
-  const { register, handleSubmit, formState: { errors, isValid }, reset, trigger, watch, setValue } = useForm({
   const { register, handleSubmit, formState: { errors, isValid, isDirty }, reset, trigger, watch, setValue } = useForm({
     mode: 'onChange',
     defaultValues: {
@@ -1116,6 +1115,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                 console.log('Edit modal backdrop clicked, attempting to close');
                 handleClose();
               }}
+            />
 
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
