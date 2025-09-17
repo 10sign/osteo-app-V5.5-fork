@@ -568,29 +568,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       console.log('Cleared form data on confirmed close');
     } catch (error) {
       console.error('Error clearing form data:', error);
-    }
-    
-    // Reset all form state
-    reset();
-    setSelectedTags([]);
-    setPastAppointments([]);
-    setTreatmentHistory([]);
-    setPatientDocuments([]);
-    setError(null);
-    setSuccess(null);
-    setShowUnsavedWarning(false);
-    setHasUnsavedChanges(false);
-    
-    console.log('New patient modal force closed - all data cleared');
-    
-    // Close the modal
     onClose();
-  };
-
-  const handleCancelClose = () => {
-    console.log('User cancelled close, continuing editing');
-    setShowUnsavedWarning(false);
-  };
 
   return (
     <AnimatePresence>
