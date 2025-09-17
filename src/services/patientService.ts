@@ -154,6 +154,7 @@ export class PatientService {
         where('patientId', '==', patientId),
         where('osteopathId', '==', auth.currentUser.uid),
         where('date', '==', Timestamp.fromDate(consultationDate)),
+        where('reason', '==', 'Première consultation')
         where('reason', '==', 'Première consultation') // Add specific reason to avoid matching other consultations
       );
       const existingConsultationSnapshot = await getDocs(existingConsultationQuery);
@@ -164,7 +165,7 @@ export class PatientService {
             patientId: patientId,
             patientName: `${dataWithMetadata.firstName} ${dataWithMetadata.lastName}`,
             osteopathId: auth.currentUser.uid,
-            date: Timestamp.fromDate(consultationDate), // Ensure date is a Timestamp
+            date: Timestamp.fromDate(consultationDate),
             reason: 'Première consultation',
             treatment: 'Évaluation initiale et anamnèse',
             notes: 'Consultation générée automatiquement lors de la création du patient.',
@@ -175,7 +176,12 @@ export class PatientService {
             prescriptions: []
           };
           
-          // Use HDSCompliance to save the consultation
+          const consultationId = crypto.randomUUID();
+          await HDSCompliance.saveCompliantData(
+            'consultations',
+            consultationId,
+            initialConsultationData
+          );
           const consultationId = await HDSCompliance.saveCompliantData(
             'consultations',
             crypto.randomUUID(), // Generate a new ID for the consultation
@@ -183,6 +189,17 @@ export class PatientService {
           );
           console.log('✅ Première consultation créée automatiquement pour le patient:', patientId, 'ID:', consultationId);
 
+          // Check if an invoice already exists for this consultation
+          const invoicesRef = collection(db, 'invoices');
+          const existingInvoiceQuery = query(
+            invoicesRef,
+            where('patientId', '==', patientId),
+            where('osteopathId', '==', auth.currentUser.uid),
+            where('notes', '==', `Facture générée automatiquement pour la consultation ${consultationId}.`)
+          );
+          const existingInvoiceSnapshot = await getDocs(existingInvoiceQuery);
+
+          if (existingInvoiceSnapshot.empty) {
           // Check if an invoice already exists for this consultation
           const invoicesRef = collection(db, 'invoices');
           const existingInvoiceQuery = query(
@@ -211,7 +228,11 @@ export class PatientService {
             createdAt: dataWithMetadata.createdAt,
             updatedAt: dataWithMetadata.updatedAt
           };
-          // Use HDSCompliance to save the invoice
+          await HDSCompliance.saveCompliantData(
+            'invoices',
+            crypto.randomUUID(),
+            invoiceData
+          );
           await HDSCompliance.saveCompliantData(
             'invoices',
             crypto.randomUUID(), // Generate a new ID for the invoice
@@ -221,10 +242,15 @@ export class PatientService {
           } else {
             console.log('⚠️ Facture automatique déjà existante pour le patient:', patientId);
           }
+          } else {
+            console.log('⚠️ Facture automatique déjà existante pour le patient:', patientId);
+          }
 
         } catch (creationError) {
           console.warn('⚠️ Erreur lors de la création automatique de consultation/facture:', creationError);
         }
+      } else {
+        console.log('⚠️ Consultation automatique déjà existante pour le patient:', patientId);
       }
       
       // Journalisation de la création
