@@ -1158,6 +1158,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                 console.log('Backdrop clicked, attempting to close');
                 handleClose();
               }}
+            />
 
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
