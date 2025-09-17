@@ -424,7 +424,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       setProgress(80);
 
       // Créer le patient
-      const patientId = await createPatient(patientData);
+      const newPatientId = await createPatient(patientData);
       
       // Clear saved form data after successful submission
       try {
@@ -439,7 +439,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       
       const invoiceData = {
         number: invoiceNumber,
-        patientId: patientId,
+        patientId: newPatientId,
         patientName: `${data.firstName.trim()} ${data.lastName.trim()}`,
         osteopathId: auth.currentUser.uid,
         issueDate: new Date().toISOString().split('T')[0],
