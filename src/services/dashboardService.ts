@@ -192,7 +192,7 @@ export class DashboardService {
       const q = query(
         invoicesRef,
         where('osteopathId', '==', userId),
-        where('status', '==', 'unpaid')
+        where('status', '==', 'draft')
       );
       
       const snapshot = await getCountFromServer(q);
@@ -206,7 +206,7 @@ export class DashboardService {
         const q = query(
           invoicesRef,
           where('osteopathId', '==', userId),
-          where('status', '==', 'unpaid')
+          where('status', '==', 'draft')
         );
         
         const snapshot = await getDocs(q);
@@ -418,17 +418,17 @@ export class DashboardService {
       const invoicesRef = collection(db, 'invoices');
       
       try {
+        // Requête simple sans orderBy pour éviter les problèmes d'index
         const invoicesQuery = query(
           invoicesRef,
-          where('osteopathId', '==', userId)
+          where('osteopathId', '==', userId),
+          where('status', '==', 'draft')
         );
         
         const invoicesSnapshot = await getDocs(invoicesQuery);
-        const unpaidInvoices = invoicesSnapshot.docs
-          .filter(doc => doc.data().status === 'unpaid')
-          .slice(0, 2);
+        const draftInvoices = invoicesSnapshot.docs.slice(0, 2);
         
-        for (const doc of unpaidInvoices) {
+        for (const doc of draftInvoices) {
           const invoice = doc.data();
           
           // Déchiffrer les données si nécessaire
@@ -441,7 +441,7 @@ export class DashboardService {
           notifications.push({
             id: doc.id,
             type: 'invoice',
-            message: `Facture #${decryptedData.number} impayée`,
+            message: `Facture #${decryptedData.number} en attente de paiement`,
             time: new Date(decryptedData.issueDate),
             timeFormatted: 'Hier',
             priority: 'medium'
