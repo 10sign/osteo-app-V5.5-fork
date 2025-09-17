@@ -14,6 +14,7 @@ import {
 import { db, auth } from '../firebase/config';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import { HDSCompliance } from '../utils/hdsCompliance';
+import { InvoiceService } from './invoiceService';
 
 export class ConsultationService {
   /**
@@ -25,6 +26,136 @@ export class ConsultationService {
     const diffMs = Math.abs(date1.getTime() - date2.getTime());
     const diffMinutes = diffMs / (1000 * 60);
     return diffMinutes <= 45;
+  }
+
+  /**
+   * Crée une nouvelle consultation avec vérification anti-doublons
+   */
+  static async createConsultation(consultationData: any): Promise<string> {
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    try {
+      // Vérifier les doublons existants
+      const consultationsRef = collection(db, 'consultations');
+      const q = query(
+        consultationsRef,
+        where('osteopathId', '==', auth.currentUser.uid),
+        where('patientId', '==', consultationData.patientId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const existingConsultations = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().date?.toDate?.() || new Date(doc.data().date)
+      }));
+      
+      const consultationDate = new Date(consultationData.date);
+      
+      // Vérifier les doublons (tolérance 45 minutes)
+      for (const existing of existingConsultations) {
+        if (this.areConsultationsWithin45Minutes(
+          { date: consultationDate },
+          { date: existing.date }
+        )) {
+          throw new Error('Une consultation existe déjà dans cette plage horaire (±45 minutes)');
+        }
+      }
+
+      const userId = auth.currentUser.uid;
+      const now = new Date();
+      
+      // Préparation des données avec chiffrement HDS
+      const dataToStore = HDSCompliance.prepareDataForStorage({
+        ...consultationData,
+        osteopathId: userId,
+        date: Timestamp.fromDate(new Date(consultationData.date)),
+        createdAt: Timestamp.fromDate(now),
+        updatedAt: Timestamp.fromDate(now)
+      }, 'consultations', userId);
+      
+      const docRef = await addDoc(collection(db, 'consultations'), dataToStore);
+      
+      // Créer automatiquement une facture pour cette consultation
+      try {
+        const invoiceData = {
+          patientId: consultationData.patientId,
+          patientName: consultationData.patientName,
+          osteopathId: userId,
+          consultationId: docRef.id,
+          number: `INV-${Date.now().toString().slice(-6)}`,
+          issueDate: new Date(consultationData.date).toISOString().split('T')[0],
+          dueDate: new Date(consultationData.date).toISOString().split('T')[0],
+          items: [{ 
+            id: 'item1', 
+            description: consultationData.reason || 'Consultation ostéopathique', 
+            quantity: 1, 
+            unitPrice: consultationData.price || 60, 
+            amount: consultationData.price || 60 
+          }],
+          subtotal: consultationData.price || 60,
+          tax: 0,
+          total: consultationData.price || 60,
+          status: 'paid',
+          paidAt: new Date().toISOString(),
+          notes: `Facture générée automatiquement pour la consultation du ${new Date(consultationData.date).toLocaleDateString('fr-FR')}.`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        await InvoiceService.createInvoice(invoiceData);
+      } catch (invoiceError) {
+        console.warn('⚠️ Erreur lors de la création automatique de la facture:', invoiceError);
+      }
+      
+      // Synchroniser le prochain rendez-vous du patient après création
+      if (consultationData.patientId) {
+        try {
+          const { AppointmentService } = await import('./appointmentService');
+          await AppointmentService.syncPatientNextAppointment(consultationData.patientId);
+          
+          // Si la consultation est terminée, l'ajouter à l'historique du patient
+          if (consultationData.status === 'completed') {
+            await this.addConsultationToPatientHistory(consultationData.patientId, {
+              date: new Date(consultationData.date).toISOString(),
+              notes: `${consultationData.reason} - ${consultationData.treatment}`,
+              isHistorical: true
+            });
+          }
+        } catch (syncError) {
+          console.warn('⚠️ Erreur lors de la synchronisation du patient:', syncError);
+        }
+      }
+      
+      // Journalisation de la création
+      await AuditLogger.log(
+        AuditEventType.DATA_CREATION,
+        `consultations/${docRef.id}`,
+        'create',
+        SensitivityLevel.SENSITIVE,
+        'success',
+        { patientId: consultationData.patientId }
+      );
+      
+      return docRef.id;
+      
+    } catch (error) {
+      console.error('❌ Erreur lors de la création de la consultation:', error);
+      
+      // Journalisation de l'erreur
+      await AuditLogger.log(
+        AuditEventType.DATA_CREATION,
+        'consultations',
+        'create',
+        SensitivityLevel.SENSITIVE,
+        'failure',
+        { error: (error as Error).message }
+      );
+      
+      throw error;
+    }
   }
 
   /**
@@ -205,6 +336,59 @@ export class ConsultationService {
       for (const existing of existingConsultations) {
         if (this.areConsultationsWithin45Minutes(
           { date: consultationDate },
+  /**
+   * Ajoute une consultation à l'historique des rendez-vous passés du patient
+   */
+  private static async addConsultationToPatientHistory(
+    patientId: string,
+    appointmentData: {
+      date: string;
+      notes: string;
+      isHistorical: boolean;
+    }
+  ): Promise<void> {
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    try {
+      const patientRef = doc(db, 'patients', patientId);
+      const patientDoc = await getDoc(patientRef);
+      
+      if (!patientDoc.exists()) {
+        console.warn(`⚠️ Patient ${patientId} non trouvé pour mise à jour de l'historique`);
+        return;
+      }
+      
+      const patientData = patientDoc.data();
+      const currentPastAppointments = patientData.pastAppointments || [];
+      
+      // Vérifier si cette consultation n'est pas déjà dans l'historique
+      const existingAppointment = currentPastAppointments.find((app: any) => 
+        app.date === appointmentData.date
+      );
+      
+      if (!existingAppointment) {
+        // Ajouter la nouvelle consultation à l'historique
+        const updatedPastAppointments = [...currentPastAppointments, appointmentData];
+        
+        // Trier par date décroissante (plus récent en premier)
+        updatedPastAppointments.sort((a, b) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        
+        await updateDoc(patientRef, {
+          pastAppointments: updatedPastAppointments,
+          updatedAt: new Date().toISOString()
+        });
+        
+        console.log(`✅ Consultation ajoutée à l'historique du patient ${patientId}`);
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'ajout à l\'historique du patient:', error);
+    }
+  }
+
           { date: existing.date }
         )) {
           throw new Error('Une consultation existe déjà dans cette plage horaire (±45 minutes)');
@@ -532,7 +716,7 @@ export class ConsultationService {
     }
   }
   /**
-   * Récupère les statistiques des consultations
+   * Récupère une consultation par son ID
    */
   static async getConsultationById(id: string): Promise<any | null> {
     if (!auth.currentUser) {
