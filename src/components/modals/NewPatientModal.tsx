@@ -55,8 +55,9 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
   const [pastAppointments, setPastAppointments] = useState<PastAppointment[]>([]);
   const [treatmentHistory, setTreatmentHistory] = useState<TreatmentHistoryEntry[]>([]);
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>([]);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
+  const [clickCount, setClickCount] = useState(0);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [hasFormData, setHasFormData] = useState(false);
 
   const { register, handleSubmit, formState: { errors, isValid, isDirty }, reset, watch, setValue, trigger } = useForm<PatientFormData>({
     mode: 'onChange',
@@ -114,6 +115,9 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       setPastAppointments([]);
       setTreatmentHistory([]);
       setPatientDocuments([]);
+      setClickCount(0);
+      setShowConfirmation(false);
+      setHasFormData(false);
       
       console.log('New patient modal opened - form initialized with empty data');
     }
@@ -134,12 +138,12 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
   useEffect(() => {
     if (!isOpen) return;
 
-    // Détecter les changements non enregistrés
-    const detectUnsavedChanges = () => {
+    // Détecter si le formulaire contient des données
+    const detectFormData = () => {
       const formData = watch();
       
       // Vérifier si des champs du formulaire ont été modifiés
-      const hasFormData = Object.values(formData).some(value => 
+      const hasFormDataValue = Object.values(formData).some(value => 
         value && value !== '' && value !== undefined && value !== null
       );
       
@@ -149,23 +153,23 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                           treatmentHistory.length > 0 ||
                           patientDocuments.length > 0;
       
-      const hasChanges = hasFormData || hasListData || isDirty;
+      const hasData = hasFormDataValue || hasListData || isDirty;
       
-      console.log('Unsaved changes detection:', {
-        hasFormData,
+      console.log('Form data detection:', {
+        hasFormDataValue,
         hasListData,
         isDirty,
-        hasChanges,
+        hasData,
         formData: Object.keys(formData).filter(key => formData[key])
       });
       
-      setHasUnsavedChanges(hasChanges);
+      setHasFormData(hasData);
       
-      return hasChanges;
+      return hasData;
     };
     
     // Détecter immédiatement
-    detectUnsavedChanges();
+    detectFormData();
     
     const saveData = () => {
       const formData = watch();
@@ -188,6 +192,89 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       saveData(); // Save on unmount
     };
   }, [isOpen, watch, selectedTags, pastAppointments, treatmentHistory, patientDocuments, isDirty]);
+
+  // Gérer le clic extérieur avec double-clic
+  const handleBackdropClick = () => {
+    if (!hasFormData) {
+      // Pas de données, fermer directement
+      onClose();
+      return;
+    }
+
+    setClickCount(prev => {
+      const newCount = prev + 1;
+      
+      if (newCount === 1) {
+        // Premier clic - ne rien faire, juste incrémenter
+        setTimeout(() => setClickCount(0), 2000); // Reset après 2 secondes
+        return newCount;
+      } else if (newCount >= 2) {
+        // Deuxième clic - afficher la confirmation
+        setShowConfirmation(true);
+        return 0; // Reset le compteur
+      }
+      
+      return newCount;
+    });
+  };
+
+  // Gérer la fermeture avec vérification
+  const handleClose = () => {
+    if (!hasFormData) {
+      // Pas de données, fermer directement
+      clearFormData(FORM_ID);
+      reset();
+      setSelectedTags([]);
+      setPastAppointments([]);
+      setTreatmentHistory([]);
+      setPatientDocuments([]);
+      setError(null);
+      setSuccess(null);
+      onClose();
+      return;
+    }
+
+    // Il y a des données, afficher la confirmation
+    setShowConfirmation(true);
+  };
+
+  // Confirmer la fermeture sans sauvegarder
+  const handleConfirmClose = () => {
+    console.log('User confirmed close without saving');
+    setShowConfirmation(false);
+    
+    // Clear any saved form data when closing
+    try {
+      clearFormData(FORM_ID);
+      console.log('Cleared form data on confirmed close');
+    } catch (error) {
+      console.error('Error clearing form data:', error);
+    }
+    
+    // Reset all form state
+    reset();
+    setSelectedTags([]);
+    setPastAppointments([]);
+    setTreatmentHistory([]);
+    setPatientDocuments([]);
+    setError(null);
+    setSuccess(null);
+    setClickCount(0);
+    setShowConfirmation(false);
+    setHasFormData(false);
+    
+    console.log('New patient modal force closed - all data cleared');
+    
+    // Close the modal
+    onClose();
+  };
+
+  // Annuler la fermeture et continuer l'édition
+  const handleCancelClose = () => {
+    console.log('User cancelled close, continuing editing');
+    setShowConfirmation(false);
+    setClickCount(0);
+  };
 
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     // Cette fonction est conservée mais n'est plus utilisée
@@ -514,7 +601,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={handleClose}
+            onClick={handleBackdropClick}
           />
 
           <motion.div
@@ -1143,21 +1230,15 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
         </div>
       )}
       
-      {/* Modal de confirmation pour les données non sauvegardées */}
+      {/* Modal de confirmation pour fermeture */}
       <AnimatePresence>
-        {showUnsavedWarning && (
+        {showConfirmation && (
           <div className="fixed inset-0 z-60 flex items-center justify-center">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('Backdrop clicked, attempting to close');
-                handleClose();
-              }}
             />
 
             <motion.div
@@ -1168,19 +1249,16 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
               className="relative w-full max-w-md bg-white rounded-xl shadow-2xl"
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Données non sauvegardées</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Confirmer la fermeture</h3>
               </div>
 
               <div className="px-6 py-4">
                 <p className="text-gray-700 mb-4">
-                  Vous avez des données non sauvegardées dans ce formulaire. 
-                  Voulez-vous vraiment fermer sans enregistrer ?
+                  Vous avez saisi des informations dans ce formulaire. 
+                  Voulez-vous vraiment fermer et perdre ces données ?
                 </p>
                 <p className="text-sm text-gray-600 mb-2">
-                  <strong>Données qui seront perdues :</strong>
-                </p>
-                <p className="text-sm text-gray-500">
-                  • Informations du formulaire • Tags sélectionnés • Historique des traitements • Rendez-vous passés • Documents téléversés
+                  <strong>Astuce :</strong> Cliquez deux fois à l'extérieur du formulaire pour afficher cette confirmation.
                 </p>
               </div>
 
@@ -1195,7 +1273,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                   variant="danger"
                   onClick={handleConfirmClose}
                 >
-                  Fermer sans enregistrer
+                  Fermer et perdre les données
                 </Button>
               </div>
             </motion.div>

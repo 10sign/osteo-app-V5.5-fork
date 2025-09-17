@@ -61,8 +61,9 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>(
     patient.documents || []
   );
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
+  const [clickCount, setClickCount] = useState(0);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
   const formId = `edit_patient_${patient.id}`;
   
   // État initial pour comparaison
@@ -200,8 +201,8 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   useEffect(() => {
     if (!isOpen) return;
 
-    // Détecter les changements non enregistrés
-    const detectUnsavedChanges = () => {
+    // Détecter les changements par rapport à l'état initial
+    const detectChanges = () => {
       // Utiliser isDirty de react-hook-form pour les champs du formulaire
       const hasFormChanges = isDirty;
       
@@ -211,24 +212,24 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
       const hasAppointmentChanges = JSON.stringify(pastAppointments) !== JSON.stringify(initialState.pastAppointments);
       const hasDocumentChanges = patientDocuments.length !== initialState.documents.length;
       
-      const hasChanges = hasFormChanges || hasTagChanges || hasTreatmentChanges || hasAppointmentChanges || hasDocumentChanges;
+      const hasAnyChanges = hasFormChanges || hasTagChanges || hasTreatmentChanges || hasAppointmentChanges || hasDocumentChanges;
       
-      console.log('Edit patient - Unsaved changes detection:', {
+      console.log('Edit patient - Changes detection:', {
         hasFormChanges,
         hasTagChanges,
         hasTreatmentChanges,
         hasAppointmentChanges,
         hasDocumentChanges,
         isDirty,
-        hasChanges
+        hasAnyChanges
       });
       
-      setHasUnsavedChanges(hasChanges);
-      return hasChanges;
+      setHasChanges(hasAnyChanges);
+      return hasAnyChanges;
     };
     
     // Détecter immédiatement
-    detectUnsavedChanges();
+    detectChanges();
     
     const saveData = () => {
       const formData = watch();
@@ -251,6 +252,71 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
       saveData(); // Save on unmount
     };
   }, [isOpen, watch, selectedTags, pastAppointments, treatmentHistory, patientDocuments, isDirty, initialState]);
+
+  // Gérer le clic extérieur avec double-clic
+  const handleBackdropClick = () => {
+    if (!hasChanges) {
+      // Pas de changements, fermer directement
+      onClose();
+      return;
+    }
+
+    setClickCount(prev => {
+      const newCount = prev + 1;
+      
+      if (newCount === 1) {
+        // Premier clic - ne rien faire, juste incrémenter
+        setTimeout(() => setClickCount(0), 2000); // Reset après 2 secondes
+        return newCount;
+      } else if (newCount >= 2) {
+        // Deuxième clic - afficher la confirmation
+        setShowConfirmation(true);
+        return 0; // Reset le compteur
+      }
+      
+      return newCount;
+    });
+  };
+
+  // Gérer la fermeture avec vérification
+  const handleClose = () => {
+    if (!hasChanges) {
+      // Pas de changements, fermer directement
+      onClose();
+      return;
+    }
+
+    // Il y a des changements, afficher la confirmation
+    setShowConfirmation(true);
+  };
+
+  // Confirmer la fermeture sans sauvegarder
+  const handleConfirmClose = () => {
+    console.log('User confirmed close without saving edits');
+    setShowConfirmation(false);
+    
+    // Clear saved form data
+    try {
+      clearFormData(formId);
+      console.log('Cleared form data on confirmed close');
+    } catch (error) {
+      console.error('Error clearing form data:', error);
+    }
+    
+    // Reset state
+    setShowConfirmation(false);
+    setHasChanges(false);
+    setClickCount(0);
+    
+    onClose();
+  };
+
+  // Annuler la fermeture et continuer l'édition
+  const handleCancelClose = () => {
+    console.log('User cancelled close, continuing editing');
+    setShowConfirmation(false);
+    setClickCount(0);
+  };
 
   // Fonction pour obtenir la valeur originale d'un champ
   const getOriginalValue = (key: string) => {
@@ -440,66 +506,6 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
         currentTreatment: data.currentTreatment,
         consultationReason: data.consultationReason,
         medicalAntecedents: data.medicalAntecedents,
-      };
-      
-      // Only add treatmentHistory if it has entries to avoid undefined
-      if (treatmentHistory.length > 0) {
-        updatedData.treatmentHistory = treatmentHistory;
-      }
-
-      // Format past appointments
-      const formattedPastAppointments = pastAppointments
-        .filter(app => app.date && app.time) // Only include appointments with date and time
-        .map(app => ({
-          date: `${app.date}T${app.time}:00`,
-          notes: app.notes,
-          isHistorical: true
-        }));
-
-      if (formattedPastAppointments.length > 0) {
-        updatedData.pastAppointments = formattedPastAppointments;
-      }
-
-      // Ajouter les documents si présents
-      if (patientDocuments.length > 0) {
-        updatedData.documents = patientDocuments.map(doc => ({
-          ...doc
-        }));
-      }
-
-      console.log('Updating patient document...', { patientId: patient.id, updatedData });
-      
-      const patientRef = doc(db, 'patients', patient.id);
-      
-      try {
-        await updateDoc(patientRef, updatedData);
-        console.log('Patient updated successfully:', patient.id);
-
-        // Afficher le message de succès
-        setSuccess('Les modifications ont été enregistrées avec succès');
-        
-        // Clear saved form data
-        clearFormData(formId);
-        
-        // Attendre 2 secondes avant de fermer le modal
-        setTimeout(() => {
-          onSuccess();
-          onClose();
-        }, 2000);
-      } catch (updateError: any) {
-        console.error('Error updating patient document:', updateError);
-        setError(`Erreur lors de la mise à jour du document patient: ${updateError.message}`);
-      }
-    } catch (error: any) {
-      console.error('Error updating patient:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      setError('Erreur lors de la mise à jour du dossier patient: ' + error.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
     <AnimatePresence>
       {isOpen && (
@@ -509,7 +515,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={handleClose}
+            onClick={handleBackdropClick}
           />
 
           <motion.div
@@ -1100,21 +1106,15 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
         </div>
       )}
       
-      {/* Modal de confirmation pour les données non sauvegardées */}
+      {/* Modal de confirmation pour fermeture */}
       <AnimatePresence>
-        {showUnsavedWarning && (
+        {showConfirmation && (
           <div className="fixed inset-0 z-60 flex items-center justify-center">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('Edit modal backdrop clicked, attempting to close');
-                handleClose();
-              }}
             />
 
             <motion.div
@@ -1125,19 +1125,16 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
               className="relative w-full max-w-md bg-white rounded-xl shadow-2xl"
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Modifications non sauvegardées</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Confirmer la fermeture</h3>
               </div>
 
               <div className="px-6 py-4">
                 <p className="text-gray-700 mb-4">
                   Vous avez modifié des informations dans ce dossier patient. 
-                  Voulez-vous vraiment fermer sans enregistrer ?
+                  Voulez-vous vraiment fermer et perdre ces modifications ?
                 </p>
                 <p className="text-sm text-gray-600 mb-2">
-                  <strong>Modifications qui seront perdues :</strong>
-                </p>
-                <p className="text-sm text-gray-500">
-                  • Modifications du formulaire • Tags modifiés • Historique des traitements • Rendez-vous passés • Documents
+                  <strong>Astuce :</strong> Cliquez deux fois à l'extérieur du formulaire pour afficher cette confirmation.
                 </p>
               </div>
 
@@ -1152,7 +1149,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                   variant="danger"
                   onClick={handleConfirmClose}
                 >
-                  Fermer sans enregistrer
+                  Fermer et perdre les modifications
                 </Button>
               </div>
             </motion.div>
