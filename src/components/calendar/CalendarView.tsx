@@ -745,6 +745,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                         key={appointment.id}
                         className={`text-xs p-1 rounded truncate flex items-center group relative ${getAppointmentColor(appointment)}`}
                         onClick={(e) => { if (appointment.date >= new Date() && !appointment.isHistorical) { e.stopPropagation(); onAppointmentEdit(appointment.id); } }}
+                      >
                         {appointment.isHistorical && <History size={10} className="mr-1 flex-shrink-0" />}
                         <span className="truncate flex-grow">
                           {isMobileScreen ? appointment.patientName : `${format(appointment.date, 'HH:mm')} - ${appointment.patientName}`}
