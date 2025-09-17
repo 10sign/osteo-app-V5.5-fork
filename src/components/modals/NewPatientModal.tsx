@@ -14,6 +14,7 @@ import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
 import { saveFormData, getFormData, clearFormData } from '../../utils/sessionPersistence';
 import { HDSCompliance } from '../../utils/hdsCompliance';
+import { PatientService } from '../../services/patientService';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../../utils/auditLogger';
 
 interface NewPatientModalProps {
@@ -424,7 +425,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       setProgress(80);
 
       // Créer le patient
-      const newPatientId = await createPatient(patientData);
+      const newPatientId = await PatientService.createPatient(patientData);
       
       // Clear saved form data after successful submission
       try {
