@@ -1060,4 +1060,4 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                       <Button
                         type="button"
                         variant="outline"
-                        size="
+                        size="sm"
