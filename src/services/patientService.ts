@@ -153,6 +153,7 @@ export class PatientService {
       
       // Journalisation de la création
       await AuditLogger.logPatientModification(
+      )
       return patientId;
       
     } catch (error) {
