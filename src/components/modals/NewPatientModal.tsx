@@ -557,21 +557,6 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
     onClose();
   };
 
-  const handleConfirmClose = () => {
-    console.log('User confirmed close without saving');
-    setShowUnsavedWarning(false);
-    setHasUnsavedChanges(false);
-    
-    // Clear any saved form data when closing
-    try {
-      clearFormData(FORM_ID);
-      console.log('Cleared form data on confirmed close');
-    } catch (error) {
-      console.error('Error clearing form data:', error);
-    }
-    onClose();
-  };
-
   return (
     <AnimatePresence>
       {isOpen && (
