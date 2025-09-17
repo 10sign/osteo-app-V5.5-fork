@@ -505,7 +505,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
   };
 
   // Clear form data when modal closes
-  const handleClose = () => {
+  const handleModalClose = () => {
     console.log('Attempting to close modal, hasUnsavedChanges:', hasUnsavedChanges);
     
     // Vérifier une dernière fois s'il y a des changements non enregistrés
@@ -614,7 +614,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">Nouveau dossier patient</h2>
               <button
-                onClick={handleClose}
+                onClick={handleModalClose}
                 className="text-gray-400 hover:text-gray-500 transition-colors"
               >
                 <X size={20} />
@@ -1211,7 +1211,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
               <Button
                 variant="outline"
-                onClick={handleClose}
+                onClick={handleModalClose}
               >
                 Annuler
               </Button>
