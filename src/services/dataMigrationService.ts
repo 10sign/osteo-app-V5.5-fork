@@ -16,7 +16,6 @@ import { HDSCompliance } from '../utils/hdsCompliance';
 import { AppointmentService } from './appointmentService';
 import { ConsultationService } from './consultationService';
 import { InvoiceService } from './invoiceService';
-import { PatientService } from './patientService';
 import { trackEvent } from '../lib/clarityClient';
 import { trackEvent as trackMatomoEvent } from '../lib/matomoTagManager';
 import { trackEvent as trackGAEvent } from '../lib/googleAnalytics';
@@ -790,116 +789,6 @@ export class DataMigrationService {
         { error: (error as Error).message }
       );
       
-      throw error;
-    }
-  }
-
-  /**
-   * Crée rétroactivement une consultation et une facture pour les patients existants
-   * qui n'en ont pas à leur date de création.
-   */
-  static async createRetroactiveConsultationsAndInvoices(): Promise<{
-    patientsProcessed: number;
-    consultationsCreated: number;
-    invoicesCreated: number;
-    errors: number;
-  }> {
-    if (!auth.currentUser) {
-      throw new Error('Utilisateur non authentifié');
-    }
-
-    try {
-      await AuditLogger.log(
-        AuditEventType.ADMIN_ACTION,
-        'patients',
-        'create_retroactive_consultations_invoices',
-        SensitivityLevel.SENSITIVE,
-        'started'
-      );
-
-      const results = {
-        patientsProcessed: 0,
-        consultationsCreated: 0,
-        invoicesCreated: 0,
-        errors: 0
-      };
-
-      const patientsRef = collection(db, 'patients');
-      const q = query(patientsRef, where('osteopathId', '==', auth.currentUser.uid));
-      const snapshot = await getDocs(q);
-
-      for (const docSnap of snapshot.docs) {
-        results.patientsProcessed++;
-        const patientId = docSnap.id;
-        const patientData = docSnap.data();
-        const patientName = `${patientData.firstName} ${patientData.lastName}`;
-        const createdAtDate = patientData.createdAt ? new Date(patientData.createdAt) : new Date();
-
-        try {
-          // Vérifier si une consultation existe déjà pour ce patient à cette date
-          const consultationsRef = collection(db, 'consultations');
-          const existingConsultationQuery = query(
-            consultationsRef,
-            where('patientId', '==', patientId),
-            where('osteopathId', '==', auth.currentUser.uid),
-            where('date', '==', Timestamp.fromDate(createdAtDate))
-          );
-          const existingConsultationSnapshot = await getDocs(existingConsultationQuery);
-
-          if (existingConsultationSnapshot.empty) {
-            const initialConsultationData = {
-              patientId: patientId,
-              patientName: patientName,
-              osteopathId: auth.currentUser.uid,
-              date: createdAtDate,
-              reason: 'Consultation rétroactive (création dossier)',
-              treatment: 'Anamnèse et évaluation initiale rétroactive.',
-              notes: 'Consultation générée rétroactivement pour la création du dossier patient.',
-              duration: 60,
-              price: 55,
-              status: 'completed',
-              examinations: [],
-              prescriptions: []
-            };
-            const consultationId = await ConsultationService.createConsultation(initialConsultationData);
-            results.consultationsCreated++;
-
-            const invoiceData = {
-              patientId: patientId, patientName: patientName, osteopathId: auth.currentUser.uid,
-              number: `INV-${Date.now().toString().slice(-6)}`, issueDate: createdAtDate.toISOString().split('T')[0],
-              dueDate: createdAtDate.toISOString().split('T')[0], items: [{ id: 'item1', description: 'Consultation ostéopathique', quantity: 1, unitPrice: 55, amount: 55 }],
-              subtotal: 55, tax: 0, total: 55, status: 'paid', notes: `Facture rétroactive pour consultation ${consultationId}.`,
-              createdAt: createdAtDate.toISOString(), updatedAt: new Date().toISOString()
-            };
-            await InvoiceService.createInvoice(invoiceData);
-            results.invoicesCreated++;
-          }
-        } catch (error) {
-          console.error(`Error processing patient ${patientId}:`, error);
-          results.errors++;
-        }
-      }
-
-      await AuditLogger.log(
-        AuditEventType.ADMIN_ACTION,
-        'patients',
-        'create_retroactive_consultations_invoices',
-        SensitivityLevel.SENSITIVE,
-        'success',
-        results
-      );
-
-      return results;
-    } catch (error) {
-      console.error('Failed to create retroactive consultations and invoices:', error);
-      await AuditLogger.log(
-        AuditEventType.ADMIN_ACTION,
-        'patients',
-        'create_retroactive_consultations_invoices',
-        SensitivityLevel.SENSITIVE,
-        'failure',
-        { error: (error as Error).message }
-      );
       throw error;
     }
   }
