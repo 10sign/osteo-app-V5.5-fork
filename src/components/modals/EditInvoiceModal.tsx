@@ -270,8 +270,7 @@ const EditInvoiceModal: React.FC<EditInvoiceModalProps> = ({
                         {...register('status', { required: 'Ce champ est requis' })}
                       >
                         <option value="paid">Payée</option>
-                        <option value="draft">Brouillon</option>
-                        <option value="sent">Envoyée</option>
+                        <option value="unpaid">Non payée</option>
                       </select>
                       {errors.status && (
                         <p className="mt-1 text-sm text-error">{errors.status.message}</p>

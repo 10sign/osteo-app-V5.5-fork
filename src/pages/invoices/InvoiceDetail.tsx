@@ -160,7 +160,15 @@ const InvoiceDetail: React.FC = () => {
       // If marking as paid, add payment date
       if (newStatus === 'paid' && invoice.status !== 'paid') {
         updateData.paymentDate = new Date().toISOString();
+        updateData.paidAt = new Date().toISOString();
         updateData.paymentMethod = 'Carte bancaire'; // Default payment method
+      }
+      
+      // If marking as unpaid, remove payment date
+      if (newStatus === 'unpaid') {
+        updateData.paymentDate = null;
+        updateData.paidAt = null;
+        updateData.paymentMethod = null;
       }
 
       await updateDoc(doc(db, 'invoices', invoice.id), updateData);

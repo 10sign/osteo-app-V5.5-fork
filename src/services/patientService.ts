@@ -218,6 +218,7 @@ export class PatientService {
             tax: 0,
             total: 55,
             status: 'paid', // Marquer comme payée par défaut
+            paidAt: new Date().toISOString(), // Date de paiement
             notes: `Facture générée automatiquement pour la consultation ${consultationId}.`,
             createdAt: dataWithMetadata.createdAt,
             updatedAt: dataWithMetadata.updatedAt

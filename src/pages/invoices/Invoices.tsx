@@ -403,23 +403,13 @@ const Invoices: React.FC = () => {
           </button>
           <button
             className={`pb-2 px-4 text-sm font-medium border-b-2 ${
-              selectedFilter === 'draft'
+              selectedFilter === 'unpaid'
                 ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
-            onClick={() => handleFilterChange('draft')}
+            onClick={() => handleFilterChange('unpaid')}
           >
-            Brouillons ({invoices.filter(i => i.status === 'draft').length})
-          </button>
-          <button
-            className={`pb-2 px-4 text-sm font-medium border-b-2 ${
-              selectedFilter === 'sent'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-            onClick={() => handleFilterChange('sent')}
-          >
-            Envoyées ({invoices.filter(i => i.status === 'sent').length})
+            Non payées ({invoices.filter(i => i.status === 'unpaid').length})
           </button>
           <button
             className={`pb-2 px-4 text-sm font-medium border-b-2 ${

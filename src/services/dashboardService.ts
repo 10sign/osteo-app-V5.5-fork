@@ -192,7 +192,7 @@ export class DashboardService {
       const q = query(
         invoicesRef,
         where('osteopathId', '==', userId),
-        where('status', '==', 'draft')
+        where('status', '==', 'unpaid')
       );
       
       const snapshot = await getCountFromServer(q);
@@ -206,7 +206,7 @@ export class DashboardService {
         const q = query(
           invoicesRef,
           where('osteopathId', '==', userId),
-          where('status', '==', 'draft')
+          where('status', '==', 'unpaid')
         );
         
         const snapshot = await getDocs(q);
