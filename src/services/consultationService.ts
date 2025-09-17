@@ -287,42 +287,6 @@ export class ConsultationService {
         console.warn('⚠️ Erreur lors de la création de la facture automatique:', invoiceError);
         // Ne pas faire échouer la création de la consultation si la facture échoue
       }
-      const consultationId = docRef.id;
-      
-      // Créer automatiquement une facture pour cette consultation
-      try {
-        const { InvoiceService } = await import('./invoiceService');
-        
-        const invoiceData = {
-          consultationId: consultationId,
-          patientId: consultationData.patientId,
-          patientName: consultationData.patientName,
-          osteopathId: userId,
-          number: `F-${Date.now()}`,
-          issueDate: new Date().toISOString().split('T')[0],
-          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // +30 jours
-          items: [{
-            id: crypto.randomUUID(),
-            description: consultationData.reason || 'Consultation ostéopathique',
-            quantity: 1,
-            unitPrice: consultationData.price || 60,
-            amount: consultationData.price || 60
-          }],
-          subtotal: consultationData.price || 60,
-          tax: 0,
-          total: consultationData.price || 60,
-          status: 'paid', // Toujours payé par défaut
-          notes: `Facture générée automatiquement pour la consultation du ${new Date(consultationData.date).toLocaleDateString('fr-FR')}`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        
-        await InvoiceService.createInvoice(invoiceData);
-        console.log('✅ Facture créée automatiquement pour la consultation:', consultationId);
-      } catch (invoiceError) {
-        console.warn('⚠️ Erreur lors de la création de la facture automatique:', invoiceError);
-        // Ne pas faire échouer la création de la consultation si la facture échoue
-      }
       
       // Synchroniser le prochain rendez-vous du patient après création
       if (consultationData.patientId) {
