@@ -55,15 +55,24 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
   const [pastAppointments, setPastAppointments] = useState<PastAppointment[]>([]);
   const [treatmentHistory, setTreatmentHistory] = useState<TreatmentHistoryEntry[]>([]);
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>([]);
-  const [clickCount, setClickCount] = useState(0);
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [hasFormData, setHasFormData] = useState(false);
 
   const { register, handleSubmit, formState: { errors, isValid, isDirty }, reset, watch, setValue, trigger } = useForm<PatientFormData>({
     mode: 'onChange',
     // Remove defaultValues to ensure completely empty form
     // Values will be set explicitly in initializeFormWithEmptyData()
   });
+
+  // Debug form state - remove after fixing
+  useEffect(() => {
+    console.log('Form Debug State:', {
+      isValid,
+      isDirty,
+      errors: Object.keys(errors),
+      errorDetails: errors,
+      isSubmitting,
+      formValues: watch()
+    });
+  }, [isValid, isDirty, errors, isSubmitting, watch]);
 
   // Function to initialize form with empty data
   const initializeFormWithEmptyData = () => {
@@ -115,9 +124,6 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       setPastAppointments([]);
       setTreatmentHistory([]);
       setPatientDocuments([]);
-      setClickCount(0);
-      setShowConfirmation(false);
-      setHasFormData(false);
       
       console.log('New patient modal opened - form initialized with empty data');
     }
@@ -138,41 +144,9 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
   useEffect(() => {
     if (!isOpen) return;
 
-    // Détecter si le formulaire contient des données
-    const detectFormData = () => {
-      const formData = watch();
-      
-      // Vérifier si des champs du formulaire ont été modifiés
-      const hasFormDataValue = Object.values(formData).some(value => 
-        value && value !== '' && value !== undefined && value !== null
-      );
-      
-      // Vérifier si des éléments ont été ajoutés aux listes
-      const hasListData = selectedTags.length > 0 || 
-                          pastAppointments.length > 0 || 
-                          treatmentHistory.length > 0 ||
-                          patientDocuments.length > 0;
-      
-      const hasData = hasFormDataValue || hasListData || isDirty;
-      
-      console.log('Form data detection:', {
-        hasFormDataValue,
-        hasListData,
-        isDirty,
-        hasData,
-        formData: Object.keys(formData).filter(key => formData[key])
-      });
-      
-      setHasFormData(hasData);
-      
-      return hasData;
-    };
-    
-    // Détecter immédiatement
-    detectFormData();
+    const formData = watch();
     
     const saveData = () => {
-      const formData = watch();
       saveFormData(FORM_ID, {
         formData,
         selectedTags,
@@ -191,90 +165,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       clearInterval(intervalId);
       saveData(); // Save on unmount
     };
-  }, [isOpen, watch, selectedTags, pastAppointments, treatmentHistory, patientDocuments, isDirty]);
-
-  // Gérer le clic extérieur avec double-clic
-  const handleBackdropClick = () => {
-    if (!hasFormData) {
-      // Pas de données, fermer directement
-      onClose();
-      return;
-    }
-
-    setClickCount(prev => {
-      const newCount = prev + 1;
-      
-      if (newCount === 1) {
-        // Premier clic - ne rien faire, juste incrémenter
-        setTimeout(() => setClickCount(0), 2000); // Reset après 2 secondes
-        return newCount;
-      } else if (newCount >= 2) {
-        // Deuxième clic - afficher la confirmation
-        setShowConfirmation(true);
-        return 0; // Reset le compteur
-      }
-      
-      return newCount;
-    });
-  };
-
-  // Gérer la fermeture avec vérification
-  const handleClose = () => {
-    if (!hasFormData) {
-      // Pas de données, fermer directement
-      clearFormData(FORM_ID);
-      reset();
-      setSelectedTags([]);
-      setPastAppointments([]);
-      setTreatmentHistory([]);
-      setPatientDocuments([]);
-      setError(null);
-      setSuccess(null);
-      onClose();
-      return;
-    }
-
-    // Il y a des données, afficher la confirmation
-    setShowConfirmation(true);
-  };
-
-  // Confirmer la fermeture sans sauvegarder
-  const handleConfirmClose = () => {
-    console.log('User confirmed close without saving');
-    setShowConfirmation(false);
-    
-    // Clear any saved form data when closing
-    try {
-      clearFormData(FORM_ID);
-      console.log('Cleared form data on confirmed close');
-    } catch (error) {
-      console.error('Error clearing form data:', error);
-    }
-    
-    // Reset all form state
-    reset();
-    setSelectedTags([]);
-    setPastAppointments([]);
-    setTreatmentHistory([]);
-    setPatientDocuments([]);
-    setError(null);
-    setSuccess(null);
-    setClickCount(0);
-    setShowConfirmation(false);
-    setHasFormData(false);
-    
-    console.log('New patient modal force closed - all data cleared');
-    
-    // Close the modal
-    onClose();
-  };
-
-  // Annuler la fermeture et continuer l'édition
-  const handleCancelClose = () => {
-    console.log('User cancelled close, continuing editing');
-    setShowConfirmation(false);
-    setClickCount(0);
-  };
+  }, [isOpen, watch, selectedTags, pastAppointments, treatmentHistory]);
 
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     // Cette fonction est conservée mais n'est plus utilisée
@@ -505,35 +396,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
   };
 
   // Clear form data when modal closes
-  const handleModalClose = () => {
-    console.log('Attempting to close modal, hasUnsavedChanges:', hasUnsavedChanges);
-    
-    // Vérifier une dernière fois s'il y a des changements non enregistrés
-    const formData = watch();
-    const hasFormData = Object.values(formData).some(value => 
-      value && value !== '' && value !== undefined && value !== null
-    );
-    const hasListData = selectedTags.length > 0 || 
-                        pastAppointments.length > 0 || 
-                        treatmentHistory.length > 0 ||
-                        patientDocuments.length > 0;
-    const currentlyHasChanges = hasFormData || hasListData || isDirty;
-    
-    console.log('Final unsaved changes check:', {
-      hasFormData,
-      hasListData,
-      isDirty,
-      currentlyHasChanges,
-      showUnsavedWarning
-    });
-    
-    // Si des données non sauvegardées existent et qu'on n'a pas encore montré l'avertissement
-    if (currentlyHasChanges && !showUnsavedWarning) {
-      console.log('Showing unsaved warning modal');
-      setShowUnsavedWarning(true);
-      return;
-    }
-    
+  const handleClose = () => {
     // Clear any saved form data when closing
     try {
       clearFormData(FORM_ID);
@@ -557,41 +420,6 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
     onClose();
   };
 
-  const handleConfirmClose = () => {
-    console.log('User confirmed close without saving');
-    setShowUnsavedWarning(false);
-    setHasUnsavedChanges(false);
-    
-    // Clear any saved form data when closing
-    try {
-      clearFormData(FORM_ID);
-      console.log('Cleared form data on confirmed close');
-    } catch (error) {
-      console.error('Error clearing form data:', error);
-    }
-    
-    // Reset all form state
-    reset();
-    setSelectedTags([]);
-    setPastAppointments([]);
-    setTreatmentHistory([]);
-    setPatientDocuments([]);
-    setError(null);
-    setSuccess(null);
-    setShowUnsavedWarning(false);
-    setHasUnsavedChanges(false);
-    
-    console.log('New patient modal force closed - all data cleared');
-    
-    // Close the modal
-    onClose();
-  };
-
-  const handleCancelClose = () => {
-    console.log('User cancelled close, continuing editing');
-    setShowUnsavedWarning(false);
-  };
-
   return (
     <AnimatePresence>
       {isOpen && (
@@ -601,7 +429,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={handleBackdropClick}
+            onClick={onClose}
           />
 
           <motion.div
@@ -614,7 +442,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">Nouveau dossier patient</h2>
               <button
-                onClick={handleModalClose}
+                onClick={onClose}
                 className="text-gray-400 hover:text-gray-500 transition-colors"
               >
                 <X size={20} />
@@ -1155,7 +983,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                 {/* Prochain rendez-vous */}
                 <div>
                   <label htmlFor="nextAppointment" className="block text-sm font-medium text-gray-700 mb-1">
-                    Jour et heure de consultation
+                    Prochaine consultation
                   </label>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -1211,7 +1039,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
               <Button
                 variant="outline"
-                onClick={handleModalClose}
+                onClick={handleClose}
               >
                 Annuler
               </Button>
@@ -1229,57 +1057,6 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
           </motion.div>
         </div>
       )}
-      
-      {/* Modal de confirmation pour fermeture */}
-      <AnimatePresence>
-        {showConfirmation && (
-          <div className="fixed inset-0 z-60 flex items-center justify-center">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ type: 'spring', duration: 0.5 }}
-              className="relative w-full max-w-md bg-white rounded-xl shadow-2xl"
-            >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Confirmer la fermeture</h3>
-              </div>
-
-              <div className="px-6 py-4">
-                <p className="text-gray-700 mb-4">
-                  Vous avez saisi des informations dans ce formulaire. 
-                  Voulez-vous vraiment fermer et perdre ces données ?
-                </p>
-                <p className="text-sm text-gray-600 mb-2">
-                  <strong>Astuce :</strong> Cliquez deux fois à l'extérieur du formulaire pour afficher cette confirmation.
-                </p>
-              </div>
-
-              <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
-                <Button
-                  variant="outline"
-                  onClick={handleCancelClose}
-                >
-                  Continuer l'édition
-                </Button>
-                <Button
-                  variant="danger"
-                  onClick={handleConfirmClose}
-                >
-                  Fermer et perdre les données
-                </Button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </AnimatePresence>
   );
 };
