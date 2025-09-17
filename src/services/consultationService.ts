@@ -12,209 +12,58 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
-import { Consultation, ConsultationFormData } from '../types';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
-import HDSCompliance from '../utils/hdsCompliance';
+import { HDSCompliance } from '../utils/hdsCompliance';
+import { InvoiceService } from './invoiceService';
 
 export class ConsultationService {
   /**
-   * Récupère toutes les consultations
+   * Vérifie si deux consultations sont à moins de 45 minutes d'écart
    */
-  static async getAllConsultations(): Promise<Consultation[]> {
+  private static areConsultationsWithin45Minutes(consultation1: any, consultation2: any): boolean {
+    const date1 = consultation1.date;
+    const date2 = consultation2.date;
+    const diffMs = Math.abs(date1.getTime() - date2.getTime());
+    const diffMinutes = diffMs / (1000 * 60);
+    return diffMinutes <= 45;
+  }
+
+  /**
+   * Crée une nouvelle consultation avec vérification anti-doublons
+   */
+  static async createConsultation(consultationData: any): Promise<string> {
     if (!auth.currentUser) {
       throw new Error('Utilisateur non authentifié');
     }
 
     try {
+      // Vérifier les doublons existants
       const consultationsRef = collection(db, 'consultations');
       const q = query(
         consultationsRef,
         where('osteopathId', '==', auth.currentUser.uid),
-        orderBy('date', 'desc')
+        where('patientId', '==', consultationData.patientId)
       );
       
       const querySnapshot = await getDocs(q);
-      const consultations: Consultation[] = [];
+      const existingConsultations = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().date?.toDate?.() || new Date(doc.data().date)
+      }));
       
-      for (const docSnapshot of querySnapshot.docs) {
-        const data = docSnapshot.data();
-        
-        // Déchiffrement des données sensibles pour l'affichage
-        const decryptedData = HDSCompliance.decryptDataForDisplay(data, 'consultations', auth.currentUser.uid);
-        
-        consultations.push({
-          id: docSnapshot.id,
-          ...decryptedData,
-          date: data.date?.toDate?.() || new Date(data.date),
-          createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
-          updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)
-        } as Consultation);
+      const consultationDate = new Date(consultationData.date);
+      
+      // Vérifier les doublons (tolérance 45 minutes)
+      for (const existing of existingConsultations) {
+        if (this.areConsultationsWithin45Minutes(
+          { date: consultationDate },
+          { date: existing.date }
+        )) {
+          throw new Error('Une consultation existe déjà dans cette plage horaire (±45 minutes)');
+        }
       }
-      
-      // Journalisation de l'accès aux données
-      await AuditLogger.log(
-        AuditEventType.DATA_ACCESS,
-        'consultations',
-        'read_all',
-        SensitivityLevel.SENSITIVE,
-        'success',
-        { count: consultations.length }
-      );
-      
-      return consultations;
-      
-    } catch (error) {
-      console.error('❌ Erreur lors de la récupération des consultations:', error);
-      
-      // Journalisation de l'erreur
-      await AuditLogger.log(
-        AuditEventType.DATA_ACCESS,
-        'consultations',
-        'read_all',
-        SensitivityLevel.SENSITIVE,
-        'failure',
-        { error: (error as Error).message }
-      );
-      
-      throw error;
-    }
-  }
 
-  /**
-   * Récupère les consultations d'un patient spécifique
-   */
-  static async getConsultationsByPatientId(patientId: string): Promise<Consultation[]> {
-    if (!auth.currentUser) {
-      throw new Error('Utilisateur non authentifié');
-    }
-
-    try {
-      const consultationsRef = collection(db, 'consultations');
-      const q = query(
-        consultationsRef,
-        where('osteopathId', '==', auth.currentUser.uid),
-        where('patientId', '==', patientId),
-        orderBy('date', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(q);
-      const consultations: Consultation[] = [];
-      
-      for (const docSnapshot of querySnapshot.docs) {
-        const data = docSnapshot.data();
-        
-        // Déchiffrement des données sensibles pour l'affichage
-        const decryptedData = HDSCompliance.decryptDataForDisplay(data, 'consultations', auth.currentUser.uid);
-        
-        consultations.push({
-          id: docSnapshot.id,
-          ...decryptedData,
-          date: data.date?.toDate?.() || new Date(data.date),
-          createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
-          updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)
-        } as Consultation);
-      }
-      
-      // Journalisation de l'accès aux données
-      await AuditLogger.log(
-        AuditEventType.DATA_ACCESS,
-        `consultations/patient/${patientId}`,
-        'read_by_patient',
-        SensitivityLevel.SENSITIVE,
-        'success',
-        { patientId, count: consultations.length }
-      );
-      
-      return consultations;
-      
-    } catch (error) {
-      console.error('❌ Erreur lors de la récupération des consultations du patient:', error);
-      
-      // Journalisation de l'erreur
-      await AuditLogger.log(
-        AuditEventType.DATA_ACCESS,
-        `consultations/patient/${patientId}`,
-        'read_by_patient',
-        SensitivityLevel.SENSITIVE,
-        'failure',
-        { patientId, error: (error as Error).message }
-      );
-      
-      throw error;
-    }
-  }
-
-  /**
-   * Récupère une consultation par son ID
-   */
-  static async getConsultationById(id: string): Promise<Consultation | null> {
-    if (!auth.currentUser) {
-      throw new Error('Utilisateur non authentifié');
-    }
-
-    try {
-      const docRef = doc(db, 'consultations', id);
-      const docSnap = await getDoc(docRef);
-      
-      if (!docSnap.exists()) {
-        return null;
-      }
-      
-      const data = docSnap.data();
-      
-      // Vérification de propriété
-      if (data.osteopathId !== auth.currentUser.uid) {
-        throw new Error('Accès non autorisé à cette consultation');
-      }
-      
-      // Déchiffrement des données sensibles pour l'affichage
-      const decryptedData = HDSCompliance.decryptDataForDisplay(data, 'consultations', auth.currentUser.uid);
-      
-      const consultation: Consultation = {
-        id: docSnap.id,
-        ...decryptedData,
-        date: data.date?.toDate?.() || new Date(data.date),
-        createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
-        updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)
-      } as Consultation;
-      
-      // Journalisation de l'accès aux données
-      await AuditLogger.log(
-        AuditEventType.DATA_ACCESS,
-        `consultations/${id}`,
-        'read_single',
-        SensitivityLevel.SENSITIVE,
-        'success'
-      );
-      
-      return consultation;
-      
-    } catch (error) {
-      console.error('❌ Erreur lors de la récupération de la consultation:', error);
-      
-      // Journalisation de l'erreur
-      await AuditLogger.log(
-        AuditEventType.DATA_ACCESS,
-        `consultations/${id}`,
-        'read_single',
-        SensitivityLevel.SENSITIVE,
-        'failure',
-        { error: (error as Error).message }
-      );
-      
-      throw error;
-    }
-  }
-
-  /**
-   * Crée une nouvelle consultation
-   */
-  static async createConsultation(consultationData: ConsultationFormData): Promise<string> {
-    if (!auth.currentUser) {
-      throw new Error('Utilisateur non authentifié');
-    }
-
-    try {
       const userId = auth.currentUser.uid;
       const now = new Date();
       
@@ -228,6 +77,49 @@ export class ConsultationService {
       }, 'consultations', userId);
       
       const docRef = await addDoc(collection(db, 'consultations'), dataToStore);
+      
+      // Créer automatiquement une facture pour cette consultation
+      // Vérifier qu'il n'y a pas déjà une facture pour cette consultation
+      const existingInvoicesRef = collection(db, 'invoices');
+      const existingInvoicesQuery = query(
+        existingInvoicesRef,
+        where('consultationId', '==', docRef.id),
+        where('osteopathId', '==', userId)
+      );
+      const existingInvoicesSnapshot = await getDocs(existingInvoicesQuery);
+      
+      if (existingInvoicesSnapshot.empty) {
+        try {
+          const invoiceData = {
+            patientId: consultationData.patientId,
+            patientName: consultationData.patientName,
+            osteopathId: userId,
+            consultationId: docRef.id,
+            number: `INV-${Date.now().toString().slice(-6)}`,
+            issueDate: new Date(consultationData.date).toISOString().split('T')[0],
+            dueDate: new Date(consultationData.date).toISOString().split('T')[0],
+            items: [{ 
+              id: 'item1', 
+              description: consultationData.reason || 'Consultation ostéopathique', 
+              quantity: 1, 
+              unitPrice: consultationData.price || 60, 
+              amount: consultationData.price || 60 
+            }],
+            subtotal: consultationData.price || 60,
+            tax: 0,
+            total: consultationData.price || 60,
+            status: 'paid',
+            paidAt: new Date().toISOString(),
+            notes: `Facture générée automatiquement pour la consultation du ${new Date(consultationData.date).toLocaleDateString('fr-FR')}.`,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          await addDoc(collection(db, 'invoices'), invoiceData);
+        } catch (invoiceError) {
+          console.warn('⚠️ Erreur lors de la création automatique de la facture:', invoiceError);
+        }
+      }
       
       // Synchroniser le prochain rendez-vous du patient après création
       if (consultationData.patientId) {
@@ -278,9 +170,217 @@ export class ConsultationService {
   }
 
   /**
+   * Déduplique les consultations et factures
+   */
+  static async deduplicateData(): Promise<{
+    dedupConsultations: number;
+    deletedInvoiceDuplicates: number;
+    invoicesUpdatedToPaid: number;
+  }> {
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    const results = {
+      dedupConsultations: 0,
+      deletedInvoiceDuplicates: 0,
+      invoicesUpdatedToPaid: 0
+    };
+
+    try {
+      const userId = auth.currentUser.uid;
+      
+      // 1. Dédupliquer les consultations
+      const consultationsRef = collection(db, 'consultations');
+      const consultationsQuery = query(consultationsRef, where('osteopathId', '==', userId));
+      const consultationsSnapshot = await getDocs(consultationsQuery);
+      
+      const consultations = consultationsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().date?.toDate?.() || new Date(doc.data().date)
+      }));
+
+      // Grouper par patient
+      const consultationsByPatient = new Map();
+      consultations.forEach(consultation => {
+        const key = consultation.patientId;
+        if (!consultationsByPatient.has(key)) {
+          consultationsByPatient.set(key, []);
+        }
+        consultationsByPatient.get(key).push(consultation);
+      });
+
+      // Détecter et supprimer les doublons
+      for (const [patientId, patientConsultations] of consultationsByPatient) {
+        const duplicateGroups = this.findDuplicateConsultations(patientConsultations);
+        
+        for (const group of duplicateGroups) {
+          if (group.length > 1) {
+            // Garder la plus ancienne
+            const toKeep = group.sort((a, b) => 
+              new Date(a.createdAt || a.date).getTime() - new Date(b.createdAt || b.date).getTime()
+            )[0];
+            const toDelete = group.filter(c => c.id !== toKeep.id);
+            
+            // Supprimer les doublons
+            for (const consultation of toDelete) {
+              await deleteDoc(doc(db, 'consultations', consultation.id));
+              results.dedupConsultations++;
+            }
+          }
+        }
+      }
+
+      // 2. Dédupliquer les factures
+      const invoicesRef = collection(db, 'invoices');
+      const invoicesQuery = query(invoicesRef, where('osteopathId', '==', userId));
+      const invoicesSnapshot = await getDocs(invoicesQuery);
+      
+      // Grouper par consultationId
+      const invoicesByConsultation = new Map();
+      invoicesSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const consultationId = data.consultationId || 'no-consultation';
+        
+        if (!invoicesByConsultation.has(consultationId)) {
+          invoicesByConsultation.set(consultationId, []);
+        }
+        invoicesByConsultation.get(consultationId).push({
+          id: doc.id,
+          ...data
+        });
+      });
+
+      // Traiter chaque groupe de factures
+      for (const [consultationId, invoices] of invoicesByConsultation) {
+        if (invoices.length > 1) {
+          // Garder la première facture (paid en priorité)
+          const toKeep = invoices.find(inv => inv.status === 'paid') || invoices[0];
+          const toDelete = invoices.filter(inv => inv.id !== toKeep.id);
+          
+          // Supprimer les doublons
+          for (const invoice of toDelete) {
+            await deleteDoc(doc(db, 'invoices', invoice.id));
+            results.deletedInvoiceDuplicates++;
+          }
+        }
+      }
+
+      // 3. Convertir toutes les factures en paid
+      const allInvoicesSnapshot = await getDocs(invoicesQuery);
+      for (const docSnap of allInvoicesSnapshot.docs) {
+        const data = docSnap.data();
+        if (data.status !== 'paid') {
+          await updateDoc(docSnap.ref, {
+            status: 'paid',
+            paidAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+          results.invoicesUpdatedToPaid++;
+        }
+      }
+
+      return results;
+    } catch (error) {
+      console.error('Error in deduplication:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Trouve les consultations en doublon (< 45 min d'écart)
+   */
+  private static findDuplicateConsultations(consultations: any[]): any[][] {
+    const groups: any[][] = [];
+    const processed = new Set();
+
+    for (let i = 0; i < consultations.length; i++) {
+      if (processed.has(i)) continue;
+      
+      const group = [consultations[i]];
+      processed.add(i);
+
+      for (let j = i + 1; j < consultations.length; j++) {
+        if (processed.has(j)) continue;
+        
+        if (this.areConsultationsWithin45Minutes(consultations[i], consultations[j])) {
+          group.push(consultations[j]);
+          processed.add(j);
+        }
+      }
+
+      if (group.length > 1) {
+        groups.push(group);
+      }
+    }
+
+    return groups;
+  }
+
+  /**
+   * Récupère toutes les consultations
+   */
+  static async getAllConsultations(): Promise<Consultation[]> {
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    try {
+      const consultationsRef = collection(db, 'consultations');
+      const q = query(
+        consultationsRef,
+        where('osteopathId', '==', auth.currentUser.uid),
+        orderBy('date', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const consultations = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        
+        // Déchiffrement des données sensibles pour l'affichage
+        const decryptedData = HDSCompliance.decryptDataForDisplay(data, 'consultations', auth.currentUser!.uid);
+        
+        return {
+          id: doc.id,
+          ...decryptedData,
+          date: data.date?.toDate?.() || new Date(data.date)
+        };
+      });
+      
+      // Journalisation de l'accès aux données
+      await AuditLogger.log(
+        AuditEventType.DATA_ACCESS,
+        'consultations',
+        'read',
+        SensitivityLevel.SENSITIVE,
+        'success',
+        { count: consultations.length }
+      );
+      
+      return consultations;
+      
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des consultations:', error);
+      
+      // Journalisation de l'erreur
+      await AuditLogger.log(
+        AuditEventType.DATA_ACCESS,
+        'consultations',
+        'read',
+        SensitivityLevel.SENSITIVE,
+        'failure',
+        { error: (error as Error).message }
+      );
+      
+      throw error;
+    }
+  }
+
+  /**
    * Met à jour une consultation existante
    */
-  static async updateConsultation(id: string, consultationData: Partial<ConsultationFormData>): Promise<void> {
+  static async updateConsultation(id: string, consultationData: any): Promise<void> {
     if (!auth.currentUser) {
       throw new Error('Utilisateur non authentifié');
     }
@@ -443,7 +543,7 @@ export class ConsultationService {
   /**
    * Ajoute une consultation à l'historique des rendez-vous passés du patient
    */
-  private static async addConsultationToPatientHistory(
+  static async addConsultationToPatientHistory(
     patientId: string,
     appointmentData: {
       date: string;
@@ -492,80 +592,41 @@ export class ConsultationService {
       console.error('❌ Erreur lors de l\'ajout à l\'historique du patient:', error);
     }
   }
+
   /**
-   * Récupère les statistiques des consultations
+   * Récupère une consultation par son ID
    */
-  static async getConsultationStats(): Promise<{
-    total: number;
-    thisMonth: number;
-    completed: number;
-    pending: number;
-  }> {
+  static async getConsultationById(id: string): Promise<any | null> {
     if (!auth.currentUser) {
       throw new Error('Utilisateur non authentifié');
     }
 
     try {
-      const consultationsRef = collection(db, 'consultations');
-      const q = query(
-        consultationsRef,
-        where('osteopathId', '==', auth.currentUser.uid)
-      );
+      const docRef = doc(db, 'consultations', id);
+      const docSnap = await getDoc(docRef);
       
-      const querySnapshot = await getDocs(q);
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      if (!docSnap.exists()) {
+        return null;
+      }
       
-      let total = 0;
-      let thisMonth = 0;
-      let completed = 0;
-      let pending = 0;
+      const data = docSnap.data();
       
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        const consultationDate = data.date?.toDate?.() || new Date(data.date);
-        
-        total++;
-        
-        if (consultationDate >= startOfMonth) {
-          thisMonth++;
-        }
-        
-        if (data.status === 'completed') {
-          completed++;
-        } else {
-          pending++;
-        }
-      });
+      // Vérification de propriété
+      if (data.osteopathId !== auth.currentUser.uid) {
+        throw new Error('Accès non autorisé à cette consultation');
+      }
       
-      // Journalisation de l'accès aux statistiques
-      await AuditLogger.log(
-        AuditEventType.DATA_ACCESS,
-        'consultations/stats',
-        'read_stats',
-        SensitivityLevel.LOW,
-        'success'
-      );
+      // Déchiffrement des données sensibles pour l'affichage
+      const decryptedData = HDSCompliance.decryptDataForDisplay(data, 'consultations', auth.currentUser.uid);
       
       return {
-        total,
-        thisMonth,
-        completed,
-        pending
+        id: docSnap.id,
+        ...decryptedData,
+        date: data.date?.toDate?.() || new Date(data.date)
       };
       
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération des statistiques:', error);
-      
-      // Journalisation de l'erreur
-      await AuditLogger.log(
-        AuditEventType.DATA_ACCESS,
-        'consultations/stats',
-        'read_stats',
-        SensitivityLevel.LOW,
-        'failure',
-        { error: (error as Error).message }
-      );
+      console.error('❌ Erreur lors de la récupération de la consultation:', error);
       
       throw error;
     }
