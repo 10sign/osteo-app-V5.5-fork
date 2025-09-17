@@ -238,29 +238,6 @@ export class ConsultationService {
         throw new Error('Une consultation existe déjà pour ce patient dans cette plage horaire (±45 minutes)');
       }
 
-      // Vérifier les doublons de consultation (même patient, même praticien, ±45 min)
-      const consultationDate = new Date(consultationData.date);
-      const startWindow = new Date(consultationDate.getTime() - 45 * 60 * 1000); // -45 min
-      const endWindow = new Date(consultationDate.getTime() + 45 * 60 * 1000); // +45 min
-      
-      const consultationsRef = collection(db, 'consultations');
-      const duplicateQuery = query(
-        consultationsRef,
-        where('osteopathId', '==', auth.currentUser.uid),
-        where('patientId', '==', consultationData.patientId)
-      );
-      
-      const duplicateSnapshot = await getDocs(duplicateQuery);
-      const existingConsultation = duplicateSnapshot.docs.find(doc => {
-        const data = doc.data();
-        const existingDate = data.date?.toDate?.() || new Date(data.date);
-        return existingDate >= startWindow && existingDate <= endWindow;
-      });
-      
-      if (existingConsultation) {
-        throw new Error('Une consultation existe déjà pour ce patient dans cette plage horaire (±45 minutes)');
-      }
-
       const userId = auth.currentUser.uid;
       const now = new Date();
       
