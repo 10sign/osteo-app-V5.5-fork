@@ -265,14 +265,10 @@ const Invoices: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'draft':
-        return 'bg-red-200 text-red-800'; // Rouge clair (#FFB3B3)
-      case 'sent':
-        return 'bg-green-200 text-green-800'; // Vert clair (#90EE90)
       case 'paid':
         return 'bg-blue-200 text-blue-800'; // Bleu clair (#ADD8E6)
-      case 'overdue':
-        return 'bg-error/10 text-error';
+      case 'unpaid':
+        return 'bg-red-200 text-red-800'; // Rouge clair
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -280,14 +276,10 @@ const Invoices: React.FC = () => {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'draft':
-        return 'Brouillon';
-      case 'sent':
-        return 'Envoyée';
       case 'paid':
         return 'Payée';
-      case 'overdue':
-        return 'En retard';
+      case 'unpaid':
+        return 'Non payée';
       default:
         return status;
     }
