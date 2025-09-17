@@ -61,7 +61,6 @@ const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
       items: [{ description: 'Consultation standard', quantity: 1, unitPrice: 60, amount: 60 }],
       issueDate: new Date().toISOString().split('T')[0],
       dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      status: 'paid'
     }
   });
 
@@ -208,7 +207,7 @@ const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
         subtotal,
         tax,
         total,
-        status: 'paid',
+        status: 'paid', // Toujours paid
         paidAt: new Date().toISOString(), // Date de paiement
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()

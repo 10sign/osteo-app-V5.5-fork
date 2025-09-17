@@ -38,7 +38,8 @@ export class InvoiceService {
         const existingSnapshot = await getDocs(existingQuery);
         
         if (!existingSnapshot.empty) {
-          throw new Error('Une facture existe déjà pour cette consultation');
+          console.warn('⚠️ Facture déjà existante pour cette consultation, création ignorée');
+          return existingSnapshot.docs[0].id;
         }
       }
 
@@ -56,7 +57,7 @@ export class InvoiceService {
       
       const invoiceWithMetadata = {
         ...invoiceData,
-        status: invoiceData.status || 'paid',
+        status: 'paid', // Toujours paid par défaut
         paidAt: invoiceData.paidAt || new Date().toISOString(),
         osteopathId: userId,
         createdAt: timestamp,
