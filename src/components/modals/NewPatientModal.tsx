@@ -568,7 +568,9 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       console.log('Cleared form data on confirmed close');
     } catch (error) {
       console.error('Error clearing form data:', error);
+    }
     onClose();
+  };
 
   return (
     <AnimatePresence>
