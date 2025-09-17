@@ -2,18 +2,20 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, X as XIcon, User, Calendar, Trash2, CheckCircle, Upload } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import { Patient, PatientFormData, TreatmentHistoryEntry } from '../../types';
 import { validatePatientData } from '../../utils/validation';
-import { ConsultationService } from '../../services/consultationService';
 import AutoCapitalizeTextarea from '../ui/AutoCapitalizeTextarea';
 import AutoCapitalizeInput from '../ui/AutoCapitalizeInput';
 import { patientCache } from '../../utils/patientCache';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
 import { saveFormData, getFormData, clearFormData } from '../../utils/sessionPersistence';
+import { PatientFormData, TreatmentHistoryEntry } from '../../types';
+import { HDSCompliance } from '../../utils/hdsCompliance';
+import { AuditLogger, AuditEventType, SensitivityLevel } from '../../utils/auditLogger';
 
 interface NewPatientModalProps {
   isOpen: boolean;
@@ -422,23 +424,16 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       
       setProgress(80);
 
-      // Créer automatiquement une consultation initiale
-      const initialConsultationData = {
-        patientId: patientId,
-        patientName: `${data.firstName.trim()} ${data.lastName.trim()}`,
-        osteopathId: auth.currentUser.uid,
-        date: new Date(),
-        reason: 'Première consultation',
-        treatment: 'Évaluation initiale et anamnèse',
-        notes: 'Consultation générée automatiquement lors de la création du patient.',
-        duration: 60,
-        price: 55,
-        status: 'completed',
-        examinations: [],
-        prescriptions: []
-      };
-
-      const initialConsultationId = await ConsultationService.createConsultation(initialConsultationData);
+      // Créer le patient
+      const patientId = await createPatient(patientData);
+      
+      // Clear saved form data after successful submission
+      try {
+        clearFormData(formId);
+        console.log('Cleared form data after successful patient creation');
+      } catch (error) {
+        console.error('Error clearing form data:', error);
+      }
 
       // Créer automatiquement une facture liée à cette consultation
       const invoiceNumber = `F-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
@@ -522,33 +517,21 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       }
       setProgress(100);
 
-      // Afficher le message de succès
-      setSuccess('Le dossier patient a été créé avec succès');
+      setSuccess('Dossier patient créé avec succès !');
       
-      // Clear saved form data
-      clearFormData(FORM_ID);
+      // Invalidate cache
+      patientCache.invalidate(patientId);
       
-      console.log('Patient created with ID:', patientId, 'Data:', patientData);
-      
-      // Wait for Firestore to commit and then refresh the list
       setTimeout(() => {
-        // Reset form
-        reset();
-        setSelectedTags([]);
-        setPastAppointments([]);
-        setTreatmentHistory([]);
-        setPatientDocuments([]);
-        
-        console.log('Calling onSuccess to refresh patient list...');
         onSuccess();
         onClose();
       }, 1500);
-    } catch (error: any) {
+
+    } catch (error) {
       console.error('Error creating new patient:', error);
-      setError('Erreur lors de la création du nouveau dossier patient: ' + error.message);
+      setError('Erreur lors de la création du dossier patient. Veuillez réessayer.');
     } finally {
       setIsSubmitting(false);
-      setProgress(0);
     }
   };
 
@@ -751,7 +734,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                     <label htmlFor="profession" className="block text-sm font-medium text-gray-700 mb-1">
                       Profession
                     </label>
-                    <AutoCapitalizeInput
+                    <input
                       type="text"
                       id="profession"
                       className="input w-full"
