@@ -278,6 +278,42 @@ const AdminDashboard: React.FC = () => {
           
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              {/* Outil de nettoyage des doublons */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <Users size={20} className="mr-2 text-primary-600" />
+                  Nettoyage des doublons
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Recherche et supprime automatiquement les patients en double, en fusionnant leurs consultations et factures.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const { DuplicateCleanupService } = await import('../../services/duplicateCleanupService');
+                      const results = await DuplicateCleanupService.findAndRemoveDuplicatePatients();
+                      
+                      if (results.duplicatesRemoved > 0) {
+                        alert(`✅ Nettoyage terminé:\n- ${results.duplicatesRemoved} doublons supprimés\n- ${results.consultationsMerged} consultations fusionnées\n- ${results.invoicesMerged} factures fusionnées`);
+                      } else {
+                        alert('✅ Aucun doublon trouvé');
+                      }
+                      
+                      if (results.errors.length > 0) {
+                        console.warn('⚠️ Erreurs lors du nettoyage:', results.errors);
+                      }
+                    } catch (error) {
+                      console.error('❌ Erreur lors du nettoyage:', error);
+                      alert('❌ Erreur lors du nettoyage des doublons');
+                    }
+                  }}
+                  leftIcon={<Users size={16} />}
+                >
+                  Nettoyer les doublons
+                </Button>
+              </div>
+              
               {/* Stats Cards */}
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold text-gray-900">Statistiques</h2>
