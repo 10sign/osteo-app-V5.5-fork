@@ -250,7 +250,21 @@ export class PatientService {
       const patientSnap = await getDoc(patientRef);
       
       if (!patientSnap.exists()) {
-        throw new Error('Patient non trouvé');
+        // Patient déjà supprimé ou inexistant - opération idempotente
+        await AuditLogger.logPatientModification(
+          patientId,
+          'delete_cascade',
+          'success',
+          { reason: 'Patient already deleted or not found' }
+        );
+        
+        return {
+          patient: false,
+          appointments: 0,
+          consultations: 0,
+          invoices: 0,
+          documents: 0
+        };
       }
       
       const patientData = patientSnap.data();
