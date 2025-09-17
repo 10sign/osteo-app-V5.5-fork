@@ -1061,3 +1061,153 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                         type="button"
                         variant="outline"
                         size="sm"
+                        onClick={() => {
+                          if (customTag.trim()) {
+                            handleAddTag(customTag.trim());
+                            setCustomTag('');
+                          }
+                        }}
+                        disabled={!customTag.trim()}
+                      >
+                        Ajouter
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {COMMON_PATHOLOGIES.map((pathology) => (
+                        <button
+                          key={pathology}
+                          type="button"
+                          onClick={() => handleAddTag(pathology)}
+                          disabled={selectedTags.includes(pathology)}
+                          className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                            selectedTags.includes(pathology)
+                              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pathology}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes complémentaires
+                  </label>
+                  <AutoCapitalizeTextarea
+                    id="notes"
+                    rows={4}
+                    className="input w-full resize-none"
+                    {...register('notes')}
+                    placeholder="Notes générales sur le patient"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="nextAppointment" className="block text-sm font-medium text-gray-700 mb-1">
+                      Prochain rendez-vous
+                    </label>
+                    <input
+                      type="date"
+                      id="nextAppointment"
+                      className="input w-full"
+                      {...register('nextAppointment')}
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="nextAppointmentTime" className="block text-sm font-medium text-gray-700 mb-1">
+                      Heure du rendez-vous
+                    </label>
+                    <input
+                      type="time"
+                      id="nextAppointmentTime"
+                      className="input w-full"
+                      {...register('nextAppointmentTime')}
+                    />
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
+              <div className="flex items-center text-sm text-gray-500">
+                {hasFormData && (
+                  <span className="text-amber-600">
+                    Données non sauvegardées - Double-cliquez à l'extérieur pour fermer
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleModalClose}
+                  disabled={isSubmitting}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  type="submit"
+                  form="newPatientForm"
+                  disabled={isSubmitting || !isValid}
+                  loading={isSubmitting}
+                >
+                  {isSubmitting ? 'Création...' : 'Créer le dossier'}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Modal de confirmation de fermeture */}
+          <AnimatePresence>
+            {showConfirmation && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-10"
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white rounded-xl shadow-2xl p-6 max-w-md mx-4"
+                >
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                    Données non sauvegardées
+                  </h3>
+                  <p className="text-gray-600 mb-6">
+                    Vous avez des modifications non sauvegardées. Êtes-vous sûr de vouloir fermer sans sauvegarder ?
+                  </p>
+                  <div className="flex items-center justify-end gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleCancelClose}
+                    >
+                      Continuer l'édition
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={handleConfirmClose}
+                    >
+                      Fermer sans sauvegarder
+                    </Button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+export default NewPatientModal;
