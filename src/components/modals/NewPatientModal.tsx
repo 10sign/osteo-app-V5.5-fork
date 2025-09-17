@@ -13,6 +13,8 @@ import { patientCache } from '../../utils/patientCache';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
 import { saveFormData, getFormData, clearFormData } from '../../utils/sessionPersistence';
+import { ConsultationService } from '../../services/consultationService';
+import { InvoiceService } from '../../services/invoiceService';
 
 interface NewPatientModalProps {
   isOpen: boolean;
