@@ -56,6 +56,8 @@ export class InvoiceService {
       
       const invoiceWithMetadata = {
         ...invoiceData,
+        status: invoiceData.status || 'paid',
+        paidAt: invoiceData.paidAt || new Date().toISOString(),
         osteopathId: userId,
         createdAt: timestamp,
         updatedAt: timestamp,

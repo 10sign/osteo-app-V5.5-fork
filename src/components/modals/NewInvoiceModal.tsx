@@ -214,23 +214,6 @@ const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
         updatedAt: new Date().toISOString()
       };
 
-      // Vérifier qu'il n'y a pas déjà une facture pour cette consultation
-      if (consultationId) {
-        const existingInvoicesRef = collection(db, 'invoices');
-        const existingInvoicesQuery = query(
-          existingInvoicesRef,
-          where('consultationId', '==', consultationId),
-          where('osteopathId', '==', auth.currentUser.uid)
-        );
-        const existingInvoicesSnapshot = await getDocs(existingInvoicesQuery);
-        
-        if (!existingInvoicesSnapshot.empty) {
-          throw new Error('Une facture existe déjà pour cette consultation');
-        }
-        
-        invoiceData.consultationId = consultationId;
-      }
-
       // Utiliser le service pour créer la facture
       await InvoiceService.createInvoice(invoiceData);
       

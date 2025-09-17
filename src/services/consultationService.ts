@@ -275,6 +275,265 @@ export class ConsultationDeduplicationService {
   }
 }
 
+/**
+ * Service de déduplication des consultations avec tolérance de 45 minutes
+ */
+export class ConsultationDeduplicationService {
+  /**
+   * Déduplique les consultations avec tolérance de 45 minutes
+   */
+  static async deduplicateConsultations(): Promise<{
+    dedupConsultations: number;
+    relinkedInvoices: number;
+    deletedInvoiceDuplicates: number;
+    flaggedForReview: number;
+  }> {
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    const results = {
+      dedupConsultations: 0,
+      relinkedInvoices: 0,
+      deletedInvoiceDuplicates: 0,
+      flaggedForReview: 0
+    };
+
+    try {
+      const userId = auth.currentUser.uid;
+      
+      // 1. Récupérer toutes les consultations
+      const consultationsRef = collection(db, 'consultations');
+      const q = query(consultationsRef, where('osteopathId', '==', userId));
+      const snapshot = await getDocs(q);
+      
+      const consultations = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().date?.toDate?.() || new Date(doc.data().date)
+      }));
+
+      // 2. Grouper par patient
+      const consultationsByPatient = new Map();
+      consultations.forEach(consultation => {
+        const key = consultation.patientId;
+        if (!consultationsByPatient.has(key)) {
+          consultationsByPatient.set(key, []);
+        }
+        consultationsByPatient.get(key).push(consultation);
+      });
+
+      // 3. Détecter et traiter les doublons
+      for (const [patientId, patientConsultations] of consultationsByPatient) {
+        const duplicateGroups = this.findDuplicateConsultations(patientConsultations);
+        
+        for (const group of duplicateGroups) {
+          if (group.length > 1) {
+            // Garder la plus ancienne ou la plus complète
+            const toKeep = this.selectConsultationToKeep(group);
+            const toDelete = group.filter(c => c.id !== toKeep.id);
+            
+            // Re-pointer les factures vers la consultation conservée
+            for (const consultation of toDelete) {
+              const relinked = await this.relinkInvoices(consultation.id, toKeep.id);
+              results.relinkedInvoices += relinked;
+            }
+            
+            // Supprimer les doublons
+            for (const consultation of toDelete) {
+              await deleteDoc(doc(db, 'consultations', consultation.id));
+              results.dedupConsultations++;
+            }
+          }
+        }
+      }
+
+      // 4. Dédupliquer les factures
+      const invoiceResults = await this.deduplicateInvoices();
+      results.deletedInvoiceDuplicates = invoiceResults.deletedInvoiceDuplicates;
+      results.flaggedForReview = invoiceResults.flaggedForReview;
+
+      return results;
+    } catch (error) {
+      console.error('Error in deduplication:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Trouve les consultations en doublon (< 45 min d'écart)
+   */
+  private static findDuplicateConsultations(consultations: any[]): any[][] {
+    const groups: any[][] = [];
+    const processed = new Set();
+
+    for (let i = 0; i < consultations.length; i++) {
+      if (processed.has(i)) continue;
+      
+      const group = [consultations[i]];
+      processed.add(i);
+
+      for (let j = i + 1; j < consultations.length; j++) {
+        if (processed.has(j)) continue;
+        
+        if (this.areConsultationsWithin45Minutes(consultations[i], consultations[j])) {
+          group.push(consultations[j]);
+          processed.add(j);
+        }
+      }
+
+      if (group.length > 1) {
+        groups.push(group);
+      }
+    }
+
+    return groups;
+  }
+
+  /**
+   * Vérifie si deux consultations sont à moins de 45 minutes d'écart
+   */
+  private static areConsultationsWithin45Minutes(consultation1: any, consultation2: any): boolean {
+    const date1 = consultation1.date;
+    const date2 = consultation2.date;
+    const diffMs = Math.abs(date1.getTime() - date2.getTime());
+    const diffMinutes = diffMs / (1000 * 60);
+    return diffMinutes <= 45;
+  }
+
+  /**
+   * Sélectionne la consultation à conserver (plus ancienne ou plus complète)
+   */
+  private static selectConsultationToKeep(consultations: any[]): any {
+    // Trier par date de création (plus ancienne en premier)
+    consultations.sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.date);
+      const dateB = new Date(b.createdAt || b.date);
+      return dateA.getTime() - dateB.getTime();
+    });
+
+    // Retourner la plus ancienne
+    return consultations[0];
+  }
+
+  /**
+   * Re-pointe les factures vers une nouvelle consultation
+   */
+  private static async relinkInvoices(oldConsultationId: string, newConsultationId: string): Promise<number> {
+    const invoicesRef = collection(db, 'invoices');
+    const q = query(invoicesRef, where('consultationId', '==', oldConsultationId));
+    const snapshot = await getDocs(q);
+    
+    let count = 0;
+    for (const docSnap of snapshot.docs) {
+      await updateDoc(docSnap.ref, {
+        consultationId: newConsultationId,
+        updatedAt: new Date().toISOString()
+      });
+      count++;
+    }
+    
+    return count;
+  }
+
+  /**
+   * Déduplique les factures (1 par consultation)
+   */
+  private static async deduplicateInvoices(): Promise<{
+    deletedInvoiceDuplicates: number;
+    flaggedForReview: number;
+  }> {
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    const results = {
+      deletedInvoiceDuplicates: 0,
+      flaggedForReview: 0
+    };
+
+    try {
+      const userId = auth.currentUser.uid;
+      
+      // Récupérer toutes les factures
+      const invoicesRef = collection(db, 'invoices');
+      const q = query(invoicesRef, where('osteopathId', '==', userId));
+      const snapshot = await getDocs(q);
+      
+      // Grouper par consultationId
+      const invoicesByConsultation = new Map();
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const consultationId = data.consultationId || 'no-consultation';
+        
+        if (!invoicesByConsultation.has(consultationId)) {
+          invoicesByConsultation.set(consultationId, []);
+        }
+        invoicesByConsultation.get(consultationId).push({
+          id: doc.id,
+          ...data
+        });
+      });
+
+      // Traiter chaque groupe
+      for (const [consultationId, invoices] of invoicesByConsultation) {
+        if (invoices.length > 1) {
+          // Vérifier si les totaux diffèrent
+          const totals = [...new Set(invoices.map(inv => inv.total))];
+          
+          if (totals.length > 1) {
+            // Totaux différents - marquer pour révision
+            for (const invoice of invoices) {
+              await updateDoc(doc(db, 'invoices', invoice.id), {
+                needsReview: true,
+                reviewReason: 'Totaux différents entre doublons',
+                updatedAt: new Date().toISOString()
+              });
+            }
+            results.flaggedForReview += invoices.length;
+          } else {
+            // Sélectionner la facture à conserver
+            const toKeep = this.selectInvoiceToKeep(invoices);
+            const toDelete = invoices.filter(inv => inv.id !== toKeep.id);
+            
+            // Supprimer les doublons
+            for (const invoice of toDelete) {
+              await deleteDoc(doc(db, 'invoices', invoice.id));
+              results.deletedInvoiceDuplicates++;
+            }
+          }
+        }
+      }
+
+      return results;
+    } catch (error) {
+      console.error('Error deduplicating invoices:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Sélectionne la facture à conserver (paid en priorité, sinon la plus récente)
+   */
+  private static selectInvoiceToKeep(invoices: any[]): any {
+    // Priorité aux factures payées
+    const paidInvoices = invoices.filter(inv => inv.status === 'paid');
+    if (paidInvoices.length > 0) {
+      return paidInvoices[0];
+    }
+
+    // Sinon, prendre la plus récente avec un numéro défini
+    const withNumber = invoices.filter(inv => inv.number);
+    if (withNumber.length > 0) {
+      withNumber.sort((a, b) => new Date(b.createdAt || b.issueDate).getTime() - new Date(a.createdAt || a.issueDate).getTime());
+      return withNumber[0];
+    }
+
+    // Par défaut, prendre la première
+    return invoices[0];
+  }
+}
+
 export class ConsultationService {
   /**
    * Récupère toutes les consultations
@@ -479,6 +738,19 @@ export class ConsultationService {
       const consultationDate = new Date(consultationData.date);
       
       for (const existing of existingConsultations) {
+        if (ConsultationDeduplicationService.areConsultationsWithin45Minutes(
+          { date: consultationDate },
+          { date: existing.date }
+        )) {
+          throw new Error('Une consultation existe déjà dans cette plage horaire (±45 minutes)');
+        }
+      }
+
+      // Vérifier les doublons avant création
+      const existingConsultations = await this.getConsultationsByPatientId(consultationData.patientId);
+      const consultationDate = new Date(consultationData.date);
+      
+      for (const existing of existingConsultations) {
         if (this.areConsultationsWithin45Minutes(
           { date: consultationDate },
           { date: existing.date }
@@ -500,6 +772,39 @@ export class ConsultationService {
       }, 'consultations', userId);
       
       const docRef = await addDoc(collection(db, 'consultations'), dataToStore);
+      
+      // Créer automatiquement une facture pour cette consultation
+      try {
+        const invoiceData = {
+          patientId: consultationData.patientId,
+          patientName: consultationData.patientName,
+          osteopathId: userId,
+          consultationId: docRef.id,
+          number: `INV-${Date.now().toString().slice(-6)}`,
+          issueDate: new Date(consultationData.date).toISOString().split('T')[0],
+          dueDate: new Date(consultationData.date).toISOString().split('T')[0],
+          items: [{ 
+            id: 'item1', 
+            description: consultationData.reason || 'Consultation ostéopathique', 
+            quantity: 1, 
+            unitPrice: consultationData.price || 60, 
+            amount: consultationData.price || 60 
+          }],
+          subtotal: consultationData.price || 60,
+          tax: 0,
+          total: consultationData.price || 60,
+          status: 'paid',
+          paidAt: new Date().toISOString(),
+          notes: `Facture générée automatiquement pour la consultation du ${new Date(consultationData.date).toLocaleDateString('fr-FR')}.`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        const { InvoiceService } = await import('./invoiceService');
+        await InvoiceService.createInvoice(invoiceData);
+      } catch (invoiceError) {
+        console.warn('⚠️ Erreur lors de la création automatique de la facture:', invoiceError);
+      }
       
       // Synchroniser le prochain rendez-vous du patient après création
       if (consultationData.patientId) {
