@@ -411,7 +411,7 @@ const Invoices: React.FC = () => {
             }`}
             onClick={() => handleFilterChange('unpaid')}
           >
-            Non payées ({invoices.filter(i => i.status === 'unpaid').length})
+            Impayées ({invoices.filter(i => i.status === 'unpaid').length})
           </button>
           <button
             className={`pb-2 px-4 text-sm font-medium border-b-2 ${

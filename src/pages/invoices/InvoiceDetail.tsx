@@ -215,7 +215,7 @@ const InvoiceDetail: React.FC = () => {
       case 'paid':
         return 'Payée';
       case 'unpaid':
-        return 'Non payée';
+        return 'Impayée';
       default:
         return status;
     }
