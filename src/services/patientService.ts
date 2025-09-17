@@ -181,11 +181,6 @@ export class PatientService {
             consultationId,
             initialConsultationData
           );
-          const consultationId = await HDSCompliance.saveCompliantData(
-            'consultations',
-            crypto.randomUUID(), // Generate a new ID for the consultation
-            initialConsultationData
-          );
           console.log('✅ Première consultation créée automatiquement pour le patient:', patientId, 'ID:', consultationId);
 
           // Check if an invoice already exists for this consultation
