@@ -13,7 +13,6 @@ import { patientCache } from '../../utils/patientCache';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
 import { saveFormData, getFormData, clearFormData } from '../../utils/sessionPersistence';
-import { PatientFormData, TreatmentHistoryEntry } from '../../types';
 import { HDSCompliance } from '../../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../../utils/auditLogger';
 
@@ -429,7 +428,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       
       // Clear saved form data after successful submission
       try {
-        clearFormData(formId);
+        const tempConsultationId = crypto.randomUUID();
         console.log('Cleared form data after successful patient creation');
       } catch (error) {
         console.error('Error clearing form data:', error);
