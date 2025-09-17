@@ -258,7 +258,6 @@ export class ConsultationService {
         const { InvoiceService } = await import('./invoiceService');
         
         const invoiceData = {
-          consultationId: consultationId,
           patientId: consultationData.patientId,
           patientName: consultationData.patientName,
           osteopathId: userId,
