@@ -64,6 +64,18 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   const formId = `edit_patient_${patient.id}`;
+  
+  // État initial pour comparaison
+  const [initialState, setInitialState] = useState({
+    tags: patient.tags || [],
+    treatmentHistory: patient.treatmentHistory || [],
+    pastAppointments: patient.pastAppointments?.map(app => ({
+      date: app.date.split('T')[0],
+      time: app.date.split('T')[1]?.slice(0, 5) || '',
+      notes: app.notes || ''
+    })) || [],
+    documents: patient.documents || []
+  });
 
   const handleAddTag = (tag: string) => {
     if (!selectedTags.includes(tag)) {
@@ -84,6 +96,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   };
 
   const { register, handleSubmit, formState: { errors, isValid }, reset, trigger, watch, setValue } = useForm({
+  const { register, handleSubmit, formState: { errors, isValid, isDirty }, reset, trigger, watch, setValue } = useForm({
     mode: 'onChange',
     defaultValues: {
       firstName: patient.firstName || '',
@@ -188,27 +201,38 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   useEffect(() => {
     if (!isOpen) return;
 
-    const formData = watch();
+    // Détecter les changements non enregistrés
+    const detectUnsavedChanges = () => {
+      // Utiliser isDirty de react-hook-form pour les champs du formulaire
+      const hasFormChanges = isDirty;
+      
+      // Comparer les listes avec leur état initial
+      const hasTagChanges = JSON.stringify(selectedTags.sort()) !== JSON.stringify(initialState.tags.sort());
+      const hasTreatmentChanges = JSON.stringify(treatmentHistory) !== JSON.stringify(initialState.treatmentHistory);
+      const hasAppointmentChanges = JSON.stringify(pastAppointments) !== JSON.stringify(initialState.pastAppointments);
+      const hasDocumentChanges = patientDocuments.length !== initialState.documents.length;
+      
+      const hasChanges = hasFormChanges || hasTagChanges || hasTreatmentChanges || hasAppointmentChanges || hasDocumentChanges;
+      
+      console.log('Edit patient - Unsaved changes detection:', {
+        hasFormChanges,
+        hasTagChanges,
+        hasTreatmentChanges,
+        hasAppointmentChanges,
+        hasDocumentChanges,
+        isDirty,
+        hasChanges
+      });
+      
+      setHasUnsavedChanges(hasChanges);
+      return hasChanges;
+    };
     
-    // Détecter les changements dans le formulaire en comparant avec les données originales du patient
-    const hasFormChanges = Object.entries(formData).some(([key, value]) => {
-      const originalValue = getOriginalValue(key);
-      return value !== originalValue;
-    });
-    
-    const hasTagChanges = JSON.stringify(selectedTags) !== JSON.stringify(patient.tags || []);
-    const hasTreatmentChanges = JSON.stringify(treatmentHistory) !== JSON.stringify(patient.treatmentHistory || []);
-    const hasAppointmentChanges = JSON.stringify(pastAppointments) !== JSON.stringify(
-      patient.pastAppointments?.map(app => ({
-        date: app.date.split('T')[0],
-        time: app.date.split('T')[1]?.slice(0, 5) || '',
-        notes: app.notes || ''
-      })) || []
-    );
-    
-    setHasUnsavedChanges(hasFormChanges || hasTagChanges || hasTreatmentChanges || hasAppointmentChanges);
+    // Détecter immédiatement
+    detectUnsavedChanges();
     
     const saveData = () => {
+      const formData = watch();
       saveFormData(formId, {
         formData,
         selectedTags,
@@ -227,7 +251,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
       clearInterval(intervalId);
       saveData(); // Save on unmount
     };
-  }, [isOpen, watch, selectedTags, pastAppointments, treatmentHistory, formId]);
+  }, [isOpen, watch, selectedTags, pastAppointments, treatmentHistory, patientDocuments, isDirty, initialState]);
 
   // Fonction pour obtenir la valeur originale d'un champ
   const getOriginalValue = (key: string) => {
@@ -314,23 +338,62 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   };
 
   const handleClose = () => {
-    // Si des données non sauvegardées existent, demander confirmation
-    if (hasUnsavedChanges && !showUnsavedWarning) {
+    console.log('Attempting to close edit modal, checking for unsaved changes...');
+    
+    // Vérifier une dernière fois s'il y a des changements non enregistrés
+    const hasFormChanges = isDirty;
+    const hasTagChanges = JSON.stringify(selectedTags.sort()) !== JSON.stringify(initialState.tags.sort());
+    const hasTreatmentChanges = JSON.stringify(treatmentHistory) !== JSON.stringify(initialState.treatmentHistory);
+    const hasAppointmentChanges = JSON.stringify(pastAppointments) !== JSON.stringify(initialState.pastAppointments);
+    const hasDocumentChanges = patientDocuments.length !== initialState.documents.length;
+    
+    const currentlyHasChanges = hasFormChanges || hasTagChanges || hasTreatmentChanges || hasAppointmentChanges || hasDocumentChanges;
+    
+    console.log('Final unsaved changes check for edit modal:', {
+      hasFormChanges,
+      hasTagChanges,
+      hasTreatmentChanges,
+      hasAppointmentChanges,
+      hasDocumentChanges,
+      isDirty,
+      currentlyHasChanges,
+      showUnsavedWarning
+    });
+    
+    // Si des données non sauvegardées existent et qu'on n'a pas encore montré l'avertissement
+    if (currentlyHasChanges && !showUnsavedWarning) {
+      console.log('Showing unsaved warning modal for edit');
       setShowUnsavedWarning(true);
       return;
     }
     
-    // Keep form data on close
+    // Fermer normalement
+    console.log('Closing edit modal normally');
     onClose();
   };
 
   const handleConfirmClose = () => {
+    console.log('User confirmed close without saving edits');
     setShowUnsavedWarning(false);
     setHasUnsavedChanges(false);
+    
+    // Clear saved form data
+    try {
+      clearFormData(formId);
+      console.log('Cleared form data on confirmed close');
+    } catch (error) {
+      console.error('Error clearing form data:', error);
+    }
+    
+    // Reset state
+    setShowUnsavedWarning(false);
+    setHasUnsavedChanges(false);
+    
     onClose();
   };
 
   const handleCancelClose = () => {
+    console.log('User cancelled close, continuing editing');
     setShowUnsavedWarning(false);
   };
 
@@ -1047,7 +1110,12 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Edit modal backdrop clicked, attempting to close');
+                handleClose();
+              }}
 
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -1063,10 +1131,13 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
               <div className="px-6 py-4">
                 <p className="text-gray-700 mb-4">
                   Vous avez modifié des informations dans ce dossier patient. 
-                  Êtes-vous sûr de vouloir fermer sans enregistrer ?
+                  Voulez-vous vraiment fermer sans enregistrer ?
+                </p>
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>Modifications qui seront perdues :</strong>
                 </p>
                 <p className="text-sm text-gray-500">
-                  Toutes les modifications seront perdues.
+                  • Modifications du formulaire • Tags modifiés • Historique des traitements • Rendez-vous passés • Documents
                 </p>
               </div>
 

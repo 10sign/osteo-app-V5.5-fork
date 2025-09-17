@@ -64,18 +64,6 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
     // Values will be set explicitly in initializeFormWithEmptyData()
   });
 
-  // Debug form state - remove after fixing
-  useEffect(() => {
-    console.log('Form Debug State:', {
-      isValid,
-      isDirty,
-      errors: Object.keys(errors),
-      errorDetails: errors,
-      isSubmitting,
-      formValues: watch()
-    });
-  }, [isValid, isDirty, errors, isSubmitting, watch]);
-
   // Function to initialize form with empty data
   const initializeFormWithEmptyData = () => {
     console.log('Initializing form with empty data for new patient');
@@ -146,16 +134,41 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
   useEffect(() => {
     if (!isOpen) return;
 
-    const formData = watch();
+    // Détecter les changements non enregistrés
+    const detectUnsavedChanges = () => {
+      const formData = watch();
+      
+      // Vérifier si des champs du formulaire ont été modifiés
+      const hasFormData = Object.values(formData).some(value => 
+        value && value !== '' && value !== undefined && value !== null
+      );
+      
+      // Vérifier si des éléments ont été ajoutés aux listes
+      const hasListData = selectedTags.length > 0 || 
+                          pastAppointments.length > 0 || 
+                          treatmentHistory.length > 0 ||
+                          patientDocuments.length > 0;
+      
+      const hasChanges = hasFormData || hasListData || isDirty;
+      
+      console.log('Unsaved changes detection:', {
+        hasFormData,
+        hasListData,
+        isDirty,
+        hasChanges,
+        formData: Object.keys(formData).filter(key => formData[key])
+      });
+      
+      setHasUnsavedChanges(hasChanges);
+      
+      return hasChanges;
+    };
     
-    // Détecter les changements dans le formulaire
-    const hasData = Object.values(formData).some(value => 
-      value && value !== '' && value !== undefined && value !== null
-    ) || selectedTags.length > 0 || pastAppointments.length > 0 || treatmentHistory.length > 0;
-    
-    setHasUnsavedChanges(hasData);
+    // Détecter immédiatement
+    detectUnsavedChanges();
     
     const saveData = () => {
+      const formData = watch();
       saveFormData(FORM_ID, {
         formData,
         selectedTags,
@@ -174,7 +187,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       clearInterval(intervalId);
       saveData(); // Save on unmount
     };
-  }, [isOpen, watch, selectedTags, pastAppointments, treatmentHistory]);
+  }, [isOpen, watch, selectedTags, pastAppointments, treatmentHistory, patientDocuments, isDirty]);
 
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     // Cette fonction est conservée mais n'est plus utilisée
@@ -406,8 +419,30 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
 
   // Clear form data when modal closes
   const handleClose = () => {
-    // Si des données non sauvegardées existent, demander confirmation
-    if (hasUnsavedChanges && !showUnsavedWarning) {
+    console.log('Attempting to close modal, hasUnsavedChanges:', hasUnsavedChanges);
+    
+    // Vérifier une dernière fois s'il y a des changements non enregistrés
+    const formData = watch();
+    const hasFormData = Object.values(formData).some(value => 
+      value && value !== '' && value !== undefined && value !== null
+    );
+    const hasListData = selectedTags.length > 0 || 
+                        pastAppointments.length > 0 || 
+                        treatmentHistory.length > 0 ||
+                        patientDocuments.length > 0;
+    const currentlyHasChanges = hasFormData || hasListData || isDirty;
+    
+    console.log('Final unsaved changes check:', {
+      hasFormData,
+      hasListData,
+      isDirty,
+      currentlyHasChanges,
+      showUnsavedWarning
+    });
+    
+    // Si des données non sauvegardées existent et qu'on n'a pas encore montré l'avertissement
+    if (currentlyHasChanges && !showUnsavedWarning) {
+      console.log('Showing unsaved warning modal');
       setShowUnsavedWarning(true);
       return;
     }
@@ -436,12 +471,37 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
   };
 
   const handleConfirmClose = () => {
+    console.log('User confirmed close without saving');
     setShowUnsavedWarning(false);
     setHasUnsavedChanges(false);
-    handleClose();
+    
+    // Clear any saved form data when closing
+    try {
+      clearFormData(FORM_ID);
+      console.log('Cleared form data on confirmed close');
+    } catch (error) {
+      console.error('Error clearing form data:', error);
+    }
+    
+    // Reset all form state
+    reset();
+    setSelectedTags([]);
+    setPastAppointments([]);
+    setTreatmentHistory([]);
+    setPatientDocuments([]);
+    setError(null);
+    setSuccess(null);
+    setShowUnsavedWarning(false);
+    setHasUnsavedChanges(false);
+    
+    console.log('New patient modal force closed - all data cleared');
+    
+    // Close the modal
+    onClose();
   };
 
   const handleCancelClose = () => {
+    console.log('User cancelled close, continuing editing');
     setShowUnsavedWarning(false);
   };
 
@@ -1092,7 +1152,12 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Backdrop clicked, attempting to close');
+                handleClose();
+              }}
 
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -1108,10 +1173,13 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
               <div className="px-6 py-4">
                 <p className="text-gray-700 mb-4">
                   Vous avez des données non sauvegardées dans ce formulaire. 
-                  Êtes-vous sûr de vouloir fermer sans enregistrer ?
+                  Voulez-vous vraiment fermer sans enregistrer ?
+                </p>
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>Données qui seront perdues :</strong>
                 </p>
                 <p className="text-sm text-gray-500">
-                  Toutes les informations saisies seront perdues.
+                  • Informations du formulaire • Tags sélectionnés • Historique des traitements • Rendez-vous passés • Documents téléversés
                 </p>
               </div>
 
