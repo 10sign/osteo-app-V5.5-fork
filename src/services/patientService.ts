@@ -4,6 +4,7 @@ import { Patient } from '../types';
 import { HDSCompliance } from '../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import { ConsultationService } from './consultationService';
+import { InvoiceService } from './invoiceService';
 import { getEffectiveOsteopathId } from '../utils/substituteAuth';
 
 /**
@@ -146,28 +147,59 @@ export class PatientService {
       );
       
       // Créer automatiquement la première consultation
-      try {
-        const initialConsultationData = {
-          patientId: patientId,
-          patientName: `${data.firstName} ${data.lastName}`,
-          osteopathId: auth.currentUser.uid,
-          date: new Date(dataWithMetadata.createdAt),
-          reason: 'Première consultation',
-          treatment: 'Évaluation initiale et anamnèse',
-          notes: 'Consultation générée automatiquement lors de la création du patient.',
-          duration: 60,
-          price: 60,
-          status: 'completed',
-          examinations: [],
-          prescriptions: []
-        };
-        
-        await ConsultationService.createConsultation(initialConsultationData);
-        
-        console.log('✅ Première consultation créée automatiquement pour le patient:', patientId);
-      } catch (consultationError) {
-        console.warn('⚠️ Erreur lors de la création de la première consultation:', consultationError);
-        // Ne pas faire échouer la création du patient si la consultation échoue
+      const consultationDate = new Date(dataWithMetadata.createdAt);
+      const consultationsRef = collection(db, 'consultations');
+      const existingConsultationQuery = query(
+        consultationsRef,
+        where('patientId', '==', patientId),
+        where('osteopathId', '==', auth.currentUser.uid),
+        where('date', '==', Timestamp.fromDate(consultationDate))
+      );
+      const existingConsultationSnapshot = await getDocs(existingConsultationQuery);
+
+      if (existingConsultationSnapshot.empty) {
+        try {
+          const initialConsultationData = {
+            patientId: patientId,
+            patientName: `${dataWithMetadata.firstName} ${dataWithMetadata.lastName}`,
+            osteopathId: auth.currentUser.uid,
+            date: consultationDate,
+            reason: 'Première consultation',
+            treatment: 'Évaluation initiale et anamnèse',
+            notes: 'Consultation générée automatiquement lors de la création du patient.',
+            duration: 60,
+            price: 55, // Prix par défaut de 55€
+            status: 'completed',
+            examinations: [],
+            prescriptions: []
+          };
+          
+          const consultationId = await ConsultationService.createConsultation(initialConsultationData);
+          console.log('✅ Première consultation créée automatiquement pour le patient:', patientId, 'ID:', consultationId);
+
+          // Créer la facture liée à cette consultation
+          const invoiceData = {
+            patientId: patientId,
+            patientName: `${dataWithMetadata.firstName} ${dataWithMetadata.lastName}`,
+            osteopathId: auth.currentUser.uid,
+            number: `INV-${Date.now().toString().slice(-6)}`, // Numéro de facture simple
+            issueDate: dataWithMetadata.createdAt.split('T')[0],
+            dueDate: dataWithMetadata.createdAt.split('T')[0], // Échéance le même jour
+            items: [{ id: 'item1', description: 'Consultation ostéopathique', quantity: 1, unitPrice: 55, amount: 55 }],
+            subtotal: 55,
+            tax: 0,
+            total: 55,
+            status: 'paid', // Marquer comme payée par défaut
+            notes: `Facture générée automatiquement pour la consultation ${consultationId}.`,
+            createdAt: dataWithMetadata.createdAt,
+            updatedAt: dataWithMetadata.updatedAt
+          };
+          await InvoiceService.createInvoice(invoiceData);
+          console.log('✅ Facture automatique créée pour le patient:', patientId);
+
+        } catch (creationError) {
+          console.warn('⚠️ Erreur lors de la création automatique de consultation/facture:', creationError);
+        }
       }
       
       // Journalisation de la création

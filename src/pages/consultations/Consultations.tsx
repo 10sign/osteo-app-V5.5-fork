@@ -393,7 +393,8 @@ const Consultations: React.FC = () => {
             practitionerId: consultationData.osteopathId || auth.currentUser!.uid,
             practitionerName: auth.currentUser!.displayName || 'Ostéopathe',
             date: consultationDate,
-            endTime: endTime,
+            endTime: endTime, // Assurez-vous que endTime est un objet Date
+            isHistorical: consultationDate < now, // Marquer comme historique si dans le passé
             duration: consultationData.duration || 60,
             status: consultationData.status === 'completed' ? 'completed' : 'confirmed',
             type: consultationData.reason || 'Consultation standard',

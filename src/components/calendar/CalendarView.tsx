@@ -365,7 +365,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                       <div 
                         key={appointment.id}
                         draggable
-                        onDragStart={(e) => handleDragStart(e, appointment.id)}
+                        onDragStart={(e) => (appointment.date >= new Date() && !appointment.isHistorical) && handleDragStart(e, appointment.id)}
                         className={`absolute inset-1 rounded-lg p-1 sm:p-2 text-xs border cursor-move hover:shadow-md transition-shadow group ${
                           getAppointmentColor(appointment)
                         } ${draggedAppointment === appointment.id ? 'opacity-50' : ''}`}
@@ -385,7 +385,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                             {appointment.status !== 'completed' && !appointment.consultationId && !appointment.isHistorical && (
                               <button
                                 onClick={(e) => {
-                                  e.stopPropagation();
+                                  if (appointment.date >= new Date() && !appointment.isHistorical) e.stopPropagation();
                                   if (onAddConsultation) onAddConsultation(appointment.id);
                                 }}
                                 className="hover:text-green-600 transition-colors"
@@ -396,7 +396,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                             )}
                             <button
                               onClick={(e) => {
-                                e.stopPropagation();
+                                if (appointment.date >= new Date() && !appointment.isHistorical) e.stopPropagation();
                                 onAppointmentEdit(appointment.id);
                               }}
                               className="hover:text-blue-600 transition-colors"
@@ -406,7 +406,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                             </button>
                             <button
                               onClick={(e) => {
-                                e.stopPropagation();
+                                if (appointment.date >= new Date() && !appointment.isHistorical) e.stopPropagation();
                                 onAppointmentDelete(appointment.id);
                               }}
                               className="hover:text-red-600 transition-colors"
@@ -417,7 +417,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                           </div>
                           )}
                           
-                          {/* Mobile actions */}
+                          {/* Mobile actions - only for editable appointments */}
                           {isMobileScreen && (
                             <button
                               onClick={(e) => {
@@ -430,7 +430,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                             </button>
                           )}
                         </div>
-                        
+
                         <div className="font-medium truncate text-xs">{appointment.patientName}</div>
                         {!isMobileScreen && (
                           <div className="text-xs opacity-75 truncate">{appointment.type}</div>
@@ -443,7 +443,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                         
                         {/* Mobile action menu */}
                         {isMobileScreen && showMobileActions === appointment.id && (
-                          <div className="absolute top-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-2 space-y-1">
+                          <div className="absolute top-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-2 space-y-1" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -744,7 +744,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                       <div
                         key={appointment.id}
                         className={`text-xs p-1 rounded truncate flex items-center group relative ${getAppointmentColor(appointment)}`}
-                      >
+                        onClick={(e) => { if (appointment.date >= new Date() && !appointment.isHistorical) { e.stopPropagation(); onAppointmentEdit(appointment.id); } }}
                         {appointment.isHistorical && <History size={10} className="mr-1 flex-shrink-0" />}
                         <span className="truncate flex-grow">
                           {isMobileScreen ? appointment.patientName : `${format(appointment.date, 'HH:mm')} - ${appointment.patientName}`}
@@ -754,7 +754,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                         {!isMobileScreen && (
                         <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
                           <button
-                            onClick={(e) => {
+                            onClick={(e) => { // This button is only visible if isEditable is true
                               e.stopPropagation();
                               onAppointmentEdit(appointment.id);
                             }}
@@ -764,7 +764,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                             <Edit size={10} />
                           </button>
                           <button
-                            onClick={(e) => {
+                            onClick={(e) => { // This button is only visible if isEditable is true
                               e.stopPropagation();
                               onAppointmentDelete(appointment.id);
                             }}
@@ -777,7 +777,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                         )}
                         
                         {/* Mobile tap to edit */}
-                        {isMobileScreen && (
+                        {isMobileScreen && ( // This button is only visible if isEditable is true
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
