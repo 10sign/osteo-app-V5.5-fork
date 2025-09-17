@@ -55,6 +55,8 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
   const [pastAppointments, setPastAppointments] = useState<PastAppointment[]>([]);
   const [treatmentHistory, setTreatmentHistory] = useState<TreatmentHistoryEntry[]>([]);
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
 
   const { register, handleSubmit, formState: { errors, isValid, isDirty }, reset, watch, setValue, trigger } = useForm<PatientFormData>({
     mode: 'onChange',
@@ -145,6 +147,13 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
     if (!isOpen) return;
 
     const formData = watch();
+    
+    // Détecter les changements dans le formulaire
+    const hasData = Object.values(formData).some(value => 
+      value && value !== '' && value !== undefined && value !== null
+    ) || selectedTags.length > 0 || pastAppointments.length > 0 || treatmentHistory.length > 0;
+    
+    setHasUnsavedChanges(hasData);
     
     const saveData = () => {
       saveFormData(FORM_ID, {
@@ -397,6 +406,12 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
 
   // Clear form data when modal closes
   const handleClose = () => {
+    // Si des données non sauvegardées existent, demander confirmation
+    if (hasUnsavedChanges && !showUnsavedWarning) {
+      setShowUnsavedWarning(true);
+      return;
+    }
+    
     // Clear any saved form data when closing
     try {
       clearFormData(FORM_ID);
@@ -420,6 +435,16 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
     onClose();
   };
 
+  const handleConfirmClose = () => {
+    setShowUnsavedWarning(false);
+    setHasUnsavedChanges(false);
+    handleClose();
+  };
+
+  const handleCancelClose = () => {
+    setShowUnsavedWarning(false);
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -429,7 +454,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={onClose}
+            onClick={handleClose}
           />
 
           <motion.div
@@ -442,7 +467,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">Nouveau dossier patient</h2>
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 className="text-gray-400 hover:text-gray-500 transition-colors"
               >
                 <X size={20} />
@@ -1057,6 +1082,57 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
           </motion.div>
         </div>
       )}
+      
+      {/* Modal de confirmation pour les données non sauvegardées */}
+      <AnimatePresence>
+        {showUnsavedWarning && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', duration: 0.5 }}
+              className="relative w-full max-w-md bg-white rounded-xl shadow-2xl"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Données non sauvegardées</h3>
+              </div>
+
+              <div className="px-6 py-4">
+                <p className="text-gray-700 mb-4">
+                  Vous avez des données non sauvegardées dans ce formulaire. 
+                  Êtes-vous sûr de vouloir fermer sans enregistrer ?
+                </p>
+                <p className="text-sm text-gray-500">
+                  Toutes les informations saisies seront perdues.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+                <Button
+                  variant="outline"
+                  onClick={handleCancelClose}
+                >
+                  Continuer l'édition
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={handleConfirmClose}
+                >
+                  Fermer sans enregistrer
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </AnimatePresence>
   );
 };

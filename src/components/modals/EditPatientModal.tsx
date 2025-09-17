@@ -61,6 +61,8 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>(
     patient.documents || []
   );
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   const formId = `edit_patient_${patient.id}`;
 
   const handleAddTag = (tag: string) => {
@@ -188,6 +190,24 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
 
     const formData = watch();
     
+    // Détecter les changements dans le formulaire en comparant avec les données originales du patient
+    const hasFormChanges = Object.entries(formData).some(([key, value]) => {
+      const originalValue = getOriginalValue(key);
+      return value !== originalValue;
+    });
+    
+    const hasTagChanges = JSON.stringify(selectedTags) !== JSON.stringify(patient.tags || []);
+    const hasTreatmentChanges = JSON.stringify(treatmentHistory) !== JSON.stringify(patient.treatmentHistory || []);
+    const hasAppointmentChanges = JSON.stringify(pastAppointments) !== JSON.stringify(
+      patient.pastAppointments?.map(app => ({
+        date: app.date.split('T')[0],
+        time: app.date.split('T')[1]?.slice(0, 5) || '',
+        notes: app.notes || ''
+      })) || []
+    );
+    
+    setHasUnsavedChanges(hasFormChanges || hasTagChanges || hasTreatmentChanges || hasAppointmentChanges);
+    
     const saveData = () => {
       saveFormData(formId, {
         formData,
@@ -208,6 +228,50 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
       saveData(); // Save on unmount
     };
   }, [isOpen, watch, selectedTags, pastAppointments, treatmentHistory, formId]);
+
+  // Fonction pour obtenir la valeur originale d'un champ
+  const getOriginalValue = (key: string) => {
+    switch (key) {
+      case 'firstName':
+        return patient.firstName || '';
+      case 'lastName':
+        return patient.lastName || '';
+      case 'dateOfBirth':
+        return patient.dateOfBirth || '';
+      case 'profession':
+        return patient.profession || '';
+      case 'gender':
+        return patient.gender || '';
+      case 'email':
+        return patient.email || '';
+      case 'address':
+        return patient.address?.street || '';
+      case 'phone':
+        return patient.phone || '';
+      case 'medicalHistory':
+        return patient.medicalHistory || '';
+      case 'insurance':
+        return patient.insurance?.provider || '';
+      case 'insuranceNumber':
+        return patient.insurance?.policyNumber || '';
+      case 'notes':
+        return patient.notes || '';
+      case 'nextAppointment':
+        return patient.nextAppointment ? patient.nextAppointment.split('T')[0] : '';
+      case 'nextAppointmentTime':
+        return patient.nextAppointment ? patient.nextAppointment.split('T')[1]?.slice(0, 5) : '';
+      case 'currentTreatment':
+        return patient.currentTreatment || '';
+      case 'consultationReason':
+        return patient.consultationReason || '';
+      case 'medicalAntecedents':
+        return patient.medicalAntecedents || '';
+      case 'osteopathicTreatment':
+        return patient.osteopathicTreatment || '';
+      default:
+        return '';
+    }
+  };
 
   // Fonction pour ajouter un traitement à l'historique
   const addTreatmentHistoryEntry = () => {
@@ -247,6 +311,27 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
 
   const handleDocumentError = (error: string) => {
     setError(error);
+  };
+
+  const handleClose = () => {
+    // Si des données non sauvegardées existent, demander confirmation
+    if (hasUnsavedChanges && !showUnsavedWarning) {
+      setShowUnsavedWarning(true);
+      return;
+    }
+    
+    // Keep form data on close
+    onClose();
+  };
+
+  const handleConfirmClose = () => {
+    setShowUnsavedWarning(false);
+    setHasUnsavedChanges(false);
+    onClose();
+  };
+
+  const handleCancelClose = () => {
+    setShowUnsavedWarning(false);
   };
 
   const onSubmit = async (data: any) => {
@@ -362,7 +447,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={onClose}
+            onClick={handleClose}
           />
 
           <motion.div
@@ -375,10 +460,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">Modifier le dossier patient</h2>
               <button
-                onClick={() => {
-                  // Keep form data on close
-                  onClose();
-                }}
+                onClick={handleClose}
                 className="text-gray-400 hover:text-gray-500 transition-colors"
               >
                 <X size={20} />
@@ -936,10 +1018,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
               <Button
                 variant="outline"
-                onClick={() => {
-                  // Keep form data on cancel
-                  onClose();
-                }}
+                onClick={handleClose}
                 disabled={isSubmitting}
               >
                 Annuler
@@ -958,6 +1037,57 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
           </motion.div>
         </div>
       )}
+      
+      {/* Modal de confirmation pour les données non sauvegardées */}
+      <AnimatePresence>
+        {showUnsavedWarning && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', duration: 0.5 }}
+              className="relative w-full max-w-md bg-white rounded-xl shadow-2xl"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Modifications non sauvegardées</h3>
+              </div>
+
+              <div className="px-6 py-4">
+                <p className="text-gray-700 mb-4">
+                  Vous avez modifié des informations dans ce dossier patient. 
+                  Êtes-vous sûr de vouloir fermer sans enregistrer ?
+                </p>
+                <p className="text-sm text-gray-500">
+                  Toutes les modifications seront perdues.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+                <Button
+                  variant="outline"
+                  onClick={handleCancelClose}
+                >
+                  Continuer l'édition
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={handleConfirmClose}
+                >
+                  Fermer sans enregistrer
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </AnimatePresence>
   );
 };
