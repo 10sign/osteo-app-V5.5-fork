@@ -215,6 +215,22 @@ export class ConsultationService {
     }
 
     try {
+      // Vérifier s'il existe déjà une consultation pour ce patient
+      if (consultationData.patientId) {
+        const existingConsultationsRef = collection(db, 'consultations');
+        const existingQuery = query(
+          existingConsultationsRef,
+          where('patientId', '==', consultationData.patientId),
+          where('osteopathId', '==', auth.currentUser.uid)
+        );
+        
+        const existingSnapshot = await getDocs(existingQuery);
+        if (!existingSnapshot.empty) {
+          console.log('⚠️ Consultation already exists for this patient, skipping creation');
+          return existingSnapshot.docs[0].id;
+        }
+      }
+
       const userId = auth.currentUser.uid;
       const now = new Date();
       
@@ -233,20 +249,6 @@ export class ConsultationService {
       // Créer automatiquement une facture pour cette consultation (seulement si pas déjà existante)
       try {
         const { InvoiceService } = await import('./invoiceService');
-        
-        // Vérifier qu'il n'existe pas déjà une facture pour cette consultation
-        const invoicesRef = collection(db, 'invoices');
-        const existingInvoiceQuery = query(
-          invoicesRef,
-          where('consultationId', '==', consultationId),
-          where('osteopathId', '==', userId)
-        );
-        
-        const existingInvoiceSnapshot = await getDocs(existingInvoiceQuery);
-        if (!existingInvoiceSnapshot.empty) {
-          console.log('ℹ️ Facture déjà existante pour cette consultation, pas de création');
-          return consultationId;
-        }
         
         const invoiceData = {
           patientId: consultationData.patientId,

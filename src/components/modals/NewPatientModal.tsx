@@ -425,6 +425,18 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
 
       // Créer automatiquement une consultation pour ce nouveau patient
       try {
+        // Vérifier qu'il n'existe pas déjà une consultation pour ce patient
+        const existingConsultationsRef = collection(db, 'consultations');
+        const existingConsultationsQuery = query(
+          existingConsultationsRef,
+          where('patientId', '==', patientId),
+          where('osteopathId', '==', auth.currentUser.uid)
+        );
+        
+        const existingConsultationsSnapshot = await getDocs(existingConsultationsQuery);
+        if (!existingConsultationsSnapshot.empty) {
+          console.log('⚠️ Consultation already exists for this patient, skipping creation');
+        } else {
         const consultationData = {
           patientId: patientId,
           patientName: `${data.firstName} ${data.lastName}`,
@@ -439,6 +451,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
         
         await ConsultationService.createConsultation(consultationData);
         console.log('✅ Consultation automatique créée pour le nouveau patient');
+        }
       } catch (consultationError) {
         console.warn('⚠️ Erreur lors de la création de la consultation automatique:', consultationError);
         // Ne pas faire échouer la création du patient si la consultation échoue

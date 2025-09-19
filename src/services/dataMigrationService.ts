@@ -366,6 +366,7 @@ export class DataMigrationService {
   static async cleanDuplicateConsultationsAndInvoices(): Promise<{
     consultationsCleaned: number;
     invoicesCleaned: number;
+    patientsProcessed: number;
     errors: number;
   }> {
     if (!auth.currentUser) {
@@ -376,6 +377,7 @@ export class DataMigrationService {
       const results = {
         consultationsCleaned: 0,
         invoicesCleaned: 0,
+        patientsProcessed: 0,
         errors: 0
       };
 
@@ -392,6 +394,8 @@ export class DataMigrationService {
         const patientId = patientDoc.id;
         const patientData = patientDoc.data();
         const patientName = `${patientData.firstName} ${patientData.lastName}`;
+        
+        results.patientsProcessed++;
         
         try {
           // 1. Nettoyer les consultations en double pour ce patient
@@ -426,6 +430,27 @@ export class DataMigrationService {
             }
             
             console.log(`✅ ${consultationsToDelete.length} consultations en double supprimées pour ${patientName}`);
+          } else if (consultations.length === 0) {
+            // Aucune consultation pour ce patient, en créer une
+            const consultationData = {
+              patientId: patientId,
+              patientName: patientName,
+              osteopathId: auth.currentUser.uid,
+              date: Timestamp.now(),
+              reason: 'Consultation initiale',
+              treatment: 'Évaluation ostéopathique',
+              notes: 'Consultation générée automatiquement lors du nettoyage',
+              duration: 60,
+              price: 60,
+              status: 'completed',
+              examinations: [],
+              prescriptions: [],
+              createdAt: Timestamp.now(),
+              updatedAt: Timestamp.now()
+            };
+            
+            const consultationRef = await addDoc(collection(db, 'consultations'), consultationData);
+            console.log(`✅ Consultation créée pour le patient ${patientName}`);
           }
           
           // 2. Nettoyer les factures en double pour ce patient
@@ -461,16 +486,71 @@ export class DataMigrationService {
             
             console.log(`✅ ${invoicesToDelete.length} factures en double supprimées pour ${patientName}`);
             
-            // 3. Lier la facture restante à la consultation restante
-            if (consultations.length > 0) {
-              const consultationToKeep = consultations[0];
-              await updateDoc(doc(db, 'invoices', invoiceToKeep.id), {
-                consultationId: consultationToKeep.id,
-                updatedAt: new Date().toISOString()
-              });
+          } else if (invoices.length === 0) {
+            // Aucune facture pour ce patient, en créer une si il y a une consultation
+            const consultationsRef = collection(db, 'consultations');
+            const consultationsQuery = query(
+              consultationsRef,
+              where('patientId', '==', patientId),
+              where('osteopathId', '==', auth.currentUser.uid)
+            );
+            
+            const consultationsSnapshot = await getDocs(consultationsQuery);
+            if (!consultationsSnapshot.empty) {
+              const consultation = consultationsSnapshot.docs[0].data();
               
-              console.log(`✅ Facture ${invoiceToKeep.number} liée à la consultation ${consultationToKeep.id}`);
+              const invoiceData = {
+                number: `F-${Date.now()}-${patientId.slice(-4)}`,
+                patientId: patientId,
+                patientName: patientName,
+                osteopathId: auth.currentUser.uid,
+                consultationId: consultationsSnapshot.docs[0].id,
+                issueDate: new Date().toISOString().split('T')[0],
+                dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                items: [{
+                  id: crypto.randomUUID(),
+                  description: consultation.reason || 'Consultation ostéopathique',
+                  quantity: 1,
+                  unitPrice: consultation.price || 60,
+                  amount: consultation.price || 60
+                }],
+                subtotal: consultation.price || 60,
+                tax: 0,
+                total: consultation.price || 60,
+                status: 'paid',
+                notes: 'Facture générée automatiquement lors du nettoyage',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              };
+              
+              await addDoc(collection(db, 'invoices'), invoiceData);
+              console.log(`✅ Facture créée pour le patient ${patientName}`);
             }
+          }
+          
+          // 3. Lier la facture restante à la consultation restante
+          const finalConsultationsSnapshot = await getDocs(query(
+            collection(db, 'consultations'),
+            where('patientId', '==', patientId),
+            where('osteopathId', '==', auth.currentUser.uid)
+          ));
+          
+          const finalInvoicesSnapshot = await getDocs(query(
+            collection(db, 'invoices'),
+            where('patientId', '==', patientId),
+            where('osteopathId', '==', auth.currentUser.uid)
+          ));
+          
+          if (!finalConsultationsSnapshot.empty && !finalInvoicesSnapshot.empty) {
+            const consultationToKeep = finalConsultationsSnapshot.docs[0];
+            const invoiceToKeep = finalInvoicesSnapshot.docs[0];
+            
+            await updateDoc(doc(db, 'invoices', invoiceToKeep.id), {
+              consultationId: consultationToKeep.id,
+              updatedAt: new Date().toISOString()
+            });
+            
+            console.log(`✅ Facture ${invoiceToKeep.data().number} liée à la consultation ${consultationToKeep.id}`);
           }
           
         } catch (error) {
