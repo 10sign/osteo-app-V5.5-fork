@@ -314,37 +314,6 @@ const AdminDashboard: React.FC = () => {
                 </Button>
               </div>
               
-              {/* Outil d'intégration agenda */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                  <Calendar size={20} className="mr-2 text-secondary-600" />
-                  Intégration agenda des consultations
-                </h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Assure que toutes les consultations existantes sont visibles dans l'agenda avec leur date/heure correcte.
-                </p>
-                <Button
-                  variant="outline"
-                  onClick={async () => {
-                    try {
-                      const results = await DataMigrationService.ensureConsultationsInAgenda();
-                      
-                      alert(`✅ Intégration agenda terminée:\n- ${results.consultationsProcessed} consultations traitées\n- ${results.appointmentsCreated} rendez-vous créés dans l'agenda\n- ${results.errors} erreurs`);
-                      
-                      if (results.errors > 0) {
-                        console.warn('⚠️ Erreurs lors de l\'intégration, consultez la console');
-                      }
-                    } catch (error) {
-                      console.error('❌ Erreur lors de l\'intégration agenda:', error);
-                      alert('❌ Erreur lors de l\'intégration des consultations dans l\'agenda');
-                    }
-                  }}
-                  leftIcon={<Calendar size={16} />}
-                >
-                  Intégrer dans l'agenda
-                </Button>
-              </div>
-              
               {/* Outil de nettoyage des consultations et factures en double */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
@@ -358,21 +327,21 @@ const AdminDashboard: React.FC = () => {
                   variant="outline"
                   onClick={async () => {
                     try {
-                      const results = await DataMigrationService.ensureOneConsultationOneInvoicePerPatient();
+                      const results = await DataMigrationService.cleanDuplicateConsultationsAndInvoices();
                       
-                      alert(`✅ Correction terminée:\n- ${results.patientsProcessed} patients traités\n- ${results.consultationsCreated} consultations créées\n- ${results.consultationsCleaned} consultations supprimées\n- ${results.invoicesCreated} factures créées\n- ${results.invoicesCleaned} factures supprimées\n- ${results.errors} erreurs`);
+                      alert(`✅ Nettoyage terminé:\n- ${results.consultationsCleaned} consultations en double supprimées\n- ${results.invoicesCleaned} factures en double supprimées\n- ${results.errors} erreurs`);
                       
                       if (results.errors > 0) {
-                        console.warn('⚠️ Erreurs lors de la correction, consultez la console');
+                        console.warn('⚠️ Erreurs lors du nettoyage, consultez la console');
                       }
                     } catch (error) {
                       console.error('❌ Erreur lors du nettoyage:', error);
-                      alert('❌ Erreur lors de la correction des consultations et factures');
+                      alert('❌ Erreur lors du nettoyage des consultations et factures');
                     }
                   }}
                   leftIcon={<Database size={16} />}
                 >
-                  Corriger 1 consultation = 1 facture
+                  Nettoyer consultations et factures
                 </Button>
               </div>
               
