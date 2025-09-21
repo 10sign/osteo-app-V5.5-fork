@@ -215,22 +215,6 @@ export class ConsultationService {
     }
 
     try {
-      // Vérifier s'il existe déjà une consultation pour ce patient
-      if (consultationData.patientId) {
-        const existingConsultationsRef = collection(db, 'consultations');
-        const existingQuery = query(
-          existingConsultationsRef,
-          where('patientId', '==', consultationData.patientId),
-          where('osteopathId', '==', auth.currentUser.uid)
-        );
-        
-        const existingSnapshot = await getDocs(existingQuery);
-        if (!existingSnapshot.empty) {
-          console.log('⚠️ Consultation already exists for this patient, skipping creation');
-          return existingSnapshot.docs[0].id;
-        }
-      }
-
       const userId = auth.currentUser.uid;
       const now = new Date();
       

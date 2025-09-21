@@ -327,21 +327,21 @@ const AdminDashboard: React.FC = () => {
                   variant="outline"
                   onClick={async () => {
                     try {
-                      const results = await DataMigrationService.cleanDuplicateConsultationsAndInvoices();
+                      const results = await DataMigrationService.ensureOneConsultationOneInvoicePerPatient();
                       
-                      alert(`✅ Nettoyage terminé:\n- ${results.consultationsCleaned} consultations en double supprimées\n- ${results.invoicesCleaned} factures en double supprimées\n- ${results.errors} erreurs`);
+                      alert(`✅ Correction terminée:\n- ${results.patientsProcessed} patients traités\n- ${results.consultationsCreated} consultations créées\n- ${results.consultationsCleaned} consultations supprimées\n- ${results.invoicesCreated} factures créées\n- ${results.invoicesCleaned} factures supprimées\n- ${results.errors} erreurs`);
                       
                       if (results.errors > 0) {
-                        console.warn('⚠️ Erreurs lors du nettoyage, consultez la console');
+                        console.warn('⚠️ Erreurs lors de la correction, consultez la console');
                       }
                     } catch (error) {
                       console.error('❌ Erreur lors du nettoyage:', error);
-                      alert('❌ Erreur lors du nettoyage des consultations et factures');
+                      alert('❌ Erreur lors de la correction des consultations et factures');
                     }
                   }}
                   leftIcon={<Database size={16} />}
                 >
-                  Nettoyer consultations et factures
+                  Corriger 1 consultation = 1 facture
                 </Button>
               </div>
               

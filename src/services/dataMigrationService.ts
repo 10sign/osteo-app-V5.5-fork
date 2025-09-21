@@ -361,12 +361,14 @@ export class DataMigrationService {
   }
   
   /**
-   * Nettoie les doublons de consultations et factures pour tous les patients
+   * Assure qu'il y a exactement 1 consultation et 1 facture par patient
    */
-  static async cleanDuplicateConsultationsAndInvoices(): Promise<{
-    consultationsCleaned: number;
-    invoicesCleaned: number;
+  static async ensureOneConsultationOneInvoicePerPatient(): Promise<{
     patientsProcessed: number;
+    consultationsCreated: number;
+    consultationsCleaned: number;
+    invoicesCreated: number;
+    invoicesCleaned: number;
     errors: number;
   }> {
     if (!auth.currentUser) {
@@ -375,9 +377,11 @@ export class DataMigrationService {
 
     try {
       const results = {
-        consultationsCleaned: 0,
-        invoicesCleaned: 0,
         patientsProcessed: 0,
+        consultationsCreated: 0,
+        consultationsCleaned: 0,
+        invoicesCreated: 0,
+        invoicesCleaned: 0,
         errors: 0
       };
 
