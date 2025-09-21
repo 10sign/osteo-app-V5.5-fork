@@ -189,7 +189,7 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2 flex items-center">
                       <FileText size={16} className="mr-2 text-gray-600" />
-                      Motif de consultation
+                      Motif principal de consultation
                     </h4>
                     <div className="bg-white border border-gray-200 rounded-lg p-4">
                       <p className="text-gray-900 font-medium">
@@ -198,11 +198,100 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                     </div>
                   </div>
 
+                  {/* Raison détaillée */}
+                  {consultation.consultationReason && cleanDecryptedField(consultation.consultationReason, false, '') && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <FileText size={16} className="mr-2 text-gray-600" />
+                        Raison détaillée de la consultation
+                      </h4>
+                      <div className="bg-white border border-gray-200 rounded-lg p-4">
+                        <p className="text-gray-900 whitespace-pre-wrap">
+                          {cleanDecryptedField(consultation.consultationReason, false, '')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Symptômes */}
+                  {consultation.symptoms && cleanDecryptedField(consultation.symptoms, false, '') && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <Stethoscope size={16} className="mr-2 text-gray-600" />
+                        Symptômes observés
+                      </h4>
+                      <div className="bg-white border border-gray-200 rounded-lg p-4">
+                        <p className="text-gray-900 whitespace-pre-wrap">
+                          {cleanDecryptedField(consultation.symptoms, false, '')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Traitement actuel du patient */}
+                  {consultation.currentTreatment && cleanDecryptedField(consultation.currentTreatment, false, '') && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <FileText size={16} className="mr-2 text-gray-600" />
+                        Traitement actuel du patient
+                      </h4>
+                      <div className="bg-white border border-gray-200 rounded-lg p-4">
+                        <p className="text-gray-900 whitespace-pre-wrap">
+                          {cleanDecryptedField(consultation.currentTreatment, false, '')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Thérapies en cours */}
+                  {consultation.ongoingTherapies && cleanDecryptedField(consultation.ongoingTherapies, false, '') && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <FileText size={16} className="mr-2 text-gray-600" />
+                        Thérapies en cours
+                      </h4>
+                      <div className="bg-white border border-gray-200 rounded-lg p-4">
+                        <p className="text-gray-900 whitespace-pre-wrap">
+                          {cleanDecryptedField(consultation.ongoingTherapies, false, '')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Historique médical */}
+                  {consultation.medicalHistory && cleanDecryptedField(consultation.medicalHistory, false, '') && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <FileText size={16} className="mr-2 text-gray-600" />
+                        Historique médical
+                      </h4>
+                      <div className="bg-white border border-gray-200 rounded-lg p-4">
+                        <p className="text-gray-900 whitespace-pre-wrap">
+                          {cleanDecryptedField(consultation.medicalHistory, false, '')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Antécédents significatifs */}
+                  {consultation.significantHistory && cleanDecryptedField(consultation.significantHistory, false, '') && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <FileText size={16} className="mr-2 text-gray-600" />
+                        Antécédents significatifs / Chirurgies
+                      </h4>
+                      <div className="bg-white border border-gray-200 rounded-lg p-4">
+                        <p className="text-gray-900 whitespace-pre-wrap">
+                          {cleanDecryptedField(consultation.significantHistory, false, '')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {/* Traitement */}
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2 flex items-center">
                       <Stethoscope size={16} className="mr-2 text-gray-600" />
-                      Traitement effectué
+                      Traitement ostéopathique effectué
                     </h4>
                     <div className="bg-white border border-gray-200 rounded-lg p-4">
                       <p className="text-gray-900 whitespace-pre-wrap">
@@ -211,6 +300,20 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                     </div>
                   </div>
 
+                  {/* Note sur le patient */}
+                  {consultation.patientNote && cleanDecryptedField(consultation.patientNote, false, '') && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <FileText size={16} className="mr-2 text-gray-600" />
+                        Note sur le patient
+                      </h4>
+                      <div className="bg-white border border-gray-200 rounded-lg p-4">
+                        <p className="text-gray-900 whitespace-pre-wrap">
+                          {cleanDecryptedField(consultation.patientNote, false, '')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {/* Notes complémentaires */}
                   {consultation.notes && cleanDecryptedField(consultation.notes, false, '') && (
                     <div>

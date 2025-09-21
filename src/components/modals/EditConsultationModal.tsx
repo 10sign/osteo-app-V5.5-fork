@@ -315,7 +315,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                     <div>
                       <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">
-                        Motif de consultation *
+                        Motif principal de consultation *
                       </label>
                       <input
                         type="text"
@@ -330,21 +330,110 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                     </div>
 
                     <div>
+                      <label htmlFor="consultationReason" className="block text-sm font-medium text-gray-700 mb-1">
+                        Raison détaillée de la consultation
+                      </label>
+                      <textarea
+                        id="consultationReason"
+                        rows={3}
+                        className="input w-full resize-none"
+                        {...register('consultationReason')}
+                        placeholder="Description détaillée du motif de consultation..."
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="symptoms" className="block text-sm font-medium text-gray-700 mb-1">
+                        Symptômes observés
+                      </label>
+                      <textarea
+                        id="symptoms"
+                        rows={3}
+                        className="input w-full resize-none"
+                        {...register('symptoms')}
+                        placeholder="Symptômes et signes cliniques observés..."
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
+                        Traitement actuel du patient
+                      </label>
+                      <textarea
+                        id="currentTreatment"
+                        rows={3}
+                        className="input w-full resize-none"
+                        {...register('currentTreatment')}
+                        placeholder="Traitements médicamenteux ou thérapies en cours..."
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="ongoingTherapies" className="block text-sm font-medium text-gray-700 mb-1">
+                        Thérapies en cours
+                      </label>
+                      <textarea
+                        id="ongoingTherapies"
+                        rows={3}
+                        className="input w-full resize-none"
+                        {...register('ongoingTherapies')}
+                        placeholder="Kinésithérapie, autres thérapies complémentaires..."
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="medicalHistory" className="block text-sm font-medium text-gray-700 mb-1">
+                        Historique médical
+                      </label>
+                      <textarea
+                        id="medicalHistory"
+                        rows={4}
+                        className="input w-full resize-none"
+                        {...register('medicalHistory')}
+                        placeholder="Historique médical général du patient..."
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="significantHistory" className="block text-sm font-medium text-gray-700 mb-1">
+                        Antécédents significatifs / Chirurgies
+                      </label>
+                      <textarea
+                        id="significantHistory"
+                        rows={4}
+                        className="input w-full resize-none"
+                        {...register('significantHistory')}
+                        placeholder="Antécédents médicaux significatifs, chirurgies, hospitalisations..."
+                      />
+                    </div>
+                    <div>
                       <label htmlFor="treatment" className="block text-sm font-medium text-gray-700 mb-1">
-                        Traitement effectué *
+                        Traitement ostéopathique effectué *
                       </label>
                       <textarea
                         id="treatment"
                         rows={4}
                         className={`input w-full resize-none ${errors.treatment ? 'border-error focus:border-error focus:ring-error' : ''}`}
                         {...register('treatment', { required: 'Ce champ est requis' })}
-                        placeholder="Décrivez le traitement effectué..."
+                        placeholder="Décrivez le traitement ostéopathique effectué..."
                       />
                       {errors.treatment && (
                         <p className="mt-1 text-sm text-error">{errors.treatment.message}</p>
                       )}
                     </div>
 
+                    <div>
+                      <label htmlFor="patientNote" className="block text-sm font-medium text-gray-700 mb-1">
+                        Note sur le patient
+                      </label>
+                      <textarea
+                        id="patientNote"
+                        rows={3}
+                        className="input w-full resize-none"
+                        {...register('patientNote')}
+                        placeholder="Notes personnelles sur le patient..."
+                      />
+                    </div>
                     <div>
                       <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
                         Statut *
