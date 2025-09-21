@@ -1,46 +1,16 @@
-import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
-import { db, auth, hdsConfig } from '../firebase/config';
-import { encryptData, decryptData, pseudonymizeData, isEncrypted, isValidEncryptedFormat, attemptDataRepair, migrateEncryptedData } from './encryption';
-import { AuditLogger, AuditEventType, SensitivityLevel } from './auditLogger';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Calendar, Clock, FileText, User, Plus, Trash2, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { useForm, useFieldArray } from 'react-hook-form';
+import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db, auth } from '../../firebase/config';
+import { Button } from '../ui/Button';
+import { Patient } from '../../types';
+import { ConsultationService } from '../../services/consultationService';
+import { AppointmentService } from '../../services/appointmentService';
+import DocumentUploadManager from '../ui/DocumentUploadManager';
+import { DocumentMetadata, moveFile } from '../../utils/documentStorage';
 
-/**
- * Convertit récursivement les objets Timestamp Firestore en chaînes ISO
- */
-function convertTimestampsToISOStrings(obj: any): any {
-  if (obj === null || obj === undefined) {
-    return obj;
-  }
-  
-  // Vérifier si c'est un objet Timestamp Firestore
-  if (obj && typeof obj === 'object' && 'seconds' in obj && 'nanoseconds' in obj) {
-    try {
-      // Convertir le Timestamp en objet Date JavaScript
-      return new Date(obj.seconds * 1000 + obj.nanoseconds / 1000000);
-    } catch (error) {
-      console.warn('Failed to convert Timestamp to Date:', error);
-      return obj;
-    }
-  }
-  
-  // Si c'est un tableau, traiter chaque élément
-  if (Array.isArray(obj)) {
-    return obj.map(item => convertTimestampsToISOStrings(item));
-  }
-  
-  // Si c'est un objet, traiter chaque propriété
-  if (typeof obj === 'object') {
-    const converted: any = {};
-    for (const [key, value] of Object.entries(obj)) {
-      converted[key] = convertTimestampsToISOStrings(value);
-    }
-    return converted;
-  }
-  
-  // Pour les types primitifs, retourner tel quel
-  return obj;
-}
-
-// Champs sensibles par collection
 const SENSITIVE_FIELDS: Record<string, string[]> = {
   patients: [
     'firstName', 
@@ -71,628 +41,750 @@ const SENSITIVE_FIELDS: Record<string, string[]> = {
   ]
 };
 
-// Champs à pseudonymiser
-const PSEUDONYMIZED_FIELDS: Record<string, string[]> = {
-  patients: ['socialSecurityNumber', 'email', 'phone'],
-  consultations: [],
-  invoices: []
-};
-
-/**
- * Classe utilitaire pour la conformité HDS
- */
-export class HDSCompliance {
-  /**
-   * Vérifie si la conformité HDS est activée
-   */
-  static isEnabled(): boolean {
-    return hdsConfig.enabled;
-  }
-  
-  /**
-   * Prépare les données pour stockage conforme HDS
-   */
-  static prepareDataForStorage(
-    data: any, 
-    collectionName: string, 
-    userId: string
-  ): any {
-    if (!this.isEnabled() || !data) return data;
-    
-    // Clone des données
-    const processedData = { ...data };
-    
-    // Récupération des champs sensibles pour cette collection
-    const sensitiveFields = SENSITIVE_FIELDS[collectionName] || [];
-    const fieldsToEncrypt = sensitiveFields.filter(field => 
-      processedData[field] !== undefined && 
-      processedData[field] !== null &&
-      !isEncrypted(processedData[field])
-    );
-    
-    // Chiffrement des champs sensibles
-    fieldsToEncrypt.forEach(field => {
-      try {
-        // Vérifier que la valeur n'est pas vide ou null
-        if (processedData[field] === null || processedData[field] === undefined || processedData[field] === '') {
-          return; // Skip empty values
-        }
-        
-        // Gestion spéciale pour les objets complexes comme address
-        if (field === 'address' && typeof processedData[field] === 'object') {
-          // Chiffrer l'objet address complet
-          processedData[field] = encryptData(processedData[field], userId);
-        } else {
-          // S'assurer que la valeur est une chaîne non vide
-          const valueToEncrypt = String(processedData[field]).trim();
-          if (valueToEncrypt.length > 0) {
-            processedData[field] = encryptData(valueToEncrypt, userId);
-          }
-        }
-      } catch (error) {
-        console.error(`❌ Failed to encrypt field ${field}:`, error);
-        // Marquer le champ comme ayant une erreur de chiffrement
-        processedData[field] = `[ENCRYPTION_ERROR]:${processedData[field]}`;
-      }
-    });
-    
-    // Pseudonymisation si nécessaire
-    const pseudoFields = PSEUDONYMIZED_FIELDS[collectionName] || [];
-    if (pseudoFields.length > 0) {
-      const fieldsToProcess = pseudoFields.filter(field => 
-        processedData[field] !== undefined && 
-        processedData[field] !== null
-      );
-      
-      if (fieldsToProcess.length > 0) {
-        // Création d'un index pseudonymisé pour recherche
-        processedData._pseudoIndex = {};
-        
-        fieldsToProcess.forEach(field => {
-          // Stockage de la version pseudonymisée pour recherche
-          processedData._pseudoIndex[field] = pseudonymizeData(processedData[field], [field]);
-        });
-      }
-    }
-    
-    // Ajout des métadonnées HDS
-    processedData._hds = {
-      version: hdsConfig.complianceVersion,
-      encryptedFields: fieldsToEncrypt,
-      pseudonymizedFields: pseudoFields,
-      lastUpdated: new Date().toISOString(),
-      updatedBy: userId
-    };
-    
-    return processedData;
-  }
-  
-  /**
-   * Déchiffre les données pour affichage avec gestion robuste des erreurs
-   */
-  static decryptDataForDisplay(
-    data: any, 
-    collectionName: string, 
-    userId: string
-  ): any {
-    if (!this.isEnabled() || !data) return data;
-    
-    // Debug: Log pour diagnostiquer les problèmes de déchiffrement
-    if (import.meta.env.DEV) {
-      console.log('🔍 Déchiffrement des données pour:', collectionName, {
-        userId: userId.substring(0, 8) + '...',
-        hasHdsMetadata: !!data._hds,
-        encryptedFields: data._hds?.encryptedFields || []
-      });
-    }
-    
-    // Clone des données
-    const processedData = { ...data };
-    
-    // Récupération des champs sensibles pour cette collection
-    const sensitiveFields = SENSITIVE_FIELDS[collectionName] || [];
-    
-    // Déchiffrement des champs sensibles
-    sensitiveFields.forEach(field => {
-      try {
-        if (processedData[field] && typeof processedData[field] === 'string') {
-          // Gestion spéciale pour les champs vides ou null
-          if (processedData[field] === '' || processedData[field] === 'null' || processedData[field] === 'undefined') {
-            processedData[field] = '';
-            return;
-          }
-          
-          if (import.meta.env.DEV) {
-            console.log(`🔓 Tentative de déchiffrement du champ ${field}:`, {
-              isEncrypted: isEncrypted(processedData[field]),
-              isValidFormat: isValidEncryptedFormat(processedData[field]),
-              fieldValue: processedData[field].substring(0, 50) + '...'
-            });
-          }
-          
-          // Vérifier si le champ contient déjà une erreur de déchiffrement
-          if (processedData[field].startsWith('[DECRYPTION_ERROR:') || 
-              processedData[field].startsWith('[ENCRYPTION_ERROR:')) {
-            if (import.meta.env.DEV) {
-              console.warn(`⚠️ Champ ${field} contient déjà une erreur, conservation de l'état`);
-            }
-            // Garder le marqueur d'erreur pour que cleanDecryptedField puisse le traiter
-            // Ne pas remplacer ici pour préserver la logique de nettoyage
-            return;
-          }
-          
-          // Vérifier si le champ est chiffré
-          if (isEncrypted(processedData[field])) {
-            // Vérifier si le format est valide
-            if (!isValidEncryptedFormat(processedData[field])) {
-              // Tenter de réparer les données
-              const repairedData = attemptDataRepair(processedData[field], userId);
-              if (repairedData) {
-                const decryptedValue = decryptData(repairedData, userId);
-                // Vérifier si le déchiffrement a réussi
-                if (typeof decryptedValue === 'string' && 
-                    (decryptedValue.startsWith('[') || decryptedValue.includes('DECODING_FAILED'))) {
-                  processedData[field] = '[DECODING_FAILED]';
-                } else {
-                  processedData[field] = decryptedValue;
-                }
-                if (import.meta.env.DEV) {
-                  console.log(`✅ Données réparées et déchiffrées pour ${field}`);
-                }
-              } else {
-                console.warn(`⚠️ Impossible de réparer ${field}, données corrompues`);
-                processedData[field] = '[DECODING_FAILED]';
-              }
-            } else {
-              // Format valide, déchiffrer normalement
-              const decryptedValue = decryptData(processedData[field], userId);
-              if (import.meta.env.DEV) {
-                console.log(`🔓 Déchiffrement de ${field}:`, {
-                  success: !decryptedValue.toString().startsWith('[DECRYPTION_ERROR:'),
-                  value: decryptedValue.toString().substring(0, 50) + '...'
-                });
-              }
-              // Vérifier si le déchiffrement a réussi
-              if (typeof decryptedValue === 'string' && 
-                  (decryptedValue.startsWith('[') || decryptedValue.includes('DECODING_FAILED'))) {
-                processedData[field] = '[DECODING_FAILED]';
-              } else {
-                processedData[field] = decryptedValue;
-              }
-            }
-          } else {
-            // Données non chiffrées, les conserver telles quelles
-            processedData[field] = processedData[field];
-          }
-        }
-        
-      } catch (error) {
-        console.error(`❌ Échec du déchiffrement pour ${field}:`, error);
-        processedData[field] = '[DECODING_FAILED]';
-      }
-    });
-    
-    // Gestion spéciale pour l'objet address
-    if (processedData.address && typeof processedData.address === 'string' && isEncrypted(processedData.address)) {
-      try {
-        const decryptedAddress = decryptData(processedData.address, userId);
-        
-        // Gestion unifiée des erreurs de déchiffrement pour l'adresse
-        if (typeof decryptedAddress === 'string') {
-          if (decryptedAddress.startsWith('[') && decryptedAddress.endsWith(']')) {
-            // C'est un marqueur d'erreur
-            processedData.address = { street: 'Adresse non disponible' };
-          } else if (decryptedAddress.startsWith('{')) {
-            // Tenter de parser le JSON
-            try {
-              processedData.address = JSON.parse(decryptedAddress);
-            } catch (jsonError) {
-              processedData.address = { street: decryptedAddress };
-            }
-          } else {
-            // Texte simple
-            processedData.address = { street: decryptedAddress };
-          }
-        } else if (typeof decryptedAddress === 'object') {
-          processedData.address = decryptedAddress;
-        } else {
-          processedData.address = { street: 'Adresse non disponible' };
-        }
-      } catch (error) {
-        processedData.address = { street: 'Adresse non disponible' };
-      }
-    }
-    
-    // Suppression des métadonnées HDS pour l'affichage
-    delete processedData._hds;
-    delete processedData._pseudoIndex;
-    
-    // Conversion des Timestamps Firestore en chaînes ISO pour éviter les erreurs de rendu React
-    return convertTimestampsToISOStrings(processedData);
-  }
-  
-  /**
-   * Sauvegarde des données conformes HDS
-   */
-  static async saveCompliantData(
-    collectionName: string,
-    docId: string,
-    data: any
-  ): Promise<void> {
-    if (!auth.currentUser) {
-      throw new Error('Utilisateur non authentifié');
-    }
-    
-    try {
-      // Préparation des données
-      const userId = auth.currentUser.uid;
-      const compliantData = this.prepareDataForStorage(data, collectionName, userId);
-      
-      // Sauvegarde dans Firestore
-      const docRef = doc(db, collectionName, docId);
-      await setDoc(docRef, compliantData);
-      
-      // Journalisation de l'opération
-      await AuditLogger.log(
-        AuditEventType.DATA_MODIFICATION,
-        `${collectionName}/${docId}`,
-        'create_or_update',
-        SensitivityLevel.SENSITIVE,
-        'success',
-        { fields: Object.keys(data) }
-      );
-      
-    } catch (error) {
-      console.error('❌ Failed to save compliant data:', error);
-      
-      // Journalisation de l'échec
-      await AuditLogger.log(
-        AuditEventType.DATA_MODIFICATION,
-        `${collectionName}/${docId}`,
-        'create_or_update',
-        SensitivityLevel.SENSITIVE,
-        'failure',
-        { error: (error as Error).message }
-      );
-      
-      throw error;
-    }
-  }
-  
-  /**
-   * Récupération des données avec déchiffrement
-   */
-  static async getCompliantData(
-    collectionName: string,
-    docId: string
-  ): Promise<any> {
-    if (!auth.currentUser) {
-      throw new Error('Utilisateur non authentifié');
-    }
-    
-    try {
-      // Récupération depuis Firestore
-      const docRef = doc(db, collectionName, docId);
-      const docSnap = await getDoc(docRef);
-      
-      if (!docSnap.exists()) {
-        throw new Error('Document non trouvé');
-      }
-      
-      // Déchiffrement des données
-      const userId = auth.currentUser.uid;
-      const data = docSnap.data();
-      const decryptedData = this.decryptDataForDisplay(data, collectionName, userId);
-      
-      // Journalisation de l'accès
-      await AuditLogger.log(
-        AuditEventType.DATA_ACCESS,
-        `${collectionName}/${docId}`,
-        'read',
-        SensitivityLevel.SENSITIVE,
-        'success'
-      );
-      
-      return {
-        ...decryptedData,
-        id: docId
-      };
-      
-    } catch (error) {
-      console.error('❌ Failed to get compliant data:', error);
-      
-      // Journalisation de l'échec
-      await AuditLogger.log(
-        AuditEventType.DATA_ACCESS,
-        `${collectionName}/${docId}`,
-        'read',
-        SensitivityLevel.SENSITIVE,
-        'failure',
-        { error: (error as Error).message }
-      );
-      
-      throw error;
-    }
-  }
-  
-  /**
-   * Mise à jour des données conformes HDS
-   */
-  static async updateCompliantData(
-    collectionName: string,
-    docId: string,
-    updates: any
-  ): Promise<void> {
-    if (!auth.currentUser) {
-      throw new Error('Utilisateur non authentifié');
-    }
-    
-    try {
-      // Récupération du document existant
-      const docRef = doc(db, collectionName, docId);
-      const docSnap = await getDoc(docRef);
-      
-      if (!docSnap.exists()) {
-        throw new Error('Document non trouvé');
-      }
-      
-      const existingData = docSnap.data();
-      const userId = auth.currentUser.uid;
-      
-      // Préparation des mises à jour
-      const sensitiveFields = SENSITIVE_FIELDS[collectionName] || [];
-      const updatesWithEncryption: Record<string, any> = {};
-      
-      // Traitement des champs à mettre à jour
-      Object.entries(updates).forEach(([key, value]) => {
-        try {
-          if (sensitiveFields.includes(key) && value !== undefined && !isEncrypted(value)) {
-            // Gestion spéciale pour les objets complexes comme address
-            if (key === 'address' && typeof value === 'object') {
-              updatesWithEncryption[key] = encryptData(value, userId);
-            } else {
-              // Chiffrement des champs sensibles
-              updatesWithEncryption[key] = encryptData(value, userId);
-            }
-          } else {
-            // Conservation des autres champs tels quels
-            updatesWithEncryption[key] = value;
-          }
-        } catch (error) {
-          console.error(`❌ Failed to encrypt field ${key}:`, error);
-          // Conserver la valeur originale en cas d'erreur
-          updatesWithEncryption[key] = value;
-        }
-      });
-      
-      // Mise à jour des métadonnées HDS
-      updatesWithEncryption['_hds'] = {
-        ...(existingData._hds || {}),
-        version: hdsConfig.complianceVersion,
-        lastUpdated: new Date().toISOString(),
-        updatedBy: userId
-      };
-      
-      // Mise à jour dans Firestore
-      await updateDoc(docRef, updatesWithEncryption);
-      
-      // Journalisation de l'opération
-      await AuditLogger.log(
-        AuditEventType.DATA_MODIFICATION,
-        `${collectionName}/${docId}`,
-        'update',
-        SensitivityLevel.SENSITIVE,
-        'success',
-        { fields: Object.keys(updates) }
-      );
-      
-    } catch (error) {
-      console.error('❌ Failed to update compliant data:', error);
-      
-      // Journalisation de l'échec
-      await AuditLogger.log(
-        AuditEventType.DATA_MODIFICATION,
-        `${collectionName}/${docId}`,
-        'update',
-        SensitivityLevel.SENSITIVE,
-        'failure',
-        { error: (error as Error).message }
-      );
-      
-      throw error;
-    }
-  }
-  
-  /**
-   * Vérifie la conformité HDS d'un document
-   */
-  static isCompliant(data: any): boolean {
-    if (!this.isEnabled() || !data) return false;
-    
-    // Vérification des métadonnées HDS
-    return (
-      data._hds &&
-      data._hds.version === hdsConfig.complianceVersion &&
-      data._hds.lastUpdated &&
-      data._hds.updatedBy
-    );
-  }
-  
-  /**
-   * Migre les données existantes vers le format HDS
-   */
-  static async migrateToCompliant(
-    collectionName: string,
-    docId: string
-  ): Promise<boolean> {
-    if (!auth.currentUser) {
-      throw new Error('Utilisateur non authentifié');
-    }
-    
-    try {
-      // Récupération du document
-      const docRef = doc(db, collectionName, docId);
-      const docSnap = await getDoc(docRef);
-      
-      if (!docSnap.exists()) {
-        throw new Error('Document non trouvé');
-      }
-      
-      const data = docSnap.data();
-      
-      // Vérification si déjà conforme
-      if (this.isCompliant(data)) {
-        return true;
-      }
-      
-      // Préparation des données conformes
-      const userId = auth.currentUser.uid;
-      const compliantData = this.prepareDataForStorage(data, collectionName, userId);
-      
-      // Mise à jour dans Firestore
-      await updateDoc(docRef, compliantData);
-      
-      // Journalisation de la migration
-      await AuditLogger.log(
-        AuditEventType.DATA_MODIFICATION,
-        `${collectionName}/${docId}`,
-        'migrate_to_hds',
-        SensitivityLevel.SENSITIVE,
-        'success'
-      );
-      
-      return true;
-      
-    } catch (error) {
-      console.error('❌ Failed to migrate data to HDS format:', error);
-      
-      // Journalisation de l'échec
-      await AuditLogger.log(
-        AuditEventType.DATA_MODIFICATION,
-        `${collectionName}/${docId}`,
-        'migrate_to_hds',
-        SensitivityLevel.SENSITIVE,
-        'failure',
-        { error: (error as Error).message }
-      );
-      
-      return false;
-    }
-  }
-  
-  /**
-   * Répare les données chiffrées corrompues
-   */
-  static async repairCorruptedData(
-    collectionName: string,
-    docId: string
-  ): Promise<boolean> {
-    if (!auth.currentUser) {
-      throw new Error('Utilisateur non authentifié');
-    }
-    
-    try {
-      // Récupération du document
-      const docRef = doc(db, collectionName, docId);
-      const docSnap = await getDoc(docRef);
-      
-      if (!docSnap.exists()) {
-        throw new Error('Document non trouvé');
-      }
-      
-      const data = docSnap.data();
-      const userId = auth.currentUser.uid;
-      
-      // Récupération des champs sensibles pour cette collection
-      const sensitiveFields = SENSITIVE_FIELDS[collectionName] || [];
-      const updates: Record<string, any> = {};
-      let hasUpdates = false;
-      
-      // Vérification et réparation de chaque champ sensible
-      for (const field of sensitiveFields) {
-        if (data[field] && typeof data[field] === 'string') {
-          // Vérifier si le champ est chiffré mais corrompu
-          if (isEncrypted(data[field]) && !isValidEncryptedFormat(data[field])) {
-            // Tenter de réparer
-            const repairedData = attemptDataRepair(data[field], userId);
-            if (repairedData) {
-              updates[field] = repairedData;
-              hasUpdates = true;
-            }
-          }
-          // Vérifier si le champ contient une erreur de déchiffrement
-          else if (typeof data[field] === 'string' && 
-                  (data[field].startsWith('[DECRYPTION_ERROR:') || 
-                   data[field].startsWith('[ENCRYPTION_ERROR:'))) {
-            // Tenter de migrer
-            const cleanValue = data[field].includes(':') ? 
-              data[field].split(':').slice(1).join(':') : 
-              '';
-            
-            if (cleanValue) {
-              updates[field] = encryptData(cleanValue, userId);
-              hasUpdates = true;
-            }
-          }
-        }
-      }
-      
-      // Gestion spéciale pour l'objet address
-      if (data.address && typeof data.address === 'string') {
-        if (isEncrypted(data.address) && !isValidEncryptedFormat(data.address)) {
-          // Tenter de réparer
-          const repairedData = attemptDataRepair(data.address, userId);
-          if (repairedData) {
-            updates.address = repairedData;
-            hasUpdates = true;
-          }
-        }
-      }
-      
-      // Appliquer les mises à jour si nécessaire
-      if (hasUpdates) {
-        // Mise à jour des métadonnées HDS
-        updates['_hds'] = {
-          ...(data._hds || {}),
-          version: hdsConfig.complianceVersion,
-          lastUpdated: new Date().toISOString(),
-          updatedBy: userId,
-          repaired: true
-        };
-        
-        await updateDoc(docRef, updates);
-        
-        // Journalisation de la réparation
-        await AuditLogger.log(
-          AuditEventType.DATA_MODIFICATION,
-          `${collectionName}/${docId}`,
-          'repair_encrypted_data',
-          SensitivityLevel.SENSITIVE,
-          'success',
-          { fields: Object.keys(updates) }
-        );
-        
-        return true;
-      }
-      
-      return false;
-      
-    } catch (error) {
-      console.error('❌ Failed to repair corrupted data:', error);
-      
-      // Journalisation de l'échec
-      await AuditLogger.log(
-        AuditEventType.DATA_MODIFICATION,
-        `${collectionName}/${docId}`,
-        'repair_encrypted_data',
-        SensitivityLevel.SENSITIVE,
-        'failure',
-        { error: (error as Error).message }
-      );
-      
-      return false;
-    }
-  }
+interface NewConsultationModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  preselectedPatientId?: string; // ID du patient pré-sélectionné
+  preselectedPatientName?: string; // Nom du patient pré-sélectionné
+  preselectedDate?: string;
+  preselectedTime?: string;
 }
 
-export default HDSCompliance;
+interface ConsultationFormData {
+  patientId: string;
+  date: string;
+  time: string;
+  duration: number;
+  reason: string;
+  treatment: string;
+  notes: string;
+  price: number;
+  status: string;
+  examinations: { value: string }[];
+  prescriptions: { value: string }[];
+  // Champs du patient (pré-remplis mais modifiables)
+  patientFirstName: string;
+  patientLastName: string;
+  patientDateOfBirth: string;
+  patientGender: string;
+  patientPhone: string;
+  patientProfession: string;
+  patientEmail: string;
+  patientAddress: string;
+  patientInsurance: string;
+  patientInsuranceNumber: string;
+}
+
+
+const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  preselectedPatientId,
+  preselectedPatientName,
+  preselectedDate,
+  preselectedTime,
+}) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [isPatientPreselected, setIsPatientPreselected] = useState(false);
+  const [consultationDocuments, setConsultationDocuments] = useState<DocumentMetadata[]>([]);
+
+  const { register, handleSubmit, formState: { errors, isValid }, reset, control, watch, setValue } = useForm<ConsultationFormData>({
+    mode: 'onChange',
+    defaultValues: {
+      duration: 60,
+      price: 60,
+      status: 'completed',
+      examinations: [],
+      prescriptions: [],
+      date: preselectedDate || new Date().toISOString().split('T')[0],
+      time: preselectedTime || '09:00'
+    }
+  });
+
+  const { fields: examinationFields, append: appendExamination, remove: removeExamination } = useFieldArray({
+    control,
+    name: 'examinations'
+  });
+
+  const { fields: prescriptionFields, append: appendPrescription, remove: removePrescription } = useFieldArray({
+    control,
+    name: 'prescriptions'
+  });
+
+  const watchedPatientId = watch('patientId');
+
+  // Gestionnaires pour les documents
+  const handleDocumentsUpdate = (documents: DocumentMetadata[]) => {
+    setConsultationDocuments(documents);
+  };
+
+  const handleDocumentError = (errorMessage: string) => {
+    setError(errorMessage);
+  };
+
+  // Load patients
+  useEffect(() => {
+    const loadPatients = async () => {
+      if (!auth.currentUser) {
+        console.log('No authenticated user for patient loading');
+        return;
+      }
+
+      // Si un patient est pré-sélectionné, on n'a pas besoin de charger tous les patients
+      if (preselectedPatientId) {
+        setIsPatientPreselected(true);
+        try {
+          const patientRef = doc(db, 'patients', preselectedPatientId);
+          const patientDoc = await getDoc(patientRef);
+          
+          console.log('Loading preselected patient:', preselectedPatientId);
+          if (patientDoc.exists()) {
+            const patientData = { ...patientDoc.data(), id: patientDoc.id } as Patient;
+            setSelectedPatient(patientData);
+            setValue('patientId', preselectedPatientId);
+            fillPatientFields(patientData);
+          } else {
+            setError('Patient pré-sélectionné non trouvé');
+            console.error('Preselected patient not found:', preselectedPatientId);
+          }
+        } catch (error) {
+          console.error('Error loading preselected patient:', error);
+          setError('Erreur lors du chargement du patient');
+        }
+        return;
+      }
+
+      try {
+        const patientsRef = collection(db, 'patients');
+        const q = query(patientsRef, where('osteopathId', '==', auth.currentUser.uid));
+        const snapshot = await getDocs(q);
+        
+        const patientsList = snapshot.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id,
+        })) as Patient[];
+        
+        setPatients(patientsList);
+
+      } catch (error) {
+        console.error('Error loading patients:', error);
+      }
+    };
+
+    if (isOpen) {
+      loadPatients();
+      console.log('NewConsultationModal opened with preselected patient:', preselectedPatientId);
+    }
+  }, [isOpen, preselectedPatientId, setValue, preselectedPatientName]);
+
+  // Update selected patient when patientId changes
+  useEffect(() => {
+    if (watchedPatientId && !isPatientPreselected) {
+      const patient = patients.find(p => p.id === watchedPatientId);
+      setSelectedPatient(patient || null);
+      if (patient) {
+        console.log('Patient selected from dropdown:', patient.firstName, patient.lastName);
+        fillPatientFields(patient);
+      }
+    }
+  }, [watchedPatientId, patients, isPatientPreselected]);
+
+  // Fill patient fields with existing data
+  const fillPatientFields = (patient: Patient) => {
+    console.log('Filling patient fields for:', patient.firstName, patient.lastName);
+    setValue('patientFirstName', patient.firstName || '');
+    setValue('patientLastName', patient.lastName || '');
+    setValue('patientDateOfBirth', patient.dateOfBirth || '');
+    setValue('patientGender', patient.gender || '');
+    setValue('patientPhone', patient.phone || '');
+    setValue('patientProfession', patient.profession || '');
+    setValue('patientEmail', patient.email || '');
+    setValue('patientAddress', patient.address?.street || '');
+    setValue('patientInsurance', patient.insurance?.provider || '');
+    setValue('patientInsuranceNumber', patient.insurance?.policyNumber || '');
+  };
+
+  const onSubmit = async (data: ConsultationFormData) => {
+    if (!auth.currentUser) {
+      setError('Informations manquantes pour créer la consultation');
+      return;
+    }
+
+    console.log('Form submission - preselectedPatientId:', preselectedPatientId);
+    console.log('Form submission - selectedPatient:', selectedPatient);
+    console.log('Form submission - form data patientId:', data.patientId);
+
+    // Utiliser le patient pré-sélectionné ou le patient sélectionné
+    const patientToUse = selectedPatient;
+    const patientIdToUse = preselectedPatientId || data.patientId;
+    const patientNameToUse = preselectedPatientName || (patientToUse ? `${patientToUse.firstName} ${patientToUse.lastName}` : '');
+
+    console.log('Using patient:', { patientIdToUse, patientNameToUse });
+    if (!patientIdToUse || !patientNameToUse) {
+      setError('Patient non sélectionné ou informations manquantes');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const consultationDate = new Date(`${data.date}T${data.time}`);
+      
+      // 1. Créer le rendez-vous dans l'agenda
+      const endTime = new Date(consultationDate.getTime() + data.duration * 60000);
+      const appointmentData = {
+        patientId: patientIdToUse,
+        patientName: patientNameToUse,
+        practitionerId: auth.currentUser.uid,
+        practitionerName: auth.currentUser.displayName || auth.currentUser.email,
+        date: consultationDate,
+        endTime: endTime,
+        duration: data.duration,
+        type: data.reason || 'Consultation ostéopathique',
+        status: 'completed',
+        location: {
+          type: 'office',
+          name: 'Cabinet principal'
+        },
+        notes: data.notes
+      };
+
+      const appointmentId = await AppointmentService.createAppointment(appointmentData);
+
+      // 2. Créer la consultation
+      const consultationData = {
+        patientId: patientIdToUse,
+        patientName: patientNameToUse,
+        osteopathId: auth.currentUser.uid,
+        date: consultationDate,
+        reason: data.reason,
+        treatment: data.treatment,
+        notes: data.notes,
+        duration: data.duration,
+        price: data.price,
+        status: data.status,
+        examinations: data.examinations.map(item => item.value),
+        prescriptions: data.prescriptions.map(item => item.value),
+        appointmentId: appointmentId
+      };
+
+      const consultationId = await ConsultationService.createConsultation(consultationData);
+
+      // Déplacer les documents du dossier temporaire vers le dossier de la consultation réelle
+      if (consultationDocuments.length > 0) {
+        const updatedDocuments: DocumentMetadata[] = [];
+        for (const doc of consultationDocuments) {
+          try {
+            const oldPath = `${doc.folder}/${doc.name}`;
+            const newFolder = `users/${auth.currentUser.uid}/consultations/${consultationId}/documents`;
+            const newPath = `${newFolder}/${doc.name}`;
+
+            const newUrl = await moveFile(oldPath, newPath);
+            updatedDocuments.push({
+              ...doc,
+              url: newUrl,
+              folder: newFolder
+            });
+          } catch (moveError) {
+            console.error(`Erreur lors du déplacement du document ${doc.name}:`, moveError);
+          }
+        }
+
+        // Mettre à jour la consultation avec les documents déplacés
+        if (updatedDocuments.length > 0) {
+          await updateDoc(doc(db, 'consultations', consultationId), {
+            documents: updatedDocuments
+          });
+        }
+      }
+
+      // 3. Lier la consultation au rendez-vous
+      await AppointmentService.updateAppointment(appointmentId, {
+        consultationId: consultationId
+      });
+      
+      // Afficher le message de succès
+      setSuccess('Consultation créée avec succès');
+      
+      // Attendre 2 secondes avant de fermer le modal
+      setTimeout(() => {
+        reset();
+        onSuccess();
+        onClose();
+      }, 2000);
+    } catch (error: any) {
+      console.error('Error creating consultation:', error);
+      setError('Erreur lors de la création de la consultation: ' + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={onClose}
+          />
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ type: 'spring', duration: 0.5 }}
+            className="relative w-[calc(100%-2rem)] md:w-[800px] max-h-[90vh] bg-white rounded-xl shadow-2xl flex flex-col"
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Nouvelle consultation</h2>
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-500 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {error && (
+                <div className="mb-4 p-3 bg-error/5 border border-error/20 rounded-lg text-error text-sm">
+                  {error}
+                </div>
+              )}
+
+              {success && (
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center">
+                  <CheckCircle size={20} className="text-green-500 mr-2" />
+                  <span className="text-green-700">{success}</span>
+                </div>
+              )}
+
+              <form id="consultationForm" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                {/* Patient Selection - Conditionnel */}
+                {!isPatientPreselected ? (
+                  <div>
+                    <label htmlFor="patientId" className="block text-sm font-medium text-gray-700 mb-1">
+                      Patient *
+                    </label>
+                    <select
+                      id="patientId"
+                      className={`input w-full ${errors.patientId ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                      {...register('patientId', { required: 'Veuillez sélectionner un patient' })}
+                    >
+                      <option value="">Sélectionner un patient</option>
+                      {patients.map((patient) => (
+                        <option key={patient.id} value={patient.id}>
+                          {patient.firstName} {patient.lastName}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.patientId && (
+                      <p className="mt-1 text-sm text-error">{errors.patientId.message}</p>
+                    )}
+                    
+                    {/* Selected Patient Info */}
+                    {selectedPatient && (
+                      <div className="mt-4 p-4 bg-primary-50 rounded-lg">
+                        <div className="flex items-center">
+                          <User size={20} className="text-primary-600 mr-2" />
+                          <div>
+                            <div className="font-medium text-primary-900">
+                              {selectedPatient.firstName} {selectedPatient.lastName}
+                            </div>
+                            <div className="text-sm text-primary-700">
+                              {selectedPatient.phone} • {selectedPatient.email}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Patient
+                    </label>
+                    <div className="p-4 bg-primary-50 rounded-lg border border-primary-200">
+                      <div className="flex items-center">
+                        <User size={20} className="text-primary-600 mr-2" />
+                        <div>
+                          <div className="font-medium text-primary-900">
+                            {preselectedPatientName || (selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : 'Patient inconnu')}
+                          </div>
+                          <div className="text-sm text-primary-700">
+                            Consultation pour ce patient
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Selected Patient Info - Toujours affiché si patient pré-sélectionné */}
+                {/* Date and Time */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
+                      Date *
+                    </label>
+                    <input
+                      type="date"
+                      id="date"
+                      className={`input w-full ${errors.date ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                      {...register('date', { required: 'Ce champ est requis' })}
+                    />
+                    {errors.date && (
+                      <p className="mt-1 text-sm text-error">{errors.date.message}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-1">
+                      Heure *
+                    </label>
+                    <input
+                      type="time"
+                      id="time"
+                      className={`input w-full ${errors.time ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                      {...register('time', { required: 'Ce champ est requis' })}
+                    />
+                    {errors.time && (
+                      <p className="mt-1 text-sm text-error">{errors.time.message}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">
+                    Motif principal de consultation *
+                  </label>
+                  <input
+                    type="text"
+                    id="reason"
+                    className={`input w-full ${errors.reason ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                    {...register('reason', { required: 'Ce champ est requis' })}
+                    placeholder="Ex: Lombalgie, Cervicalgie..."
+                  />
+                  {errors.reason && (
+                    <p className="mt-1 text-sm text-error">{errors.reason.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="consultationReason" className="block text-sm font-medium text-gray-700 mb-1">
+                    Raison détaillée de la consultation
+                  </label>
+                  <textarea
+                    id="consultationReason"
+                    rows={3}
+                    className="input w-full resize-none"
+                    {...register('consultationReason')}
+                    placeholder="Description détaillée du motif de consultation..."
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="symptoms" className="block text-sm font-medium text-gray-700 mb-1">
+                    Symptômes observés
+                  </label>
+                  <textarea
+                    id="symptoms"
+                    rows={3}
+                    className="input w-full resize-none"
+                    {...register('symptoms')}
+                    placeholder="Symptômes et signes cliniques observés..."
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
+                    Traitement actuel du patient
+                  </label>
+                  <textarea
+                    id="currentTreatment"
+                    rows={3}
+                    className="input w-full resize-none"
+                    {...register('currentTreatment')}
+                    placeholder="Traitements médicamenteux ou thérapies en cours..."
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="ongoingTherapies" className="block text-sm font-medium text-gray-700 mb-1">
+                    Thérapies en cours
+                  </label>
+                  <textarea
+                    id="ongoingTherapies"
+                    rows={3}
+                    className="input w-full resize-none"
+                    {...register('ongoingTherapies')}
+                    placeholder="Kinésithérapie, autres thérapies complémentaires..."
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="medicalHistory" className="block text-sm font-medium text-gray-700 mb-1">
+                    Historique médical
+                  </label>
+                  <textarea
+                    id="medicalHistory"
+                    rows={4}
+                    className="input w-full resize-none"
+                    {...register('medicalHistory')}
+                    placeholder="Historique médical général du patient..."
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="significantHistory" className="block text-sm font-medium text-gray-700 mb-1">
+                    Antécédents significatifs / Chirurgies
+                  </label>
+                  <textarea
+                    id="significantHistory"
+                    rows={4}
+                    className="input w-full resize-none"
+                    {...register('significantHistory')}
+                    placeholder="Antécédents médicaux significatifs, chirurgies, hospitalisations..."
+                  />
+                </div>
+                <div>
+                  <label htmlFor="treatment" className="block text-sm font-medium text-gray-700 mb-1">
+                    Traitement ostéopathique effectué *
+                  </label>
+                  <textarea
+                    id="treatment"
+                    rows={4}
+                    className={`input w-full resize-none ${errors.treatment ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                    {...register('treatment', { required: 'Ce champ est requis' })}
+                    placeholder="Décrivez le traitement ostéopathique effectué..."
+                  />
+                  {errors.treatment && (
+                    <p className="mt-1 text-sm text-error">{errors.treatment.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="patientNote" className="block text-sm font-medium text-gray-700 mb-1">
+                    Note sur le patient
+                  </label>
+                  <textarea
+                    id="patientNote"
+                    rows={3}
+                    className="input w-full resize-none"
+                    {...register('patientNote')}
+                    placeholder="Notes personnelles sur le patient..."
+                  />
+                </div>
+                {/* Examens demandés */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Examens demandés
+                    </label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => appendExamination({ value: '' })}
+                      leftIcon={<Plus size={14} />}
+                    >
+                      Ajouter
+                    </Button>
+                  </div>
+                  
+                  {examinationFields.length > 0 ? (
+                    <div className="space-y-2">
+                      {examinationFields.map((field, index) => (
+                        <div key={field.id} className="flex items-center space-x-2">
+                          <input
+                            type="text"
+                            className="input flex-1"
+                            placeholder="Ex: Radiographie lombaire..."
+                            {...register(`examinations.${index}.value`)}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeExamination(index)}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500 italic">
+                      Aucun examen demandé
+                    </div>
+                  )}
+                </div>
+
+                {/* Prescriptions */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Prescriptions
+                    </label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => appendPrescription({ value: '' })}
+                      leftIcon={<Plus size={14} />}
+                    >
+                      Ajouter
+                    </Button>
+                  </div>
+                  
+                  {prescriptionFields.length > 0 ? (
+                    <div className="space-y-2">
+                      {prescriptionFields.map((field, index) => (
+                        <div key={field.id} className="flex items-center space-x-2">
+                          <input
+                            type="text"
+                            className="input flex-1"
+                            placeholder="Ex: Antalgiques, repos..."
+                            {...register(`prescriptions.${index}.value`)}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removePrescription(index)}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500 italic">
+                      Aucune prescription
+                    </div>
+                  )}
+                </div>
+
+                {/* Documents de consultation */}
+                <div className="border-t pt-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Documents de consultation</h3>
+                  <DocumentUploadManager
+                    patientId="temp"
+                    onUploadSuccess={handleDocumentsUpdate}
+                    onUploadError={handleDocumentError}
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes complémentaires
+                  </label>
+                  <textarea
+                    id="notes"
+                    rows={3}
+                    className="input w-full resize-none"
+                    {...register('notes')}
+                    placeholder="Notes additionnelles..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label htmlFor="duration" className="block text-sm font-medium text-gray-700 mb-1">
+                      Durée (minutes) *
+                    </label>
+                    <input
+                      type="number"
+                      id="duration"
+                      min="15"
+                      step="15"
+                      className={`input w-full ${errors.duration ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                      {...register('duration', { 
+                        required: 'Ce champ est requis',
+                        min: { value: 15, message: 'Durée minimum 15 minutes' }
+                      })}
+                    />
+                    {errors.duration && (
+                      <p className="mt-1 text-sm text-error">{errors.duration.message}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">
+                      Tarif (€) *
+                    </label>
+                    <input
+                      type="number"
+                      id="price"
+                      min="0"
+                      step="5"
+                      className={`input w-full ${errors.price ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                      {...register('price', { 
+                        required: 'Ce champ est requis',
+                        min: { value: 0, message: 'Le tarif doit être positif' }
+                      })}
+                    />
+                    {errors.price && (
+                      <p className="mt-1 text-sm text-error">{errors.price.message}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                      Statut *
+                    </label>
+                    <select
+                      id="status"
+                      className={`input w-full ${errors.status ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                      {...register('status', { required: 'Ce champ est requis' })}
+                    >
+                      <option value="completed">Effectué</option>
+                      <option value="draft">En cours</option>
+                    </select>
+                    {errors.status && (
+                      <p className="mt-1 text-sm text-error">{errors.status.message}</p>
+                    )}
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <Button
+                variant="outline"
+                onClick={onClose}
+                disabled={isSubmitting}
+              >
+                Annuler
+              </Button>
+              <Button
+                type="submit"
+                form="consultationForm"
+                variant="primary"
+                isLoading={isSubmitting}
+                loadingText="Création en cours..."
+                disabled={!isValid || isSubmitting || (!selectedPatient && !preselectedPatientId)}
+              >
+                Créer la consultation
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+export default NewConsultationModal;
