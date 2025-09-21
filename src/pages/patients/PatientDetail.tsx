@@ -1815,6 +1815,126 @@ const PatientDetail: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* Traitement en cours */}
+            {patient.currentTreatment && cleanDecryptedField(patient.currentTreatment, false, '') && (
+              <div className="bg-white rounded-xl shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <Pill size={20} className="mr-2 text-gray-600" />
+                  Traitement en cours
+                </h3>
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  {cleanDecryptedField(patient.currentTreatment, false, '')}
+                </p>
+              </div>
+            )}
+
+            {/* Motif de consultation */}
+            {patient.consultationReason && cleanDecryptedField(patient.consultationReason, false, '') && (
+              <div className="bg-white rounded-xl shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <FileText size={20} className="mr-2 text-gray-600" />
+                  Motif de consultation
+                </h3>
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  {cleanDecryptedField(patient.consultationReason, false, '')}
+                </p>
+              </div>
+            )}
+
+            {/* Antécédents médicaux */}
+            {patient.medicalAntecedents && cleanDecryptedField(patient.medicalAntecedents, false, '') && (
+              <div className="bg-white rounded-xl shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <AlertTriangle size={20} className="mr-2 text-gray-600" />
+                  Antécédents médicaux
+                </h3>
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  {cleanDecryptedField(patient.medicalAntecedents, false, '')}
+                </p>
+              </div>
+            )}
+
+            {/* Traitement ostéopathique */}
+            {patient.osteopathicTreatment && cleanDecryptedField(patient.osteopathicTreatment, false, '') && (
+              <div className="bg-white rounded-xl shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <Stethoscope size={20} className="mr-2 text-gray-600" />
+                  Traitement ostéopathique
+                </h3>
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  {cleanDecryptedField(patient.osteopathicTreatment, false, '')}
+                </p>
+              </div>
+            )}
+
+            {/* Notes */}
+            {patient.notes && cleanDecryptedField(patient.notes, false, '') && (
+              <div className="bg-white rounded-xl shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <FileText size={20} className="mr-2 text-gray-600" />
+                  Notes
+                </h3>
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  {cleanDecryptedField(patient.notes, false, '')}
+                </p>
+              </div>
+            )}
+
+            {/* Assurance */}
+            {patient.insurance && (patient.insurance.provider || patient.insurance.policyNumber) && (
+              <div className="bg-white rounded-xl shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <Shield size={20} className="mr-2 text-gray-600" />
+                  Assurance
+                </h3>
+                <div className="space-y-2">
+                  {patient.insurance.provider && (
+                    <p className="text-gray-700">
+                      <span className="font-medium">Mutuelle:</span> {cleanDecryptedField(patient.insurance.provider, false, 'Non renseignée')}
+                    </p>
+                  )}
+                  {patient.insurance.policyNumber && (
+                    <p className="text-gray-700">
+                      <span className="font-medium">Numéro:</span> {cleanDecryptedField(patient.insurance.policyNumber, false, 'Non renseigné')}
+                    </p>
+                  )}
+                  {patient.insurance.expiryDate && (
+                    <p className="text-gray-700">
+                      <span className="font-medium">Date d'expiration:</span> {new Date(patient.insurance.expiryDate).toLocaleDateString('fr-FR')}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Historique des traitements */}
+            {patient.treatmentHistory && patient.treatmentHistory.length > 0 && (
+              <div className="bg-white rounded-xl shadow p-6 lg:col-span-2">
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <History size={20} className="mr-2 text-gray-600" />
+                  Historique des traitements
+                </h3>
+                <div className="space-y-4">
+                  {patient.treatmentHistory.map((treatment, index) => (
+                    <div key={index} className="border-l-4 border-primary-200 pl-4 py-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-gray-900">
+                          {treatment.date ? new Date(treatment.date).toLocaleDateString('fr-FR') : 'Date non spécifiée'}
+                        </span>
+                        {treatment.provider && (
+                          <span className="text-sm text-gray-500">{treatment.provider}</span>
+                        )}
+                      </div>
+                      <p className="text-gray-700">{treatment.treatment}</p>
+                      {treatment.notes && (
+                        <p className="text-sm text-gray-600 mt-1">{treatment.notes}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
