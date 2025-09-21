@@ -8,8 +8,7 @@ import {
   updateDoc, 
   deleteDoc,
   writeBatch,
-  Timestamp,
-  addDoc
+  Timestamp 
 } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
@@ -588,115 +587,6 @@ export class DataMigrationService {
         { error: (error as Error).message }
       );
       
-      throw error;
-    }
-  }
-
-  /**
-   * Assure que toutes les consultations existantes sont visibles dans l'agenda
-   */
-  static async ensureConsultationsInAgenda(): Promise<{
-    consultationsProcessed: number;
-    appointmentsCreated: number;
-    errors: number;
-  }> {
-    if (!auth.currentUser) {
-      throw new Error('Utilisateur non authentifié');
-    }
-
-    try {
-      const results = {
-        consultationsProcessed: 0,
-        appointmentsCreated: 0,
-        errors: 0
-      };
-
-      // Récupérer toutes les consultations
-      const consultationsRef = collection(db, 'consultations');
-      const consultationsQuery = query(
-        consultationsRef,
-        where('osteopathId', '==', auth.currentUser.uid)
-      );
-
-      const consultationsSnapshot = await getDocs(consultationsQuery);
-
-      for (const consultationDoc of consultationsSnapshot.docs) {
-        try {
-          const consultationData = consultationDoc.data();
-          results.consultationsProcessed++;
-
-          // Vérifier si cette consultation a déjà un rendez-vous dans l'agenda
-          const appointmentsRef = collection(db, 'appointments');
-          const appointmentQuery = query(
-            appointmentsRef,
-            where('consultationId', '==', consultationDoc.id),
-            where('osteopathId', '==', auth.currentUser.uid)
-          );
-
-          const appointmentSnapshot = await getDocs(appointmentQuery);
-
-          if (appointmentSnapshot.empty) {
-            // Créer un rendez-vous dans l'agenda pour cette consultation
-            const consultationDate = consultationData.date?.toDate?.() || new Date(consultationData.date);
-            const endTime = new Date(consultationDate.getTime() + (consultationData.duration || 60) * 60000);
-
-            const appointmentData = {
-              patientId: consultationData.patientId,
-              patientName: consultationData.patientName,
-              practitionerId: auth.currentUser.uid,
-              practitionerName: auth.currentUser.displayName || auth.currentUser.email,
-              date: Timestamp.fromDate(consultationDate),
-              endTime: Timestamp.fromDate(endTime),
-              duration: consultationData.duration || 60,
-              status: 'completed',
-              type: consultationData.reason || 'Consultation ostéopathique',
-              location: {
-                type: 'office',
-                name: 'Cabinet principal'
-              },
-              notes: consultationData.notes || '',
-              osteopathId: auth.currentUser.uid,
-              consultationId: consultationDoc.id,
-              createdAt: Timestamp.now(),
-              updatedAt: Timestamp.now()
-            };
-
-            await addDoc(collection(db, 'appointments'), appointmentData);
-            results.appointmentsCreated++;
-
-            console.log(`✅ Rendez-vous créé dans l'agenda pour la consultation ${consultationDoc.id}`);
-          }
-
-        } catch (error) {
-          console.error(`❌ Erreur lors du traitement de la consultation ${consultationDoc.id}:`, error);
-          results.errors++;
-        }
-      }
-
-      // Journaliser l'opération
-      await AuditLogger.log(
-        AuditEventType.DATA_MODIFICATION,
-        'consultations',
-        'ensure_agenda_integration',
-        SensitivityLevel.INTERNAL,
-        'success',
-        results
-      );
-
-      return results;
-
-    } catch (error) {
-      console.error('❌ Failed to ensure consultations in agenda:', error);
-      
-      await AuditLogger.log(
-        AuditEventType.DATA_MODIFICATION,
-        'consultations',
-        'ensure_agenda_integration',
-        SensitivityLevel.INTERNAL,
-        'failure',
-        { error: (error as Error).message }
-      );
-
       throw error;
     }
   }
