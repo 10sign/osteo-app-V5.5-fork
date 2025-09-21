@@ -31,6 +31,9 @@ import { Button } from '../../components/ui/Button';
 import EditPatientModal from '../../components/modals/EditPatientModal';
 import DeletePatientModal from '../../components/modals/DeletePatientModal';
 import NewConsultationModal from '../../components/modals/NewConsultationModal';
+import ViewConsultationModal from '../../components/modals/ViewConsultationModal';
+import EditConsultationModal from '../../components/modals/EditConsultationModal';
+import DeleteConsultationModal from '../../components/modals/DeleteConsultationModal';
 import { Patient } from '../../types';
 import { HDSCompliance } from '../../utils/hdsCompliance';
 import { cleanDecryptedField } from '../../utils/dataCleaning';
@@ -39,6 +42,7 @@ import { fr } from 'date-fns/locale';
 import { patientCache } from '../../utils/patientCache';
 import DocumentUploadManager from '../../components/ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
+import { ConsultationService } from '../../services/consultationService';
 
 interface Consultation {
   id: string;
@@ -71,6 +75,17 @@ const PatientDetail: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isNewConsultationModalOpen, setIsNewConsultationModalOpen] = useState(false);
+  const [isViewConsultationModalOpen, setIsViewConsultationModalOpen] = useState(false);
+  const [isEditConsultationModalOpen, setIsEditConsultationModalOpen] = useState(false);
+  const [isDeleteConsultationModalOpen, setIsDeleteConsultationModalOpen] = useState(false);
+  const [selectedConsultationId, setSelectedConsultationId] = useState<string | null>(null);
+  const [consultationToDelete, setConsultationToDelete] = useState<{
+    id: string;
+    patientName: string;
+    date: string;
+    time: string;
+  } | null>(null);
+  const [isDeletingConsultation, setIsDeletingConsultation] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [refreshing, setRefreshing] = useState(false);
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>([]);
@@ -251,6 +266,56 @@ const PatientDetail: React.FC = () => {
 
   const handleNewConsultationSuccess = () => {
     setIsNewConsultationModalOpen(false);
+    loadConsultations();
+    loadInvoices();
+  };
+
+  const handleViewConsultation = (consultationId: string) => {
+    setSelectedConsultationId(consultationId);
+    setIsViewConsultationModalOpen(true);
+  };
+
+  const handleEditConsultation = (consultationId: string) => {
+    setSelectedConsultationId(consultationId);
+    setIsEditConsultationModalOpen(true);
+  };
+
+  const handleDeleteConsultation = (consultation: Consultation) => {
+    setConsultationToDelete({
+      id: consultation.id,
+      patientName: `${patient?.firstName} ${patient?.lastName}`,
+      date: format(consultation.date, 'dd/MM/yyyy', { locale: fr }),
+      time: format(consultation.date, 'HH:mm')
+    });
+    setIsDeleteConsultationModalOpen(true);
+  };
+
+  const confirmConsultationDeletion = async () => {
+    if (!consultationToDelete) return;
+
+    setIsDeletingConsultation(true);
+    try {
+      await ConsultationService.deleteConsultation(consultationToDelete.id);
+      
+      setIsDeleteConsultationModalOpen(false);
+      setConsultationToDelete(null);
+      
+      // Refresh consultations and invoices
+      await loadConsultations();
+      await loadInvoices();
+      
+    } catch (error) {
+      console.error('Error deleting consultation:', error);
+      setError('Erreur lors de la suppression de la consultation');
+    } finally {
+      setIsDeletingConsultation(false);
+    }
+  };
+
+  const handleConsultationEditSuccess = () => {
+    setIsEditConsultationModalOpen(false);
+    setSelectedConsultationId(null);
+    // Refresh consultations and invoices
     loadConsultations();
     loadInvoices();
   };
@@ -822,6 +887,37 @@ const PatientDetail: React.FC = () => {
                         )}
                       </div>
 
+                      {/* Action buttons */}
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <div className="flex items-center justify-end space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewConsultation(consultation.id)}
+                            leftIcon={<Eye size={14} />}
+                          >
+                            Voir
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditConsultation(consultation.id)}
+                            leftIcon={<Edit size={14} />}
+                          >
+                            Modifier
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteConsultation(consultation)}
+                            leftIcon={<Trash2 size={14} />}
+                            className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
+                          >
+                            Supprimer
+                          </Button>
+                        </div>
+                      </div>
+
                       {/* Linked Invoice */}
                       {linkedInvoice && (
                         <div className="mt-4 pt-4 border-t border-gray-200">
@@ -1055,6 +1151,48 @@ const PatientDetail: React.FC = () => {
         onSuccess={handleNewConsultationSuccess}
         preselectedPatientId={patient.id}
         preselectedPatientName={`${patient.firstName} ${patient.lastName}`}
+      />
+
+      {/* Consultation Modals */}
+      {selectedConsultationId && (
+        <>
+          <ViewConsultationModal
+            isOpen={isViewConsultationModalOpen}
+            onClose={() => {
+              setIsViewConsultationModalOpen(false);
+              setSelectedConsultationId(null);
+            }}
+            consultationId={selectedConsultationId}
+          />
+
+          <EditConsultationModal
+            isOpen={isEditConsultationModalOpen}
+            onClose={() => {
+              setIsEditConsultationModalOpen(false);
+              setSelectedConsultationId(null);
+            }}
+            onSuccess={handleConsultationEditSuccess}
+            consultationId={selectedConsultationId}
+            preselectedPatientId={patient.id}
+            preselectedPatientName={`${patient.firstName} ${patient.lastName}`}
+          />
+        </>
+      )}
+
+      <DeleteConsultationModal
+        isOpen={isDeleteConsultationModalOpen}
+        onClose={() => {
+          setIsDeleteConsultationModalOpen(false);
+          setConsultationToDelete(null);
+        }}
+        onConfirm={confirmConsultationDeletion}
+        isLoading={isDeletingConsultation}
+        consultationInfo={consultationToDelete || {
+          id: '',
+          patientName: '',
+          date: '',
+          time: ''
+        }}
       />
     </div>
   );
