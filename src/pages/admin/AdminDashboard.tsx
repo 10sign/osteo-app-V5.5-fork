@@ -314,6 +314,37 @@ const AdminDashboard: React.FC = () => {
                 </Button>
               </div>
               
+              {/* Outil d'intégration agenda */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <Calendar size={20} className="mr-2 text-secondary-600" />
+                  Intégration agenda des consultations
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Assure que toutes les consultations existantes sont visibles dans l'agenda avec leur date/heure correcte.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const results = await DataMigrationService.ensureConsultationsInAgenda();
+                      
+                      alert(`✅ Intégration agenda terminée:\n- ${results.consultationsProcessed} consultations traitées\n- ${results.appointmentsCreated} rendez-vous créés dans l'agenda\n- ${results.errors} erreurs`);
+                      
+                      if (results.errors > 0) {
+                        console.warn('⚠️ Erreurs lors de l\'intégration, consultez la console');
+                      }
+                    } catch (error) {
+                      console.error('❌ Erreur lors de l\'intégration agenda:', error);
+                      alert('❌ Erreur lors de l\'intégration des consultations dans l\'agenda');
+                    }
+                  }}
+                  leftIcon={<Calendar size={16} />}
+                >
+                  Intégrer dans l'agenda
+                </Button>
+              </div>
+              
               {/* Outil de nettoyage des consultations et factures en double */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
