@@ -14,7 +14,7 @@ import {
 import { db, auth } from '../firebase/config';
 import { Consultation, ConsultationFormData } from '../types';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
-import { hdsCompliance } from '../utils/hdsCompliance';
+import HDSCompliance from '../utils/hdsCompliance';
 
 export class ConsultationService {
   /**
@@ -40,7 +40,7 @@ export class ConsultationService {
         const data = docSnapshot.data();
         
         // Déchiffrement des données sensibles pour l'affichage
-        const decryptedData = hdsCompliance.decryptDataForDisplay(data, 'consultations', auth.currentUser.uid);
+        const decryptedData = HDSCompliance.decryptDataForDisplay(data, 'consultations', auth.currentUser.uid);
         
         consultations.push({
           id: docSnapshot.id,
@@ -104,7 +104,7 @@ export class ConsultationService {
         const data = docSnapshot.data();
         
         // Déchiffrement des données sensibles pour l'affichage
-        const decryptedData = hdsCompliance.decryptDataForDisplay(data, 'consultations', auth.currentUser.uid);
+        const decryptedData = HDSCompliance.decryptDataForDisplay(data, 'consultations', auth.currentUser.uid);
         
         consultations.push({
           id: docSnapshot.id,
@@ -168,7 +168,7 @@ export class ConsultationService {
       }
       
       // Déchiffrement des données sensibles pour l'affichage
-      const decryptedData = hdsCompliance.decryptDataForDisplay(data, 'consultations', auth.currentUser.uid);
+      const decryptedData = HDSCompliance.decryptDataForDisplay(data, 'consultations', auth.currentUser.uid);
       
       const consultation: Consultation = {
         id: docSnap.id,
@@ -235,7 +235,7 @@ export class ConsultationService {
       const now = new Date();
       
       // Préparation des données avec chiffrement HDS
-      const dataToStore = hdsCompliance.prepareDataForStorage({
+      const dataToStore = HDSCompliance.prepareDataForStorage({
         ...consultationData,
         osteopathId: userId,
         date: Timestamp.fromDate(new Date(consultationData.date)),
@@ -371,7 +371,7 @@ export class ConsultationService {
       console.log('💾 Prepared update data:', updateData);
       
       // Préparation des données avec chiffrement HDS
-      const dataToStore = hdsCompliance.prepareDataForStorage(updateData, 'consultations', userId);
+      const dataToStore = HDSCompliance.prepareDataForStorage(updateData, 'consultations', userId);
       console.log('🔐 Data prepared for storage:', dataToStore);
       
       await updateDoc(docRef, dataToStore);

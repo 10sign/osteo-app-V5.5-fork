@@ -1,93 +1,58 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, Clock, FileText, User, Plus, Trash2, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { X, Calendar, Clock, FileText, User, Plus, Trash2, CheckCircle } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
-import { Patient } from '../../types';
-import { ConsultationService } from '../../services/consultationService';
-import { AppointmentService } from '../../services/appointmentService';
-import DocumentUploadManager from '../ui/DocumentUploadManager';
-import { DocumentMetadata, moveFile } from '../../utils/documentStorage';
+import { cleanDecryptedField } from '../../utils/dataCleaning';
+import { HDSCompliance } from '../../utils/hdsCompliance';
+import { AuditLogger, AuditEventType, SensitivityLevel } from '../../utils/auditLogger';
 
-interface NewConsultationModalProps {
+interface EditConsultationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  preselectedPatientId?: string; // ID du patient pré-sélectionné
-  preselectedPatientName?: string; // Nom du patient pré-sélectionné
-  preselectedDate?: string;
-  preselectedTime?: string;
+  consultationId: string;
+  preselectedPatientId?: string;
+  preselectedPatientName?: string;
 }
 
 interface ConsultationFormData {
-  patientId: string;
   date: string;
   time: string;
-  duration: number;
   reason: string;
-  consultationReason: string;
-  symptoms: string;
-  currentTreatment: string;
-  ongoingTherapies: string;
-  medicalHistory: string;
-  significantHistory: string;
   treatment: string;
   notes: string;
-  patientNote: string;
+  duration: number;
   price: number;
   status: string;
   examinations: { value: string }[];
   prescriptions: { value: string }[];
-  // Champs du patient (pré-remplis mais modifiables)
-  patientFirstName: string;
-  patientLastName: string;
-  patientDateOfBirth: string;
-  patientGender: string;
-  patientPhone: string;
-  patientProfession: string;
-  patientEmail: string;
-  patientAddress: string;
-  patientInsurance: string;
-  patientInsuranceNumber: string;
 }
 
-
-const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
+const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  consultationId,
   preselectedPatientId,
-  preselectedPatientName,
-  preselectedDate,
-  preselectedTime,
+  preselectedPatientName
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [isPatientPreselected, setIsPatientPreselected] = useState(false);
-  const [consultationDocuments, setConsultationDocuments] = useState<DocumentMetadata[]>([]);
+  const [consultationData, setConsultationData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const { register, handleSubmit, formState: { errors, isValid }, reset, control, watch, setValue } = useForm<ConsultationFormData>({
+  const { register, handleSubmit, formState: { errors, isValid }, reset, control } = useForm<ConsultationFormData>({
     mode: 'onChange',
     defaultValues: {
       duration: 60,
       price: 60,
       status: 'completed',
       examinations: [],
-      prescriptions: [],
-      consultationReason: '',
-      symptoms: '',
-      currentTreatment: '',
-      ongoingTherapies: '',
-      medicalHistory: '',
-      significantHistory: '',
-      patientNote: '',
-      date: preselectedDate || new Date().toISOString().split('T')[0],
-      time: preselectedTime || '09:00'
+      prescriptions: []
     }
   });
 
@@ -101,119 +66,106 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
     name: 'prescriptions'
   });
 
-  const watchedPatientId = watch('patientId');
-
-  // Gestionnaires pour les documents
-  const handleDocumentsUpdate = (documents: DocumentMetadata[]) => {
-    setConsultationDocuments(documents);
-  };
-
-  const handleDocumentError = (errorMessage: string) => {
-    setError(errorMessage);
-  };
-
-  // Load patients
+  // Load consultation data when modal opens
   useEffect(() => {
-    const loadPatients = async () => {
-      if (!auth.currentUser) {
-        console.log('No authenticated user for patient loading');
-        return;
-      }
-
-      // Si un patient est pré-sélectionné, on n'a pas besoin de charger tous les patients
-      if (preselectedPatientId) {
-        setIsPatientPreselected(true);
-        try {
-          const patientRef = doc(db, 'patients', preselectedPatientId);
-          const patientDoc = await getDoc(patientRef);
-          
-          console.log('Loading preselected patient:', preselectedPatientId);
-          if (patientDoc.exists()) {
-            const patientData = { ...patientDoc.data(), id: patientDoc.id } as Patient;
-            setSelectedPatient(patientData);
-            setValue('patientId', preselectedPatientId);
-            fillPatientFields(patientData);
-          } else {
-            setError('Patient pré-sélectionné non trouvé');
-            console.error('Preselected patient not found:', preselectedPatientId);
-          }
-        } catch (error) {
-          console.error('Error loading preselected patient:', error);
-          setError('Erreur lors du chargement du patient');
-        }
-        return;
-      }
-
+    const loadData = async () => {
+      if (!auth.currentUser || !consultationId) return;
+      
+      setLoading(true);
+      setError(null);
+      
       try {
-        const patientsRef = collection(db, 'patients');
-        const q = query(patientsRef, where('osteopathId', '==', auth.currentUser.uid));
-        const snapshot = await getDocs(q);
+        console.log('🔄 Loading consultation data for ID:', consultationId);
         
-        const patientsList = snapshot.docs.map(doc => ({
-          ...doc.data(),
-          id: doc.id,
-        })) as Patient[];
+        // Charger directement depuis Firestore
+        const consultationRef = doc(db, 'consultations', consultationId);
+        const consultationDoc = await getDoc(consultationRef);
         
-        setPatients(patientsList);
-
+        if (!consultationDoc.exists()) {
+          throw new Error('Consultation non trouvée');
+        }
+        
+        const rawData = consultationDoc.data();
+        console.log('📋 Raw consultation data:', rawData);
+        
+        // Vérifier la propriété
+        if (rawData.osteopathId !== auth.currentUser.uid) {
+          throw new Error('Accès non autorisé à cette consultation');
+        }
+        
+        // Déchiffrer les données pour l'affichage
+        const decryptedData = HDSCompliance.decryptDataForDisplay(
+          rawData,
+          'consultations',
+          auth.currentUser.uid
+        );
+        
+        console.log('🔓 Decrypted consultation data:', decryptedData);
+        
+        const consultation = {
+          id: consultationDoc.id,
+          ...decryptedData,
+          date: rawData.date?.toDate?.() || new Date(rawData.date)
+        };
+        
+        setConsultationData(consultation);
+        
+        console.log('✅ Final consultation data for form:', consultation);
+        
+        // Pre-fill form with consultation data
+        const consultationDate = consultation.date?.toDate ? consultation.date.toDate() : new Date(consultation.date);
+        const dateString = consultationDate.toISOString().split('T')[0];
+        const timeString = consultationDate.toTimeString().slice(0, 5);
+        
+        // Nettoyer les champs pour l'édition
+        const cleanReason = cleanDecryptedField(consultation.reason, true, '');
+        const cleanTreatment = cleanDecryptedField(consultation.treatment, true, '');
+        const cleanNotes = cleanDecryptedField(consultation.notes, true, '');
+        
+        console.log('🧹 Cleaned fields for editing:', {
+          reason: { original: consultation.reason, cleaned: cleanReason },
+          treatment: { original: consultation.treatment, cleaned: cleanTreatment },
+          notes: { original: consultation.notes, cleaned: cleanNotes }
+        });
+        
+        reset({
+          date: dateString,
+          time: timeString,
+          reason: cleanReason,
+          treatment: cleanTreatment,
+          notes: cleanNotes,
+          duration: consultation.duration || 60,
+          price: consultation.price || 60,
+          status: consultation.status || 'completed',
+          examinations: consultation.examinations?.map((exam: string) => ({ value: exam })) || [],
+          prescriptions: consultation.prescriptions?.map((presc: string) => ({ value: presc })) || []
+        });
+        
+        console.log('📝 Form initialized with cleaned data');
       } catch (error) {
-        console.error('Error loading patients:', error);
+        console.error('Error loading consultation data:', error);
+        setError('Erreur lors du chargement de la consultation');
+      } finally {
+        setLoading(false);
       }
     };
 
-    if (isOpen) {
-      loadPatients();
-      console.log('NewConsultationModal opened with preselected patient:', preselectedPatientId);
+    if (isOpen && consultationId) {
+      loadData();
     }
-  }, [isOpen, preselectedPatientId, setValue, preselectedPatientName]);
-
-  // Update selected patient when patientId changes
-  useEffect(() => {
-    if (watchedPatientId && !isPatientPreselected) {
-      const patient = patients.find(p => p.id === watchedPatientId);
-      setSelectedPatient(patient || null);
-      if (patient) {
-        console.log('Patient selected from dropdown:', patient.firstName, patient.lastName);
-        fillPatientFields(patient);
-      }
-    }
-  }, [watchedPatientId, patients, isPatientPreselected]);
-
-  // Fill patient fields with existing data
-  const fillPatientFields = (patient: Patient) => {
-    console.log('Filling patient fields for:', patient.firstName, patient.lastName);
-    setValue('patientFirstName', patient.firstName || '');
-    setValue('patientLastName', patient.lastName || '');
-    setValue('patientDateOfBirth', patient.dateOfBirth || '');
-    setValue('patientGender', patient.gender || '');
-    setValue('patientPhone', patient.phone || '');
-    setValue('patientProfession', patient.profession || '');
-    setValue('patientEmail', patient.email || '');
-    setValue('patientAddress', patient.address?.street || '');
-    setValue('patientInsurance', patient.insurance?.provider || '');
-    setValue('patientInsuranceNumber', patient.insurance?.policyNumber || '');
-  };
+  }, [isOpen, consultationId, reset]);
 
   const onSubmit = async (data: ConsultationFormData) => {
     if (!auth.currentUser) {
-      setError('Informations manquantes pour créer la consultation');
+      setError('Vous devez être connecté pour modifier une consultation');
       return;
     }
 
-    console.log('Form submission - preselectedPatientId:', preselectedPatientId);
-    console.log('Form submission - selectedPatient:', selectedPatient);
-    console.log('Form submission - form data patientId:', data.patientId);
-
-    // Utiliser le patient pré-sélectionné ou le patient sélectionné
-    const patientToUse = selectedPatient;
-    const patientIdToUse = preselectedPatientId || data.patientId;
-    const patientNameToUse = preselectedPatientName || (patientToUse ? `${patientToUse.firstName} ${patientToUse.lastName}` : '');
-
-    console.log('Using patient:', { patientIdToUse, patientNameToUse });
-    if (!patientIdToUse || !patientNameToUse) {
-      setError('Patient non sélectionné ou informations manquantes');
-      return;
-    }
+    console.log('📤 Submitting consultation update:', {
+      consultationId,
+      formData: data,
+      currentUser: auth.currentUser.uid
+    });
 
     setIsSubmitting(true);
     setError(null);
@@ -221,32 +173,8 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
     try {
       const consultationDate = new Date(`${data.date}T${data.time}`);
       
-      // 1. Créer le rendez-vous dans l'agenda
-      const endTime = new Date(consultationDate.getTime() + data.duration * 60000);
-      const appointmentData = {
-        patientId: patientIdToUse,
-        patientName: patientNameToUse,
-        practitionerId: auth.currentUser.uid,
-        practitionerName: auth.currentUser.displayName || auth.currentUser.email,
-        date: consultationDate,
-        endTime: endTime,
-        duration: data.duration,
-        type: data.reason || 'Consultation ostéopathique',
-        status: 'completed',
-        location: {
-          type: 'office',
-          name: 'Cabinet principal'
-        },
-        notes: data.notes
-      };
-
-      const appointmentId = await AppointmentService.createAppointment(appointmentData);
-
-      // 2. Créer la consultation
-      const consultationData = {
-        patientId: patientIdToUse,
-        patientName: patientNameToUse,
-        osteopathId: auth.currentUser.uid,
+      // Préparer les données de mise à jour
+      const updateData = {
         date: consultationDate,
         reason: data.reason,
         treatment: data.treatment,
@@ -256,46 +184,23 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         status: data.status,
         examinations: data.examinations.map(item => item.value),
         prescriptions: data.prescriptions.map(item => item.value),
-        appointmentId: appointmentId
+        updatedAt: new Date().toISOString()
       };
-
-      const consultationId = await ConsultationService.createConsultation(consultationData);
-
-      // Déplacer les documents du dossier temporaire vers le dossier de la consultation réelle
-      if (consultationDocuments.length > 0) {
-        const updatedDocuments: DocumentMetadata[] = [];
-        for (const doc of consultationDocuments) {
-          try {
-            const oldPath = `${doc.folder}/${doc.name}`;
-            const newFolder = `users/${auth.currentUser.uid}/consultations/${consultationId}/documents`;
-            const newPath = `${newFolder}/${doc.name}`;
-
-            const newUrl = await moveFile(oldPath, newPath);
-            updatedDocuments.push({
-              ...doc,
-              url: newUrl,
-              folder: newFolder
-            });
-          } catch (moveError) {
-            console.error(`Erreur lors du déplacement du document ${doc.name}:`, moveError);
-          }
-        }
-
-        // Mettre à jour la consultation avec les documents déplacés
-        if (updatedDocuments.length > 0) {
-          await updateDoc(doc(db, 'consultations', consultationId), {
-            documents: updatedDocuments
-          });
-        }
-      }
-
-      // 3. Lier la consultation au rendez-vous
-      await AppointmentService.updateAppointment(appointmentId, {
-        consultationId: consultationId
+      
+      console.log('💾 Prepared update data:', updateData);
+      
+      // Mettre à jour via le service
+      const consultationRef = doc(db, 'consultations', consultationId);
+      await updateDoc(consultationRef, {
+        ...updateData,
+        date: Timestamp.fromDate(consultationDate),
+        updatedAt: Timestamp.now()
       });
       
+      console.log('✅ Consultation updated successfully in Firestore');
+      
       // Afficher le message de succès
-      setSuccess('Consultation créée avec succès');
+      setSuccess('Consultation modifiée avec succès');
       
       // Attendre 2 secondes avant de fermer le modal
       setTimeout(() => {
@@ -304,8 +209,8 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         onClose();
       }, 2000);
     } catch (error: any) {
-      console.error('Error creating consultation:', error);
-      setError('Erreur lors de la création de la consultation: ' + error.message);
+      console.error('Error updating consultation:', error);
+      setError('Erreur lors de la modification de la consultation: ' + error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -328,10 +233,10 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: 'spring', duration: 0.5 }}
-            className="relative w-[calc(100%-2rem)] md:w-[800px] max-h-[90vh] bg-white rounded-xl shadow-2xl flex flex-col"
+            className="relative w-[calc(100%-2rem)] md:w-[700px] max-h-[90vh] bg-white rounded-xl shadow-2xl flex flex-col"
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">Nouvelle consultation</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Modifier la consultation</h2>
               <button
                 onClick={onClose}
                 className="text-gray-400 hover:text-gray-500 transition-colors"
@@ -354,395 +259,368 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                 </div>
               )}
 
-              <form id="consultationForm" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-                {/* Patient Selection - Conditionnel */}
-                {!isPatientPreselected ? (
-                  <div>
-                    <label htmlFor="patientId" className="block text-sm font-medium text-gray-700 mb-1">
-                      Patient *
-                    </label>
-                    <select
-                      id="patientId"
-                      className={`input w-full ${errors.patientId ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                      {...register('patientId', { required: 'Veuillez sélectionner un patient' })}
-                    >
-                      <option value="">Sélectionner un patient</option>
-                      {patients.map((patient) => (
-                        <option key={patient.id} value={patient.id}>
-                          {patient.firstName} {patient.lastName}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.patientId && (
-                      <p className="mt-1 text-sm text-error">{errors.patientId.message}</p>
-                    )}
-                    
-                    {/* Selected Patient Info */}
-                    {selectedPatient && (
-                      <div className="mt-4 p-4 bg-primary-50 rounded-lg">
-                        <div className="flex items-center">
-                          <User size={20} className="text-primary-600 mr-2" />
-                          <div>
-                            <div className="font-medium text-primary-900">
-                              {selectedPatient.firstName} {selectedPatient.lastName}
-                            </div>
-                            <div className="text-sm text-primary-700">
-                              {selectedPatient.phone} • {selectedPatient.email}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Patient
-                    </label>
-                    <div className="p-4 bg-primary-50 rounded-lg border border-primary-200">
-                      <div className="flex items-center">
-                        <User size={20} className="text-primary-600 mr-2" />
-                        <div>
-                          <div className="font-medium text-primary-900">
-                            {preselectedPatientName || (selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : 'Patient inconnu')}
-                          </div>
-                          <div className="text-sm text-primary-700">
-                            Consultation pour ce patient
-                          </div>
-                        </div>
-                      </div>
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                </div>
+              ) : consultationData ? (
+                <>
+                  <div className="mb-4 p-4 bg-primary-50 rounded-lg">
+                    <div className="flex items-center">
+                      <User size={20} className="text-primary-600 mr-2" />
+                      <span className="font-medium text-primary-900">
+                        Patient: {consultationData?.patientName || preselectedPatientName || 'Patient inconnu'}
+                      </span>
                     </div>
-                  </div>
-                )}
-
-                {/* Selected Patient Info - Toujours affiché si patient pré-sélectionné */}
-                {/* Date and Time */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
-                      Date *
-                    </label>
-                    <input
-                      type="date"
-                      id="date"
-                      className={`input w-full ${errors.date ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                      {...register('date', { required: 'Ce champ est requis' })}
-                    />
-                    {errors.date && (
-                      <p className="mt-1 text-sm text-error">{errors.date.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-1">
-                      Heure *
-                    </label>
-                    <input
-                      type="time"
-                      id="time"
-                      className={`input w-full ${errors.time ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                      {...register('time', { required: 'Ce champ est requis' })}
-                    />
-                    {errors.time && (
-                      <p className="mt-1 text-sm text-error">{errors.time.message}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">
-                    Motif principal de consultation *
-                  </label>
-                  <input
-                    type="text"
-                    id="reason"
-                    className={`input w-full ${errors.reason ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                    {...register('reason', { required: 'Ce champ est requis' })}
-                    placeholder="Ex: Lombalgie, Cervicalgie..."
-                  />
-                  {errors.reason && (
-                    <p className="mt-1 text-sm text-error">{errors.reason.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label htmlFor="consultationReason" className="block text-sm font-medium text-gray-700 mb-1">
-                    Raison détaillée de la consultation
-                  </label>
-                  <textarea
-                    id="consultationReason"
-                    rows={3}
-                    className="input w-full resize-none"
-                    {...register('consultationReason')}
-                    placeholder="Description détaillée du motif de consultation..."
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="symptoms" className="block text-sm font-medium text-gray-700 mb-1">
-                    Symptômes observés
-                  </label>
-                  <textarea
-                    id="symptoms"
-                    rows={3}
-                    className="input w-full resize-none"
-                    {...register('symptoms')}
-                    placeholder="Symptômes et signes cliniques observés..."
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
-                    Traitement actuel du patient
-                  </label>
-                  <textarea
-                    id="currentTreatment"
-                    rows={3}
-                    className="input w-full resize-none"
-                    {...register('currentTreatment')}
-                    placeholder="Traitements médicamenteux ou thérapies en cours..."
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="ongoingTherapies" className="block text-sm font-medium text-gray-700 mb-1">
-                    Thérapies en cours
-                  </label>
-                  <textarea
-                    id="ongoingTherapies"
-                    rows={3}
-                    className="input w-full resize-none"
-                    {...register('ongoingTherapies')}
-                    placeholder="Kinésithérapie, autres thérapies complémentaires..."
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="medicalHistory" className="block text-sm font-medium text-gray-700 mb-1">
-                    Historique médical
-                  </label>
-                  <textarea
-                    id="medicalHistory"
-                    rows={4}
-                    className="input w-full resize-none"
-                    {...register('medicalHistory')}
-                    placeholder="Historique médical général du patient..."
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="significantHistory" className="block text-sm font-medium text-gray-700 mb-1">
-                    Antécédents significatifs / Chirurgies
-                  </label>
-                  <textarea
-                    id="significantHistory"
-                    rows={4}
-                    className="input w-full resize-none"
-                    {...register('significantHistory')}
-                    placeholder="Antécédents médicaux significatifs, chirurgies, hospitalisations..."
-                  />
-                </div>
-                <div>
-                  <label htmlFor="treatment" className="block text-sm font-medium text-gray-700 mb-1">
-                    Traitement ostéopathique effectué *
-                  </label>
-                  <textarea
-                    id="treatment"
-                    rows={4}
-                    className={`input w-full resize-none ${errors.treatment ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                    {...register('treatment', { required: 'Ce champ est requis' })}
-                    placeholder="Décrivez le traitement ostéopathique effectué..."
-                  />
-                  {errors.treatment && (
-                    <p className="mt-1 text-sm text-error">{errors.treatment.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label htmlFor="patientNote" className="block text-sm font-medium text-gray-700 mb-1">
-                    Note sur le patient
-                  </label>
-                  <textarea
-                    id="patientNote"
-                    rows={3}
-                    className="input w-full resize-none"
-                    {...register('patientNote')}
-                    placeholder="Notes personnelles sur le patient..."
-                  />
-                </div>
-                {/* Examens demandés */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Examens demandés
-                    </label>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => appendExamination({ value: '' })}
-                      leftIcon={<Plus size={14} />}
-                    >
-                      Ajouter
-                    </Button>
+                    <div className="mt-2 text-sm text-primary-700">
+                      Consultation du {consultationData.date?.toDate ? 
+                        consultationData.date.toDate().toLocaleDateString('fr-FR') : 
+                        new Date(consultationData.date).toLocaleDateString('fr-FR')}
+                    </div>
                   </div>
                   
-                  {examinationFields.length > 0 ? (
-                    <div className="space-y-2">
-                      {examinationFields.map((field, index) => (
-                        <div key={field.id} className="flex items-center space-x-2">
-                          <input
-                            type="text"
-                            className="input flex-1"
-                            placeholder="Ex: Radiographie lombaire..."
-                            {...register(`examinations.${index}.value`)}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeExamination(index)}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
+                  {/* Debug info in development */}
+                  <form id="editConsultationForm" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
+                          Date *
+                        </label>
+                        <input
+                          type="date"
+                          id="date"
+                          className={`input w-full ${errors.date ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                          {...register('date', { required: 'Ce champ est requis' })}
+                        />
+                        {errors.date && (
+                          <p className="mt-1 text-sm text-error">{errors.date.message}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-1">
+                          Heure *
+                        </label>
+                        <input
+                          type="time"
+                          id="time"
+                          className={`input w-full ${errors.time ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                          {...register('time', { required: 'Ce champ est requis' })}
+                        />
+                        {errors.time && (
+                          <p className="mt-1 text-sm text-error">{errors.time.message}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">
+                        Motif principal de consultation *
+                      </label>
+                      <input
+                        type="text"
+                        id="reason"
+                        className={`input w-full ${errors.reason ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                        {...register('reason', { required: 'Ce champ est requis' })}
+                        placeholder="Ex: Lombalgie, Cervicalgie..."
+                      />
+                      {errors.reason && (
+                        <p className="mt-1 text-sm text-error">{errors.reason.message}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="consultationReason" className="block text-sm font-medium text-gray-700 mb-1">
+                        Raison détaillée de la consultation
+                      </label>
+                      <textarea
+                        id="consultationReason"
+                        rows={3}
+                        className="input w-full resize-none"
+                        {...register('consultationReason')}
+                        placeholder="Description détaillée du motif de consultation..."
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="symptoms" className="block text-sm font-medium text-gray-700 mb-1">
+                        Symptômes observés
+                      </label>
+                      <textarea
+                        id="symptoms"
+                        rows={3}
+                        className="input w-full resize-none"
+                        {...register('symptoms')}
+                        placeholder="Symptômes et signes cliniques observés..."
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
+                        Traitement actuel du patient
+                      </label>
+                      <textarea
+                        id="currentTreatment"
+                        rows={3}
+                        className="input w-full resize-none"
+                        {...register('currentTreatment')}
+                        placeholder="Traitements médicamenteux ou thérapies en cours..."
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="ongoingTherapies" className="block text-sm font-medium text-gray-700 mb-1">
+                        Thérapies en cours
+                      </label>
+                      <textarea
+                        id="ongoingTherapies"
+                        rows={3}
+                        className="input w-full resize-none"
+                        {...register('ongoingTherapies')}
+                        placeholder="Kinésithérapie, autres thérapies complémentaires..."
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="medicalHistory" className="block text-sm font-medium text-gray-700 mb-1">
+                        Historique médical
+                      </label>
+                      <textarea
+                        id="medicalHistory"
+                        rows={4}
+                        className="input w-full resize-none"
+                        {...register('medicalHistory')}
+                        placeholder="Historique médical général du patient..."
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="significantHistory" className="block text-sm font-medium text-gray-700 mb-1">
+                        Antécédents significatifs / Chirurgies
+                      </label>
+                      <textarea
+                        id="significantHistory"
+                        rows={4}
+                        className="input w-full resize-none"
+                        {...register('significantHistory')}
+                        placeholder="Antécédents médicaux significatifs, chirurgies, hospitalisations..."
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="treatment" className="block text-sm font-medium text-gray-700 mb-1">
+                        Traitement ostéopathique effectué *
+                      </label>
+                      <textarea
+                        id="treatment"
+                        rows={4}
+                        className={`input w-full resize-none ${errors.treatment ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                        {...register('treatment', { required: 'Ce champ est requis' })}
+                        placeholder="Décrivez le traitement ostéopathique effectué..."
+                      />
+                      {errors.treatment && (
+                        <p className="mt-1 text-sm text-error">{errors.treatment.message}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="patientNote" className="block text-sm font-medium text-gray-700 mb-1">
+                        Note sur le patient
+                      </label>
+                      <textarea
+                        id="patientNote"
+                        rows={3}
+                        className="input w-full resize-none"
+                        {...register('patientNote')}
+                        placeholder="Notes personnelles sur le patient..."
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                        Statut *
+                      </label>
+                      <select
+                        id="status"
+                        className={`input w-full ${errors.status ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                        {...register('status', { required: 'Ce champ est requis' })}
+                      >
+                        <option value="completed">Effectué</option>
+                        <option value="draft">En cours</option>
+                        <option value="cancelled">Annulé</option>
+                      </select>
+                      {errors.status && (
+                        <p className="mt-1 text-sm text-error">{errors.status.message}</p>
+                      )}
+                    </div>
+
+                    {/* Examens demandés */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Examens demandés
+                        </label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => appendExamination({ value: '' })}
+                          leftIcon={<Plus size={14} />}
+                        >
+                          Ajouter
+                        </Button>
+                      </div>
+                      
+                      {examinationFields.length > 0 ? (
+                        <div className="space-y-2">
+                          {examinationFields.map((field, index) => (
+                            <div key={field.id} className="flex items-center space-x-2">
+                              <input
+                                type="text"
+                                className="input flex-1"
+                                placeholder="Ex: Radiographie lombaire..."
+                                {...register(`examinations.${index}.value`)}
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeExamination(index)}
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-gray-500 italic">
-                      Aucun examen demandé
-                    </div>
-                  )}
-                </div>
-
-                {/* Prescriptions */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Prescriptions
-                    </label>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => appendPrescription({ value: '' })}
-                      leftIcon={<Plus size={14} />}
-                    >
-                      Ajouter
-                    </Button>
-                  </div>
-                  
-                  {prescriptionFields.length > 0 ? (
-                    <div className="space-y-2">
-                      {prescriptionFields.map((field, index) => (
-                        <div key={field.id} className="flex items-center space-x-2">
-                          <input
-                            type="text"
-                            className="input flex-1"
-                            placeholder="Ex: Antalgiques, repos..."
-                            {...register(`prescriptions.${index}.value`)}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removePrescription(index)}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
+                      ) : (
+                        <div className="text-sm text-gray-500 italic">
+                          Aucun examen demandé
                         </div>
-                      ))}
+                      )}
                     </div>
-                  ) : (
-                    <div className="text-sm text-gray-500 italic">
-                      Aucune prescription
+
+                    {/* Prescriptions */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Prescriptions
+                        </label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => appendPrescription({ value: '' })}
+                          leftIcon={<Plus size={14} />}
+                        >
+                          Ajouter
+                        </Button>
+                      </div>
+                      
+                      {prescriptionFields.length > 0 ? (
+                        <div className="space-y-2">
+                          {prescriptionFields.map((field, index) => (
+                            <div key={field.id} className="flex items-center space-x-2">
+                              <input
+                                type="text"
+                                className="input flex-1"
+                                placeholder="Ex: Antalgiques, repos..."
+                                {...register(`prescriptions.${index}.value`)}
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removePrescription(index)}
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-500 italic">
+                          Aucune prescription
+                        </div>
+                      )}
                     </div>
-                  )}
+
+                    <div>
+                      <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
+                        Notes complémentaires
+                      </label>
+                      <textarea
+                        id="notes"
+                        rows={3}
+                        className="input w-full resize-none"
+                        {...register('notes')}
+                        placeholder="Notes additionnelles..."
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label htmlFor="duration" className="block text-sm font-medium text-gray-700 mb-1">
+                          Durée (minutes) *
+                        </label>
+                        <input
+                          type="number"
+                          id="duration"
+                          min="15"
+                          step="15"
+                          className={`input w-full ${errors.duration ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                          {...register('duration', { 
+                            required: 'Ce champ est requis',
+                            min: { value: 15, message: 'Durée minimum 15 minutes' }
+                          })}
+                        />
+                        {errors.duration && (
+                          <p className="mt-1 text-sm text-error">{errors.duration.message}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">
+                          Tarif (€) *
+                        </label>
+                        <input
+                          type="number"
+                          id="price"
+                          min="0"
+                          step="5"
+                          className={`input w-full ${errors.price ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                          {...register('price', { 
+                            required: 'Ce champ est requis',
+                            min: { value: 0, message: 'Le tarif doit être positif' }
+                          })}
+                        />
+                        {errors.price && (
+                          <p className="mt-1 text-sm text-error">{errors.price.message}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                          Statut *
+                        </label>
+                        <select
+                          id="status"
+                          className={`input w-full ${errors.status ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                          {...register('status', { required: 'Ce champ est requis' })}
+                        >
+                          <option value="completed">Effectué</option>
+                          <option value="draft">En cours</option>
+                          <option value="cancelled">Annulé</option>
+                        </select>
+                        {errors.status && (
+                          <p className="mt-1 text-sm text-error">{errors.status.message}</p>
+                        )}
+                      </div>
+                    </div>
+                  </form>
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-gray-500">Consultation non trouvée</p>
                 </div>
-
-                {/* Documents de consultation */}
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Documents de consultation</h3>
-                  <DocumentUploadManager
-                    patientId="temp"
-                    onUploadSuccess={handleDocumentsUpdate}
-                    onUploadError={handleDocumentError}
-                    disabled={isSubmitting}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes complémentaires
-                  </label>
-                  <textarea
-                    id="notes"
-                    rows={3}
-                    className="input w-full resize-none"
-                    {...register('notes')}
-                    placeholder="Notes additionnelles..."
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label htmlFor="duration" className="block text-sm font-medium text-gray-700 mb-1">
-                      Durée (minutes) *
-                    </label>
-                    <input
-                      type="number"
-                      id="duration"
-                      min="15"
-                      step="15"
-                      className={`input w-full ${errors.duration ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                      {...register('duration', { 
-                        required: 'Ce champ est requis',
-                        min: { value: 15, message: 'Durée minimum 15 minutes' }
-                      })}
-                    />
-                    {errors.duration && (
-                      <p className="mt-1 text-sm text-error">{errors.duration.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">
-                      Tarif (€) *
-                    </label>
-                    <input
-                      type="number"
-                      id="price"
-                      min="0"
-                      step="5"
-                      className={`input w-full ${errors.price ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                      {...register('price', { 
-                        required: 'Ce champ est requis',
-                        min: { value: 0, message: 'Le tarif doit être positif' }
-                      })}
-                    />
-                    {errors.price && (
-                      <p className="mt-1 text-sm text-error">{errors.price.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
-                      Statut *
-                    </label>
-                    <select
-                      id="status"
-                      className={`input w-full ${errors.status ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                      {...register('status', { required: 'Ce champ est requis' })}
-                    >
-                      <option value="completed">Effectué</option>
-                      <option value="draft">En cours</option>
-                    </select>
-                    {errors.status && (
-                      <p className="mt-1 text-sm text-error">{errors.status.message}</p>
-                    )}
-                  </div>
-                </div>
-              </form>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
@@ -755,13 +633,13 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
               </Button>
               <Button
                 type="submit"
-                form="consultationForm"
+                form="editConsultationForm"
                 variant="primary"
                 isLoading={isSubmitting}
-                loadingText="Création en cours..."
-                disabled={!isValid || isSubmitting || (!selectedPatient && !preselectedPatientId)}
+                loadingText="Modification en cours..."
+                disabled={!isValid || isSubmitting || loading}
               >
-                Créer la consultation
+                Modifier la consultation
               </Button>
             </div>
           </motion.div>
@@ -771,4 +649,4 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
   );
 };
 
-export default NewConsultationModal;
+export default EditConsultationModal;
