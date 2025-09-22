@@ -128,12 +128,6 @@ export interface PastAppointment {
 // Nouvel interface pour l'historique des traitements
 export interface TreatmentHistoryEntry {
   date: string; // format: "YYYY-MM-DD"
-  consultationReason?: string;
-  symptoms?: string;
-  currentTreatment?: string;
-  ongoingTherapies?: string;
-  medicalHistory?: string;
-  significantHistory?: string;
   treatment: string;
   provider?: string;
   notes?: string;
@@ -176,7 +170,6 @@ export interface Insurance {
 
 // Appointment related types
 export interface Appointment {
-  patientNote?: string;
   id: string;
   patientId: string;
   practitionerId: string;
@@ -190,15 +183,8 @@ export interface Appointment {
   createdAt: string;
   updatedAt: string;
   isHistorical?: boolean; // Indique si c'est un rendez-vous historique
-  consultationReason?: string;
-  symptoms?: string;
-  currentTreatment?: string;
-  ongoingTherapies?: string;
-  medicalHistory?: string;
-  significantHistory?: string;
 }
 
-  patientNote?: string;
 // Invoice related types
 export interface Invoice {
   id: string;
