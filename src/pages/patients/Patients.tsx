@@ -6,7 +6,7 @@ import { db, auth } from '../../firebase/config';
 import { Button } from '../../components/ui/Button';
 import NewPatientModal from '../../components/modals/NewPatientModal';
 import { Patient } from '../../types';
-import { hdsCompliance } from '../../utils/hdsCompliance';
+import { HDSCompliance } from '../../utils/hdsCompliance';
 import { clearFormData } from '../../utils/sessionPersistence';
 
 const Patients: React.FC = () => {
@@ -58,7 +58,7 @@ const Patients: React.FC = () => {
         }
         
         // Déchiffrer les données si nécessaire
-        const decryptedData = hdsCompliance.decryptDataForDisplay(
+        const decryptedData = HDSCompliance.decryptDataForDisplay(
           data,
           'patients',
           auth.currentUser.uid
@@ -73,7 +73,7 @@ const Patients: React.FC = () => {
       }
       
       // ✅ Sort by lastName in memory instead of using orderBy
-      patientsList.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
+      patientsList.sort((a, b) => a.lastName.localeCompare(b.lastName));
 
       // Convertir les dates en objets Date pour le tri
       patientsList.forEach(patient => {
