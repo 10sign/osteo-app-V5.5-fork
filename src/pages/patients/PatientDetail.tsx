@@ -20,10 +20,8 @@ import {
   History,
   Stethoscope,
   CreditCard,
-  Tag,
   Info,
   RefreshCw,
-  Shield,
   Pill,
   AlertTriangle,
   Image as ImageIcon
@@ -94,10 +92,6 @@ const PatientDetail: React.FC = () => {
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress>({ progress: 0, status: 'uploading' });
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
-  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
@@ -753,9 +747,6 @@ const PatientDetail: React.FC = () => {
     }
   };
 
-  // Feature flag to control visibility of past appointments in overview
-  const SHOW_PAST_APPOINTMENTS = false;
-
   // Formatage de la date et de l'heure
   const formatCurrentDate = (date: Date) => {
     return date.toLocaleDateString('fr-FR', {
@@ -776,7 +767,7 @@ const PatientDetail: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        <div className="w-8 h-8 border-b-2 rounded-full animate-spin border-primary-600"></div>
       </div>
     );
   }
@@ -795,9 +786,9 @@ const PatientDetail: React.FC = () => {
           </Button>
         </div>
         
-        <div className="p-6 bg-error/5 border border-error/20 rounded-xl">
+        <div className="p-6 border bg-error/5 border-error/20 rounded-xl">
           <div className="flex items-center">
-            <AlertCircle className="text-error mr-3" size={24} />
+            <AlertCircle className="mr-3 text-error" size={24} />
             <div>
               <h3 className="font-medium text-error">Erreur</h3>
               <p className="text-error/80">{error || 'Une erreur est survenue'}</p>
@@ -819,7 +810,7 @@ const PatientDetail: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center">
           <Button 
             variant="ghost" 
@@ -834,7 +825,7 @@ const PatientDetail: React.FC = () => {
             {patient.firstName} {patient.lastName}
           </h1>
           {patient.isTestData && (
-            <span className="ml-3 px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+            <span className="px-2 py-1 ml-3 text-xs text-yellow-800 bg-yellow-100 rounded-full">
               Donnée test
             </span>
           )}
@@ -877,21 +868,21 @@ const PatientDetail: React.FC = () => {
 
       {/* Document Success/Error Messages */}
       {documentSuccess && (
-        <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center">
-          <CheckCircle size={16} className="text-green-500 mr-2" />
-          <span className="text-green-700 text-sm">{documentSuccess}</span>
+        <div className="flex items-center p-3 border border-green-200 rounded-lg bg-green-50">
+          <CheckCircle size={16} className="mr-2 text-green-500" />
+          <span className="text-sm text-green-700">{documentSuccess}</span>
         </div>
       )}
 
       {documentError && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center">
-          <AlertCircle size={16} className="text-red-500 mr-2" />
-          <span className="text-red-700 text-sm">{documentError}</span>
+        <div className="flex items-center p-3 border border-red-200 rounded-lg bg-red-50">
+          <AlertCircle size={16} className="mr-2 text-red-500" />
+          <span className="text-sm text-red-700">{documentError}</span>
         </div>
       )}
 
       {/* Patient overview card */}
-      <div className="bg-white rounded-xl shadow p-6">
+      <div className="p-6 bg-white shadow rounded-xl">
         <div className="flex items-start space-x-6">
           <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold text-primary-700 ${
             patient.isTestData ? 'bg-yellow-100' : 'bg-primary-100'
@@ -899,9 +890,9 @@ const PatientDetail: React.FC = () => {
             {getInitials(patient.firstName, patient.lastName)}
           </div>
           
-          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid flex-1 grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             <div>
-              <h3 className="text-sm font-medium text-gray-500 mb-1">Informations personnelles</h3>
+              <h3 className="mb-1 text-sm font-medium text-gray-500">Informations personnelles</h3>
               <div className="space-y-1">
                 <p className="text-gray-900">
                   <span className="font-medium">Âge:</span> {calculateAge(patient.dateOfBirth)} ans
@@ -925,17 +916,17 @@ const PatientDetail: React.FC = () => {
             </div>
             
             <div>
-              <h3 className="text-sm font-medium text-gray-500 mb-1">Contact</h3>
+              <h3 className="mb-1 text-sm font-medium text-gray-500">Contact</h3>
               <div className="space-y-1">
                 {patient.phone && (
                   <div className="flex items-center">
-                    <Phone size={16} className="text-gray-400 mr-2" />
+                    <Phone size={16} className="mr-2 text-gray-400" />
                     <span className="text-gray-900">{cleanDecryptedField(patient.phone, false, 'Non renseigné')}</span>
                   </div>
                 )}
                 {patient.email && (
                   <div className="flex items-center">
-                    <Mail size={16} className="text-gray-400 mr-2" />
+                    <Mail size={16} className="mr-2 text-gray-400" />
                     <span className="text-gray-900">{cleanDecryptedField(patient.email, false, 'Non renseigné')}</span>
                   </div>
                 )}
@@ -956,11 +947,11 @@ const PatientDetail: React.FC = () => {
             </div>
             
             <div>
-              <h3 className="text-sm font-medium text-gray-500 mb-1">Prochaine consultation</h3>
+              <h3 className="mb-1 text-sm font-medium text-gray-500">Prochaine consultation</h3>
               {patient.nextAppointment ? (
                 <div className="flex items-center">
-                  <Calendar size={16} className="text-primary-500 mr-2" />
-                  <span className="text-primary-600 font-medium">
+                  <Calendar size={16} className="mr-2 text-primary-500" />
+                  <span className="font-medium text-primary-600">
                     {formatDate(patient.nextAppointment.split('T')[0])} à {patient.nextAppointment.split('T')[1]?.slice(0, 5)}
                   </span>
                 </div>
@@ -973,8 +964,8 @@ const PatientDetail: React.FC = () => {
         
         {/* Tags */}
         {patient.tags && patient.tags.length > 0 && (
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Symptômes / Syndromes</h3>
+          <div className="pt-6 mt-6 border-t border-gray-200">
+            <h3 className="mb-2 text-sm font-medium text-gray-500">Symptômes / Syndromes</h3>
             <div className="flex flex-wrap gap-2">
               {patient.tags.map((tag, index) => (
                 <span
@@ -994,7 +985,7 @@ const PatientDetail: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-200 overflow-x-auto">
+      <div className="flex overflow-x-auto border-b border-gray-200">
         <button
           className={`px-6 py-3 text-sm font-medium border-b-2 whitespace-nowrap ${
             activeTab === 'overview'
@@ -1040,26 +1031,26 @@ const PatientDetail: React.FC = () => {
       {/* Tab content */}
       <div className="space-y-6">
         {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* AJOUT: Résumé rapide des statistiques du patient */}
-            <div className="bg-white rounded-xl shadow p-6 lg:col-span-2">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Résumé du dossier</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-3 bg-primary-50 rounded-lg">
+            <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
+              <h3 className="mb-4 text-lg font-medium text-gray-900">Résumé du dossier</h3>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <div className="p-3 text-center rounded-lg bg-primary-50">
                   <div className="text-2xl font-bold text-primary-600">{consultations.length}</div>
                   <div className="text-sm text-gray-600">Consultations</div>
                 </div>
-                <div className="text-center p-3 bg-secondary-50 rounded-lg">
+                <div className="p-3 text-center rounded-lg bg-secondary-50">
                   <div className="text-2xl font-bold text-secondary-600">{invoices.length}</div>
                   <div className="text-sm text-gray-600">Factures</div>
                 </div>
-                <div className="text-center p-3 bg-accent-50 rounded-lg">
+                <div className="p-3 text-center rounded-lg bg-accent-50">
                   <div className="text-2xl font-bold text-accent-600">
                     {invoices.filter(i => i.status === 'paid').length}
                   </div>
                   <div className="text-sm text-gray-600">Factures payées</div>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
+                <div className="p-3 text-center rounded-lg bg-green-50">
                   <div className="text-2xl font-bold text-green-600">
                     {consultations.filter(c => c.status === 'completed').length}
                   </div>
@@ -1070,8 +1061,8 @@ const PatientDetail: React.FC = () => {
 
             {/* AJOUT : Section Profession - Champ manquant dans la vue d'ensemble */}
             {patient.profession && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
                   <User size={20} className="mr-2 text-gray-600" />
                   Profession
                 </h3>
@@ -1081,8 +1072,8 @@ const PatientDetail: React.FC = () => {
 
             {/* AJOUT : Section Traitement actuel - Champ manquant dans la vue d'ensemble */}
             {patient.currentTreatment && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
                   <Pill size={20} className="mr-2 text-gray-600" />
                   Traitement actuel
                 </h3>
@@ -1092,8 +1083,8 @@ const PatientDetail: React.FC = () => {
 
             {/* AJOUT : Section Motif de consultation - Champ manquant dans la vue d'ensemble */}
             {patient.consultationReason && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
                   <FileText size={20} className="mr-2 text-gray-600" />
                   Motif de consultation
                 </h3>
@@ -1103,8 +1094,8 @@ const PatientDetail: React.FC = () => {
 
             {/* AJOUT : Section Antécédents médicaux - Champ manquant dans la vue d'ensemble */}
             {patient.medicalAntecedents && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
                   <AlertTriangle size={20} className="mr-2 text-gray-600" />
                   Antécédents médicaux
                 </h3>
@@ -1114,8 +1105,8 @@ const PatientDetail: React.FC = () => {
 
             {/* AJOUT : Section Traitement ostéopathique - Champ manquant dans la vue d'ensemble */}
             {patient.osteopathicTreatment && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
                   <Stethoscope size={20} className="mr-2 text-gray-600" />
                   Traitement ostéopathique
                 </h3>
@@ -1125,14 +1116,14 @@ const PatientDetail: React.FC = () => {
 
             {/* AJOUT : Section Historique des traitements - Champ manquant dans la vue d'ensemble */}
             {patient.treatmentHistory && patient.treatmentHistory.length > 0 && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
                   <History size={20} className="mr-2 text-gray-600" />
                   Historique des traitements
                 </h3>
                 <div className="space-y-4">
                   {patient.treatmentHistory.map((treatment, index) => (
-                    <div key={index} className="border-l-4 border-primary-200 pl-4 py-2">
+                    <div key={index} className="py-2 pl-4 border-l-4 border-primary-200">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-medium text-gray-900">
                           {treatment.date ? new Date(treatment.date).toLocaleDateString('fr-FR') : 'Date non spécifiée'}
@@ -1143,7 +1134,7 @@ const PatientDetail: React.FC = () => {
                       </div>
                       <p className="text-gray-700">{treatment.treatment}</p>
                       {treatment.notes && (
-                        <p className="text-sm text-gray-600 mt-1">{treatment.notes}</p>
+                        <p className="mt-1 text-sm text-gray-600">{treatment.notes}</p>
                       )}
                     </div>
                   ))}
@@ -1153,14 +1144,14 @@ const PatientDetail: React.FC = () => {
 
             {/* Historique des traitements */}
             {patient.treatmentHistory && patient.treatmentHistory.length > 0 && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
                   <History size={20} className="mr-2 text-gray-600" />
                   Historique des traitements
                 </h3>
                 <div className="space-y-4">
                   {patient.treatmentHistory.map((treatment, index) => (
-                    <div key={index} className="border-l-4 border-primary-200 pl-4 py-2">
+                    <div key={index} className="py-2 pl-4 border-l-4 border-primary-200">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-medium text-gray-900">
                           {treatment.date ? new Date(treatment.date).toLocaleDateString('fr-FR') : 'Date non spécifiée'}
@@ -1171,7 +1162,7 @@ const PatientDetail: React.FC = () => {
                       </div>
                       <p className="text-gray-700">{treatment.treatment}</p>
                       {treatment.notes && (
-                        <p className="text-sm text-gray-600 mt-1">{treatment.notes}</p>
+                        <p className="mt-1 text-sm text-gray-600">{treatment.notes}</p>
                       )}
                     </div>
                   ))}
@@ -1179,76 +1170,13 @@ const PatientDetail: React.FC = () => {
               </div>
             )}
 
-            {/* AJOUT : Section Tags/Symptômes - Champ manquant dans la vue d'ensemble */}
-            {patient.tags && patient.tags.length > 0 && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <Tag size={20} className="mr-2 text-gray-600" />
-                  Symptômes / Syndromes
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {patient.tags.map((tag, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-primary-50 text-primary-700 border border-primary-200"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* AJOUT : Section Documents médicaux - Champ manquant dans la vue d'ensemble */}
-            {patient.documents && patient.documents.length > 0 && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <FileText size={20} className="mr-2 text-gray-600" />
-                  Documents médicaux ({patient.documents.length})
-                </h3>
-                <div className="space-y-2">
-                  {patient.documents.slice(0, 3).map((document, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center">
-                        <FileText size={16} className="mr-2 text-gray-500" />
-                        <div>
-                          <div className="font-medium text-gray-900">{document.originalName || document.name}</div>
-                          <div className="text-sm text-gray-500">
-                            {document.uploadedAt ? new Date(document.uploadedAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
-                          </div>
-                        </div>
-                      </div>
-                      <a
-                        href={document.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary-600 hover:text-primary-700 text-sm"
-                      >
-                        Voir
-                      </a>
-                    </div>
-                  ))}
-                  {patient.documents.length > 3 && (
-                    <div className="text-center">
-                      <button
-                        onClick={() => setActiveTab('documents')}
-                        className="text-sm text-primary-600 hover:text-primary-700"
-                      >
-                        Voir tous les documents ({patient.documents.length})
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* AJOUT : Section Métadonnées du dossier - Informations système manquantes */}
-            <div className="bg-white rounded-xl shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <div className="p-6 bg-white shadow rounded-xl">
+              <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
                 <Info size={20} className="mr-2 text-gray-600" />
                 Informations du dossier
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <div className="text-sm text-gray-500">Dossier créé le</div>
                   <div className="font-medium text-gray-900">
@@ -1264,7 +1192,7 @@ const PatientDetail: React.FC = () => {
                 <div>
                   <div className="text-sm text-gray-500">Statut du dossier</div>
                   <div className="flex items-center">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                    <div className="w-2 h-2 mr-2 bg-green-500 rounded-full"></div>
                     <span className="font-medium text-green-700">Actif</span>
                   </div>
                 </div>
@@ -1275,51 +1203,14 @@ const PatientDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* AJOUT: Section Profession - Information manquante */}
-            {patient.profession && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                  <User size={20} className="mr-2 text-gray-600" />
-                  Profession
-                </h3>
-                <p className="text-gray-900">{patient.profession}</p>
-              </div>
-            )}
+            
 
-            {/* AJOUT: Section Assurance - Informations manquantes */}
-            {(patient.insurance?.provider || patient.insurance?.policyNumber) && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                  <Shield size={20} className="mr-2 text-gray-600" />
-                  Informations d'assurance
-                </h3>
-                <div className="space-y-2">
-                  {patient.insurance?.provider && (
-                    <div>
-                      <span className="text-sm font-medium text-gray-500">Mutuelle: </span>
-                      <span className="text-gray-900">{patient.insurance.provider}</span>
-                    </div>
-                  )}
-                  {patient.insurance?.policyNumber && (
-                    <div>
-                      <span className="text-sm font-medium text-gray-500">Numéro d'assuré: </span>
-                      <span className="text-gray-900">{patient.insurance.policyNumber}</span>
-                    </div>
-                  )}
-                  {patient.insurance?.expiryDate && (
-                    <div>
-                      <span className="text-sm font-medium text-gray-500">Date d'expiration: </span>
-                      <span className="text-gray-900">{new Date(patient.insurance.expiryDate).toLocaleDateString('fr-FR')}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            
 
             {/* AJOUT: Section Traitement ostéopathique - Information manquante */}
             {patient.osteopathicTreatment && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
                   <Stethoscope size={20} className="mr-2 text-gray-600" />
                   Traitement ostéopathique
                 </h3>
@@ -1331,14 +1222,14 @@ const PatientDetail: React.FC = () => {
 
             {/* AJOUT: Section Historique des traitements - Information manquante */}
             {patient.treatmentHistory && patient.treatmentHistory.length > 0 && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
                   <History size={20} className="mr-2 text-gray-600" />
                   Historique des traitements
                 </h3>
                 <div className="space-y-4">
                   {patient.treatmentHistory.map((treatment, index) => (
-                    <div key={index} className="border-l-4 border-primary-200 pl-4 py-2">
+                    <div key={index} className="py-2 pl-4 border-l-4 border-primary-200">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-medium text-gray-900">{treatment.treatment}</span>
                         {treatment.date && (
@@ -1351,7 +1242,7 @@ const PatientDetail: React.FC = () => {
                         <p className="text-sm text-gray-600">Prestataire: {treatment.provider}</p>
                       )}
                       {treatment.notes && (
-                        <p className="text-sm text-gray-600 mt-1">{treatment.notes}</p>
+                        <p className="mt-1 text-sm text-gray-600">{treatment.notes}</p>
                       )}
                     </div>
                   ))}
@@ -1359,110 +1250,19 @@ const PatientDetail: React.FC = () => {
               </div>
             )}
 
-            {/* AJOUT: Section Rendez-vous passés - Information manquante */}
-            {SHOW_PAST_APPOINTMENTS && patient.pastAppointments && patient.pastAppointments.length > 0 && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                  <Calendar size={20} className="mr-2 text-gray-600" />
-                  Rendez-vous passés
-                </h3>
-                <div className="space-y-3">
-                  {patient.pastAppointments.slice(0, 5).map((appointment, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <div className="font-medium text-gray-900">
-                          {new Date(appointment.date).toLocaleDateString('fr-FR')} à{' '}
-                          {new Date(appointment.date).toLocaleTimeString('fr-FR', { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })}
-                        </div>
-                        {appointment.notes && (
-                          <p className="text-sm text-gray-600 mt-1">{appointment.notes}</p>
-                        )}
-                      </div>
-                      {appointment.isHistorical && (
-                        <span className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded-full">
-                          Historique
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                  {patient.pastAppointments.length > 5 && (
-                    <p className="text-sm text-gray-500 text-center">
-                      ... et {patient.pastAppointments.length - 5} autre(s) rendez-vous
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
+            
 
-            {/* AJOUT: Section Tags/Symptômes - Information manquante */}
-            {patient.tags && patient.tags.length > 0 && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                  <Tag size={20} className="mr-2 text-gray-600" />
-                  Symptômes / Syndromes
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {patient.tags.map((tag, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-primary-50 text-primary-700 border border-primary-200"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+            
 
-            {/* AJOUT: Section Documents - Information manquante */}
-            {patient.documents && patient.documents.length > 0 && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                  <FileText size={20} className="mr-2 text-gray-600" />
-                  Documents médicaux ({patient.documents.length})
-                </h3>
-                <div className="space-y-2">
-                  {patient.documents.slice(0, 3).map((document, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center">
-                        <FileText size={16} className="text-gray-500 mr-2" />
-                        <div>
-                          <div className="font-medium text-gray-900">{document.originalName || document.name}</div>
-                          <div className="text-sm text-gray-500">
-                            {document.category && `${document.category} • `}
-                            {new Date(document.uploadedAt).toLocaleDateString('fr-FR')}
-                          </div>
-                        </div>
-                      </div>
-                      <a
-                        href={document.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary-600 hover:text-primary-700"
-                      >
-                        <Eye size={16} />
-                      </a>
-                    </div>
-                  ))}
-                  {patient.documents.length > 3 && (
-                    <p className="text-sm text-gray-500 text-center">
-                      ... et {patient.documents.length - 3} autre(s) document(s)
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
+            
 
             {/* AJOUT: Section Métadonnées du dossier - Informations manquantes */}
-            <div className="bg-white rounded-xl shadow p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+            <div className="p-6 bg-white shadow rounded-xl">
+              <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
                 <Info size={20} className="mr-2 text-gray-600" />
                 Informations du dossier
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <span className="text-sm font-medium text-gray-500">Créé le: </span>
                   <span className="text-gray-900">
@@ -1483,7 +1283,7 @@ const PatientDetail: React.FC = () => {
                 )}
                 {patient.isTestData && (
                   <div>
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                    <span className="inline-flex items-center px-2 py-1 text-xs font-medium text-yellow-800 bg-yellow-100 rounded-full">
                       Données de test
                     </span>
                   </div>
@@ -1492,7 +1292,7 @@ const PatientDetail: React.FC = () => {
             </div>
 
             {/* AJOUT: Dernières consultations (aperçu rapide) */}
-            <div className="bg-white rounded-xl shadow p-6">
+            <div className="p-6 bg-white shadow rounded-xl">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-gray-900">Dernières consultations</h3>
                 <Button
@@ -1507,7 +1307,7 @@ const PatientDetail: React.FC = () => {
               {consultations.length > 0 ? (
                 <div className="space-y-3">
                   {consultations.slice(0, 3).map((consultation) => (
-                    <div key={consultation.id} className="p-3 bg-gray-50 rounded-lg">
+                    <div key={consultation.id} className="p-3 rounded-lg bg-gray-50">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-900">
                           {formatDateTime(consultation.date)}
@@ -1526,18 +1326,18 @@ const PatientDetail: React.FC = () => {
                     </div>
                   ))}
                   {consultations.length > 3 && (
-                    <p className="text-sm text-gray-500 text-center">
+                    <p className="text-sm text-center text-gray-500">
                       +{consultations.length - 3} autres consultations
                     </p>
                   )}
                 </div>
               ) : (
-                <p className="text-gray-500 italic text-center py-4">Aucune consultation enregistrée</p>
+                <p className="py-4 italic text-center text-gray-500">Aucune consultation enregistrée</p>
               )}
             </div>
 
             {/* AJOUT: Factures récentes (aperçu rapide) */}
-            <div className="bg-white rounded-xl shadow p-6">
+            <div className="p-6 bg-white shadow rounded-xl">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-gray-900">Factures récentes</h3>
                 <Button
@@ -1552,7 +1352,7 @@ const PatientDetail: React.FC = () => {
               {invoices.length > 0 ? (
                 <div className="space-y-3">
                   {invoices.slice(0, 3).map((invoice) => (
-                    <div key={invoice.id} className="p-3 bg-gray-50 rounded-lg">
+                    <div key={invoice.id} className="p-3 rounded-lg bg-gray-50">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-900">
                           {invoice.number}
@@ -1570,24 +1370,24 @@ const PatientDetail: React.FC = () => {
                     </div>
                   ))}
                   {invoices.length > 3 && (
-                    <p className="text-sm text-gray-500 text-center">
+                    <p className="text-sm text-center text-gray-500">
                       +{invoices.length - 3} autres factures
                     </p>
                   )}
                 </div>
               ) : (
-                <p className="text-gray-500 italic text-center py-4">Aucune facture créée</p>
+                <p className="py-4 italic text-center text-gray-500">Aucune facture créée</p>
               )}
             </div>
 
             {/* AJOUT: Alertes et informations importantes */}
-            <div className="bg-white rounded-xl shadow p-6 lg:col-span-2">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Alertes et informations importantes</h3>
+            <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
+              <h3 className="mb-4 text-lg font-medium text-gray-900">Alertes et informations importantes</h3>
               <div className="space-y-3">
                 {/* Alerte pour prochain rendez-vous */}
                 {patient.nextAppointment && (
-                  <div className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <Calendar size={16} className="text-blue-600 mr-3" />
+                  <div className="flex items-center p-3 border border-blue-200 rounded-lg bg-blue-50">
+                    <Calendar size={16} className="mr-3 text-blue-600" />
                     <div>
                       <p className="text-sm font-medium text-blue-900">Prochain rendez-vous programmé</p>
                       <p className="text-sm text-blue-700">
@@ -1599,8 +1399,8 @@ const PatientDetail: React.FC = () => {
                 
                 {/* Alerte pour factures impayées */}
                 {invoices.filter(i => i.status === 'draft' || i.status === 'sent').length > 0 && (
-                  <div className="flex items-center p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <AlertCircle size={16} className="text-yellow-600 mr-3" />
+                  <div className="flex items-center p-3 border border-yellow-200 rounded-lg bg-yellow-50">
+                    <AlertCircle size={16} className="mr-3 text-yellow-600" />
                     <div>
                       <p className="text-sm font-medium text-yellow-900">
                         {invoices.filter(i => i.status === 'draft' || i.status === 'sent').length} facture(s) en attente de paiement
@@ -1614,8 +1414,8 @@ const PatientDetail: React.FC = () => {
                 
                 {/* Alerte si aucune consultation récente */}
                 {consultations.length === 0 && (
-                  <div className="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                    <Stethoscope size={16} className="text-gray-600 mr-3" />
+                  <div className="flex items-center p-3 border border-gray-200 rounded-lg bg-gray-50">
+                    <Stethoscope size={16} className="mr-3 text-gray-600" />
                     <div>
                       <p className="text-sm font-medium text-gray-900">Aucune consultation enregistrée</p>
                       <p className="text-sm text-gray-600">Commencez par ajouter une première consultation</p>
@@ -1627,8 +1427,8 @@ const PatientDetail: React.FC = () => {
                 {patient.nextAppointment && 
                  invoices.filter(i => i.status === 'draft' || i.status === 'sent').length === 0 && 
                  consultations.length > 0 && (
-                  <div className="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <CheckCircle size={16} className="text-green-600 mr-3" />
+                  <div className="flex items-center p-3 border border-green-200 rounded-lg bg-green-50">
+                    <CheckCircle size={16} className="mr-3 text-green-600" />
                     <div>
                       <p className="text-sm font-medium text-green-900">Dossier à jour</p>
                       <p className="text-sm text-green-700">Toutes les informations sont complètes</p>
@@ -1639,22 +1439,22 @@ const PatientDetail: React.FC = () => {
             </div>
 
             {/* Medical History */}
-            <div className="bg-white rounded-xl shadow p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Historique médical</h3>
+            <div className="p-6 bg-white shadow rounded-xl">
+              <h3 className="mb-4 text-lg font-medium text-gray-900">Historique médical</h3>
               {patient.medicalHistory ? (
-                <div className="prose prose-sm max-w-none">
+                <div className="prose-sm prose max-w-none">
                   <p className="text-gray-700 whitespace-pre-wrap">
                     {cleanDecryptedField(patient.medicalHistory, false, 'Aucun historique médical renseigné')}
                   </p>
                 </div>
               ) : (
-                <p className="text-gray-500 italic">Aucun historique médical renseigné</p>
+                <p className="italic text-gray-500">Aucun historique médical renseigné</p>
               )}
             </div>
 
             {/* AJOUT: Actions rapides */}
-            <div className="bg-white rounded-xl shadow p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Actions rapides</h3>
+            <div className="p-6 bg-white shadow rounded-xl">
+              <h3 className="mb-4 text-lg font-medium text-gray-900">Actions rapides</h3>
               <div className="grid grid-cols-1 gap-3">
                 <Button
                   variant="outline"
@@ -1693,9 +1493,9 @@ const PatientDetail: React.FC = () => {
 
             {/* Current Treatment */}
             {patient.currentTreatment && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Traitement actuel</h3>
-                <div className="prose prose-sm max-w-none">
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="mb-4 text-lg font-medium text-gray-900">Traitement actuel</h3>
+                <div className="prose-sm prose max-w-none">
                   <p className="text-gray-700 whitespace-pre-wrap">
                     {cleanDecryptedField(patient.currentTreatment, false, 'Aucun traitement actuel')}
                   </p>
@@ -1705,9 +1505,9 @@ const PatientDetail: React.FC = () => {
 
             {/* Consultation Reason */}
             {patient.consultationReason && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Motif de consultation</h3>
-                <div className="prose prose-sm max-w-none">
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="mb-4 text-lg font-medium text-gray-900">Motif de consultation</h3>
+                <div className="prose-sm prose max-w-none">
                   <p className="text-gray-700 whitespace-pre-wrap">
                     {cleanDecryptedField(patient.consultationReason, false, 'Aucun motif spécifique')}
                   </p>
@@ -1717,9 +1517,9 @@ const PatientDetail: React.FC = () => {
 
             {/* Medical Antecedents */}
             {patient.medicalAntecedents && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Antécédents médicaux</h3>
-                <div className="prose prose-sm max-w-none">
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="mb-4 text-lg font-medium text-gray-900">Antécédents médicaux</h3>
+                <div className="prose-sm prose max-w-none">
                   <p className="text-gray-700 whitespace-pre-wrap">
                     {cleanDecryptedField(patient.medicalAntecedents, false, 'Aucun antécédent médical renseigné')}
                   </p>
@@ -1729,9 +1529,9 @@ const PatientDetail: React.FC = () => {
 
             {/* Osteopathic Treatment */}
             {patient.osteopathicTreatment && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Traitement ostéopathique</h3>
-                <div className="prose prose-sm max-w-none">
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="mb-4 text-lg font-medium text-gray-900">Traitement ostéopathique</h3>
+                <div className="prose-sm prose max-w-none">
                   <p className="text-gray-700 whitespace-pre-wrap">
                     {cleanDecryptedField(patient.osteopathicTreatment, false, 'Aucun traitement ostéopathique spécifique')}
                   </p>
@@ -1741,9 +1541,9 @@ const PatientDetail: React.FC = () => {
 
             {/* Notes */}
             {patient.notes && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Notes</h3>
-                <div className="prose prose-sm max-w-none">
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="mb-4 text-lg font-medium text-gray-900">Notes</h3>
+                <div className="prose-sm prose max-w-none">
                   <p className="text-gray-700 whitespace-pre-wrap">
                     {cleanDecryptedField(patient.notes, false, 'Aucune note')}
                   </p>
@@ -1753,8 +1553,8 @@ const PatientDetail: React.FC = () => {
 
             {/* Insurance */}
             {patient.insurance && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Assurance</h3>
+              <div className="p-6 bg-white shadow rounded-xl">
+                <h3 className="mb-4 text-lg font-medium text-gray-900">Assurance</h3>
                 <div className="space-y-2">
                   <p className="text-gray-700">
                     <span className="font-medium">Mutuelle:</span> {cleanDecryptedField(patient.insurance.provider, false, 'Non renseignée')}
@@ -1770,11 +1570,11 @@ const PatientDetail: React.FC = () => {
 
             {/* Treatment History */}
             {patient.treatmentHistory && patient.treatmentHistory.length > 0 && (
-              <div className="bg-white rounded-xl shadow p-6 lg:col-span-2">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Historique des traitements</h3>
+              <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
+                <h3 className="mb-4 text-lg font-medium text-gray-900">Historique des traitements</h3>
                 <div className="space-y-4">
                   {patient.treatmentHistory.map((treatment, index) => (
-                    <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div key={index} className="p-4 border border-gray-200 rounded-lg">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-900">
                           {formatDate(treatment.date)}
@@ -1783,7 +1583,7 @@ const PatientDetail: React.FC = () => {
                           <span className="text-sm text-gray-500">{treatment.provider}</span>
                         )}
                       </div>
-                      <p className="text-gray-700 mb-2">{treatment.treatment}</p>
+                      <p className="mb-2 text-gray-700">{treatment.treatment}</p>
                       {treatment.notes && (
                         <p className="text-sm text-gray-500">{treatment.notes}</p>
                       )}
@@ -1794,14 +1594,14 @@ const PatientDetail: React.FC = () => {
             )}
 
             {/* Past Appointments */}
-            {SHOW_PAST_APPOINTMENTS && patient.pastAppointments && patient.pastAppointments.length > 0 && (
-              <div className="bg-white rounded-xl shadow p-6 lg:col-span-2">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Rendez-vous passés</h3>
+            {patient.pastAppointments && patient.pastAppointments.length > 0 && (
+              <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
+                <h3 className="mb-4 text-lg font-medium text-gray-900">Rendez-vous passés</h3>
                 <div className="space-y-3">
                   {patient.pastAppointments.map((appointment, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
                       <div className="flex items-center">
-                        <History size={16} className="text-gray-400 mr-3" />
+                        <History size={16} className="mr-3 text-gray-400" />
                         <div>
                           <div className="text-sm font-medium text-gray-900">
                             {formatDate(appointment.date.split('T')[0])} à {appointment.date.split('T')[1]?.slice(0, 5)}
@@ -1822,7 +1622,7 @@ const PatientDetail: React.FC = () => {
 
         {activeTab === 'consultations' && (
           <div className="space-y-4">
-            <div className="flex justify-between items-center">
+            <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium text-gray-900">Consultations</h3>
               <Button
                 variant="primary"
@@ -1834,10 +1634,10 @@ const PatientDetail: React.FC = () => {
             </div>
 
             {consultations.length === 0 ? (
-              <div className="text-center py-12 bg-white rounded-xl shadow">
-                <Stethoscope size={48} className="mx-auto text-gray-300 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-1">Aucune consultation</h3>
-                <p className="text-gray-500 mb-4">
+              <div className="py-12 text-center bg-white shadow rounded-xl">
+                <Stethoscope size={48} className="mx-auto mb-4 text-gray-300" />
+                <h3 className="mb-1 text-lg font-medium text-gray-900">Aucune consultation</h3>
+                <p className="mb-4 text-gray-500">
                   Aucune consultation n'a encore été enregistrée pour ce patient.
                 </p>
                 <Button
@@ -1851,10 +1651,10 @@ const PatientDetail: React.FC = () => {
             ) : (
               <div className="space-y-4">
                 {consultations.map((consultation) => (
-                  <div key={consultation.id} className="bg-white rounded-xl shadow p-6">
+                  <div key={consultation.id} className="p-6 bg-white shadow rounded-xl">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
+                        <div className="flex items-center mb-2 space-x-3">
                           <h4 className="text-lg font-medium text-gray-900">
                             {formatDateTime(consultation.date)}
                           </h4>
@@ -1862,7 +1662,7 @@ const PatientDetail: React.FC = () => {
                             {getConsultationStatusText(consultation.status)}
                           </span>
                         </div>
-                        <div className="flex items-center text-sm text-gray-500 space-x-4">
+                        <div className="flex items-center space-x-4 text-sm text-gray-500">
                           <div className="flex items-center">
                             <Clock size={14} className="mr-1" />
                             <span>{consultation.duration || 60} min</span>
@@ -1903,14 +1703,14 @@ const PatientDetail: React.FC = () => {
 
                     <div className="space-y-4">
                       <div>
-                        <h5 className="text-sm font-medium text-gray-700 mb-1">Motif</h5>
+                        <h5 className="mb-1 text-sm font-medium text-gray-700">Motif</h5>
                         <p className="text-gray-900">
                           {cleanDecryptedField(consultation.reason, false, 'Consultation ostéopathique')}
                         </p>
                       </div>
 
                       <div>
-                        <h5 className="text-sm font-medium text-gray-700 mb-1">Traitement</h5>
+                        <h5 className="mb-1 text-sm font-medium text-gray-700">Traitement</h5>
                         <p className="text-gray-900 whitespace-pre-wrap">
                           {cleanDecryptedField(consultation.treatment, false, 'Traitement ostéopathique standard')}
                         </p>
@@ -1918,7 +1718,7 @@ const PatientDetail: React.FC = () => {
 
                       {consultation.notes && cleanDecryptedField(consultation.notes, false, '') && (
                         <div>
-                          <h5 className="text-sm font-medium text-gray-700 mb-1">Notes</h5>
+                          <h5 className="mb-1 text-sm font-medium text-gray-700">Notes</h5>
                           <p className="text-gray-900 whitespace-pre-wrap">
                             {cleanDecryptedField(consultation.notes, false, '')}
                           </p>
@@ -1934,7 +1734,7 @@ const PatientDetail: React.FC = () => {
 
         {activeTab === 'invoices' && (
           <div className="space-y-4">
-            <div className="flex justify-between items-center">
+            <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium text-gray-900">Factures</h3>
               <Button
                 variant="primary"
@@ -1946,10 +1746,10 @@ const PatientDetail: React.FC = () => {
             </div>
 
             {invoices.length === 0 ? (
-              <div className="text-center py-12 bg-white rounded-xl shadow">
-                <FileText size={48} className="mx-auto text-gray-300 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-1">Aucune facture</h3>
-                <p className="text-gray-500 mb-4">
+              <div className="py-12 text-center bg-white shadow rounded-xl">
+                <FileText size={48} className="mx-auto mb-4 text-gray-300" />
+                <h3 className="mb-1 text-lg font-medium text-gray-900">Aucune facture</h3>
+                <p className="mb-4 text-gray-500">
                   Aucune facture n'a encore été créée pour ce patient.
                 </p>
                 <Button
@@ -1963,10 +1763,10 @@ const PatientDetail: React.FC = () => {
             ) : (
               <div className="space-y-4">
                 {invoices.map((invoice) => (
-                  <div key={invoice.id} className="bg-white rounded-xl shadow p-6">
+                  <div key={invoice.id} className="p-6 bg-white shadow rounded-xl">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
+                        <div className="flex items-center mb-2 space-x-3">
                           <h4 className="text-lg font-medium text-gray-900">
                             Facture {invoice.number}
                           </h4>
@@ -1974,7 +1774,7 @@ const PatientDetail: React.FC = () => {
                             {getStatusText(invoice.status)}
                           </span>
                         </div>
-                        <div className="flex items-center text-sm text-gray-500 space-x-4">
+                        <div className="flex items-center space-x-4 text-sm text-gray-500">
                           <div className="flex items-center">
                             <Calendar size={14} className="mr-1" />
                             <span>Émise le {formatDate(invoice.issueDate)}</span>
@@ -2016,7 +1816,7 @@ const PatientDetail: React.FC = () => {
 
                     {invoice.notes && (
                       <div>
-                        <h5 className="text-sm font-medium text-gray-700 mb-1">Notes</h5>
+                        <h5 className="mb-1 text-sm font-medium text-gray-700">Notes</h5>
                         <p className="text-gray-900">{invoice.notes}</p>
                       </div>
                     )}
@@ -2030,8 +1830,8 @@ const PatientDetail: React.FC = () => {
         {activeTab === 'documents' && (
           <div className="space-y-6">
             {/* Document Upload Section */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Documents médicaux</h3>
+            <div className="p-6 bg-white rounded-lg shadow">
+              <h3 className="mb-4 text-lg font-medium text-gray-900">Documents médicaux</h3>
               <DocumentUploadManager
                 patientId={patient.id}
                 initialDocuments={patient.documents || []}
@@ -2113,7 +1913,7 @@ const PatientDetail: React.FC = () => {
                                 size="sm"
                                 onClick={() => handleDeleteDocumentNew(index)}
                                 isLoading={isDeleting === index}
-                                className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
+                                className="text-red-600 border-red-200 hover:text-red-700 hover:border-red-300"
                               >
                                 Confirmer
                               </Button>
@@ -2124,7 +1924,7 @@ const PatientDetail: React.FC = () => {
                               size="sm"
                               onClick={() => setShowDeleteConfirm(index)}
                               leftIcon={<Trash2 size={14} />}
-                              className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
+                              className="text-red-600 border-red-200 hover:text-red-700 hover:border-red-300"
                             >
                               Supprimer
                             </Button>
@@ -2134,7 +1934,7 @@ const PatientDetail: React.FC = () => {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="py-8 text-center text-gray-500">
                     <FileText size={48} className="mx-auto mb-4 text-gray-300" />
                     <p>Aucun document médical</p>
                   </div>
