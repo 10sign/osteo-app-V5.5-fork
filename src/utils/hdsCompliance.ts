@@ -118,4 +118,7 @@ class HDSCompliance {
 }
 
 export { SENSITIVE_FIELDS, HDSCompliance };
-export default HDSCompliance;
+
+// Export singleton instance for direct use
+export const hdsCompliance = HDSCompliance.getInstance();
+export default hdsCompliance;
