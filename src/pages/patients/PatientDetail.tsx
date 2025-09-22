@@ -753,6 +753,9 @@ const PatientDetail: React.FC = () => {
     }
   };
 
+  // Feature flag to control visibility of past appointments in overview
+  const SHOW_PAST_APPOINTMENTS = false;
+
   // Formatage de la date et de l'heure
   const formatCurrentDate = (date: Date) => {
     return date.toLocaleDateString('fr-FR', {
@@ -1357,7 +1360,7 @@ const PatientDetail: React.FC = () => {
             )}
 
             {/* AJOUT: Section Rendez-vous passés - Information manquante */}
-            {patient.pastAppointments && patient.pastAppointments.length > 0 && (
+            {SHOW_PAST_APPOINTMENTS && patient.pastAppointments && patient.pastAppointments.length > 0 && (
               <div className="bg-white rounded-xl shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
                   <Calendar size={20} className="mr-2 text-gray-600" />
@@ -1791,7 +1794,7 @@ const PatientDetail: React.FC = () => {
             )}
 
             {/* Past Appointments */}
-            {patient.pastAppointments && patient.pastAppointments.length > 0 && (
+            {SHOW_PAST_APPOINTMENTS && patient.pastAppointments && patient.pastAppointments.length > 0 && (
               <div className="bg-white rounded-xl shadow p-6 lg:col-span-2">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Rendez-vous passés</h3>
                 <div className="space-y-3">
