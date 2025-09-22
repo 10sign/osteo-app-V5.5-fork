@@ -14,7 +14,7 @@ import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '../firebase/config';
 import { Substitute, SubstituteFormData } from '../types/substitute';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
-import { hdsCompliance } from '../utils/hdsCompliance';
+import { HDSCompliance } from '../utils/hdsCompliance';
 
 /**
  * Service pour la gestion des remplaçants
@@ -74,7 +74,7 @@ export class SubstituteService {
       };
 
       // Préparer les données avec conformité HDS
-      const compliantData = hdsCompliance.prepareDataForStorage(
+      const compliantData = HDSCompliance.prepareDataForStorage(
         userData,
         'users',
         auth.currentUser.uid
@@ -139,7 +139,7 @@ export class SubstituteService {
         const data = docSnap.data();
         
         // Déchiffrer les données si nécessaire
-        const decryptedData = hdsCompliance.decryptDataForDisplay(
+        const decryptedData = HDSCompliance.decryptDataForDisplay(
           data,
           'users',
           auth.currentUser.uid
@@ -203,7 +203,7 @@ export class SubstituteService {
         const data = docSnap.data();
         
         // Déchiffrer les données si nécessaire
-        const decryptedData = hdsCompliance.decryptDataForDisplay(
+        const decryptedData = HDSCompliance.decryptDataForDisplay(
           data,
           'users',
           auth.currentUser.uid
@@ -253,7 +253,7 @@ export class SubstituteService {
       };
 
       // Mise à jour avec chiffrement HDS
-      await hdsCompliance.updateCompliantData(
+      await HDSCompliance.updateCompliantData(
         'users',
         substituteId,
         updatesWithMetadata
@@ -406,7 +406,7 @@ export class SubstituteService {
       const osteopathData = osteopathDoc.data();
 
       // Déchiffrer les données si nécessaire
-      const decryptedData = hdsCompliance.decryptDataForDisplay(
+      const decryptedData = HDSCompliance.decryptDataForDisplay(
         osteopathData,
         'users',
         auth.currentUser.uid
