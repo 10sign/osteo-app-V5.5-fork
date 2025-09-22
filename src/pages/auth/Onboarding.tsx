@@ -4,7 +4,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { updateProfile } from 'firebase/auth';
 import { db, storage, auth } from '../../firebase/config';
-import { HDSCompliance } from '../../utils/hdsCompliance';
+import { hdsCompliance } from '../../utils/hdsCompliance';
 import { useAuth } from '../../context/AuthContext';
 import { Building2, Upload, Check, ArrowRight, ArrowLeft } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
@@ -225,6 +225,7 @@ const Onboarding: React.FC = () => {
       
       // Create user profile
       // Use HDSCompliance.updateCompliantData to preserve existing fields like 'role'
+      // Use hdsCompliance.updateCompliantData to preserve existing fields like 'role'
       const profileData: UserProfile = {
         ...profile,
         uid: user.uid,
@@ -232,7 +233,7 @@ const Onboarding: React.FC = () => {
         rates,
       };
       
-      await HDSCompliance.updateCompliantData('users', user.uid, profileData);
+      await hdsCompliance.updateCompliantData('users', user.uid, profileData);
       
       // Update user profile display name if needed
       if (user && (!user.displayName || user.displayName.trim() === '')) {

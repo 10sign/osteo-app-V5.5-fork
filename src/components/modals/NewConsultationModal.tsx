@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, Clock, FileText, User, Plus, Trash2, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import { Patient } from '../../types';
@@ -10,6 +10,7 @@ import { ConsultationService } from '../../services/consultationService';
 import { AppointmentService } from '../../services/appointmentService';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata, moveFile } from '../../utils/documentStorage';
+import { Link } from 'react-router-dom';
 
 interface NewConsultationModalProps {
   isOpen: boolean;
@@ -27,23 +28,19 @@ interface ConsultationFormData {
   time: string;
   duration: number;
   reason: string;
+  consultationReason: string;
+  symptoms: string;
+  currentTreatment: string;
+  ongoingTherapies: string;
+  medicalHistory: string;
+  significantHistory: string;
   treatment: string;
   notes: string;
+  patientNote: string;
   price: number;
   status: string;
   examinations: { value: string }[];
   prescriptions: { value: string }[];
-  // Champs du patient (pré-remplis mais modifiables)
-  patientFirstName: string;
-  patientLastName: string;
-  patientDateOfBirth: string;
-  patientGender: string;
-  patientPhone: string;
-  patientProfession: string;
-  patientEmail: string;
-  patientAddress: string;
-  patientInsurance: string;
-  patientInsuranceNumber: string;
 }
 
 
@@ -73,7 +70,14 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
       examinations: [],
       prescriptions: [],
       date: preselectedDate || new Date().toISOString().split('T')[0],
-      time: preselectedTime || '09:00'
+      time: preselectedTime || '09:00',
+      consultationReason: '',
+      symptoms: '',
+      currentTreatment: '',
+      ongoingTherapies: '',
+      medicalHistory: '',
+      significantHistory: '',
+      patientNote: ''
     }
   });
 
@@ -118,7 +122,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
             const patientData = { ...patientDoc.data(), id: patientDoc.id } as Patient;
             setSelectedPatient(patientData);
             setValue('patientId', preselectedPatientId);
-            fillPatientFields(patientData);
           } else {
             setError('Patient pré-sélectionné non trouvé');
             console.error('Preselected patient not found:', preselectedPatientId);
@@ -160,25 +163,9 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
       setSelectedPatient(patient || null);
       if (patient) {
         console.log('Patient selected from dropdown:', patient.firstName, patient.lastName);
-        fillPatientFields(patient);
       }
     }
   }, [watchedPatientId, patients, isPatientPreselected]);
-
-  // Fill patient fields with existing data
-  const fillPatientFields = (patient: Patient) => {
-    console.log('Filling patient fields for:', patient.firstName, patient.lastName);
-    setValue('patientFirstName', patient.firstName || '');
-    setValue('patientLastName', patient.lastName || '');
-    setValue('patientDateOfBirth', patient.dateOfBirth || '');
-    setValue('patientGender', patient.gender || '');
-    setValue('patientPhone', patient.phone || '');
-    setValue('patientProfession', patient.profession || '');
-    setValue('patientEmail', patient.email || '');
-    setValue('patientAddress', patient.address?.street || '');
-    setValue('patientInsurance', patient.insurance?.provider || '');
-    setValue('patientInsuranceNumber', patient.insurance?.policyNumber || '');
-  };
 
   const onSubmit = async (data: ConsultationFormData) => {
     if (!auth.currentUser) {
@@ -235,8 +222,15 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         osteopathId: auth.currentUser.uid,
         date: consultationDate,
         reason: data.reason,
+        consultationReason: data.consultationReason,
+        symptoms: data.symptoms,
+        currentTreatment: data.currentTreatment,
+        ongoingTherapies: data.ongoingTherapies,
+        medicalHistory: data.medicalHistory,
+        significantHistory: data.significantHistory,
         treatment: data.treatment,
         notes: data.notes,
+        patientNote: data.patientNote,
         duration: data.duration,
         price: data.price,
         status: data.status,
@@ -393,7 +387,12 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                             {preselectedPatientName || (selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : 'Patient inconnu')}
                           </div>
                           <div className="text-sm text-primary-700">
-                            Consultation pour ce patient
+                            <Link 
+                              to={`/patients/${preselectedPatientId || selectedPatient?.id}`}
+                              className="text-primary-600 hover:text-primary-800 underline"
+                            >
+                              Voir le dossier patient
+                            </Link>
                           </div>
                         </div>
                       </div>
@@ -401,7 +400,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                   </div>
                 )}
 
-                {/* Selected Patient Info - Toujours affiché si patient pré-sélectionné */}
                 {/* Date and Time */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -437,7 +435,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
 
                 <div>
                   <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">
-                    Motif de consultation *
+                    Motif principal de consultation *
                   </label>
                   <input
                     type="text"
@@ -452,19 +450,110 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                 </div>
 
                 <div>
+                  <label htmlFor="consultationReason" className="block text-sm font-medium text-gray-700 mb-1">
+                    Raison détaillée de la consultation
+                  </label>
+                  <textarea
+                    id="consultationReason"
+                    rows={3}
+                    className="input w-full resize-none"
+                    {...register('consultationReason')}
+                    placeholder="Description détaillée du motif de consultation..."
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="symptoms" className="block text-sm font-medium text-gray-700 mb-1">
+                    Symptômes observés
+                  </label>
+                  <textarea
+                    id="symptoms"
+                    rows={3}
+                    className="input w-full resize-none"
+                    {...register('symptoms')}
+                    placeholder="Symptômes et signes cliniques observés..."
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
+                    Traitement actuel du patient
+                  </label>
+                  <textarea
+                    id="currentTreatment"
+                    rows={3}
+                    className="input w-full resize-none"
+                    {...register('currentTreatment')}
+                    placeholder="Traitements médicamenteux ou thérapies en cours..."
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="ongoingTherapies" className="block text-sm font-medium text-gray-700 mb-1">
+                    Thérapies en cours
+                  </label>
+                  <textarea
+                    id="ongoingTherapies"
+                    rows={3}
+                    className="input w-full resize-none"
+                    {...register('ongoingTherapies')}
+                    placeholder="Kinésithérapie, autres thérapies complémentaires..."
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="medicalHistory" className="block text-sm font-medium text-gray-700 mb-1">
+                    Historique médical
+                  </label>
+                  <textarea
+                    id="medicalHistory"
+                    rows={4}
+                    className="input w-full resize-none"
+                    {...register('medicalHistory')}
+                    placeholder="Historique médical général du patient..."
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="significantHistory" className="block text-sm font-medium text-gray-700 mb-1">
+                    Antécédents significatifs / Chirurgies
+                  </label>
+                  <textarea
+                    id="significantHistory"
+                    rows={4}
+                    className="input w-full resize-none"
+                    {...register('significantHistory')}
+                    placeholder="Antécédents médicaux significatifs, chirurgies, hospitalisations..."
+                  />
+                </div>
+
+                <div>
                   <label htmlFor="treatment" className="block text-sm font-medium text-gray-700 mb-1">
-                    Traitement effectué *
+                    Traitement ostéopathique effectué *
                   </label>
                   <textarea
                     id="treatment"
                     rows={4}
                     className={`input w-full resize-none ${errors.treatment ? 'border-error focus:border-error focus:ring-error' : ''}`}
                     {...register('treatment', { required: 'Ce champ est requis' })}
-                    placeholder="Décrivez le traitement effectué..."
+                    placeholder="Décrivez le traitement ostéopathique effectué..."
                   />
                   {errors.treatment && (
                     <p className="mt-1 text-sm text-error">{errors.treatment.message}</p>
                   )}
+                </div>
+
+                <div>
+                  <label htmlFor="patientNote" className="block text-sm font-medium text-gray-700 mb-1">
+                    Note sur le patient
+                  </label>
+                  <textarea
+                    id="patientNote"
+                    rows={3}
+                    className="input w-full resize-none"
+                    {...register('patientNote')}
+                    placeholder="Notes personnelles sur le patient..."
+                  />
                 </div>
 
                 {/* Examens demandés */}
