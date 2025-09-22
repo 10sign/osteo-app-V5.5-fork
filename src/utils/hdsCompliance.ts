@@ -55,8 +55,15 @@ const SENSITIVE_FIELDS: Record<string, string[]> = {
   ],
   consultations: [
     'reason',
+    'consultationReason',
+    'symptoms',
+    'currentTreatment',
+    'ongoingTherapies',
+    'medicalHistory',
+    'significantHistory',
     'treatment',
-    'notes'
+    'notes',
+    'patientNote'
   ],
   invoices: [
     'patientName',
