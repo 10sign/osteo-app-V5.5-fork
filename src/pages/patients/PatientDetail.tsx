@@ -37,8 +37,6 @@ import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { format, differenceInYears } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { patientCache } from '../../utils/patientCache';
-import DocumentUploadManager from '../../components/ui/DocumentUploadManager';
-import { DocumentMetadata } from '../../utils/documentStorage';
 
 interface Consultation {
   id: string;
@@ -73,7 +71,6 @@ const PatientDetail: React.FC = () => {
   const [isNewConsultationModalOpen, setIsNewConsultationModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [refreshing, setRefreshing] = useState(false);
-  const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -128,9 +125,6 @@ const PatientDetail: React.FC = () => {
 
       setPatient(patientWithId);
       patientCache.set(id, patientWithId);
-
-      // Initialize patient documents
-      setPatientDocuments(patientWithId.documents || []);
 
       // Load consultations
       await loadConsultations();
@@ -217,18 +211,6 @@ const PatientDetail: React.FC = () => {
     } catch (error) {
       console.error('Error loading invoices:', error);
     }
-  };
-
-  const handleDocumentsUpdate = (documents: DocumentMetadata[]) => {
-    setPatientDocuments(documents);
-    // Update patient state as well
-    if (patient) {
-      setPatient(prev => prev ? { ...prev, documents } : null);
-    }
-  };
-
-  const handleDocumentError = (error: string) => {
-    setError(error);
   };
 
   const handleRefresh = () => {
@@ -944,21 +926,6 @@ const PatientDetail: React.FC = () => {
           <div className="space-y-6">
             <h3 className="text-lg font-medium text-gray-900">Dossier médical complet</h3>
             
-            {/* Document Upload Manager */}
-            <div className="bg-white rounded-xl shadow p-6">
-              <h4 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                <FileText size={20} className="mr-2 text-primary-600" />
-                Documents médicaux
-              </h4>
-              <DocumentUploadManager
-                patientId={patient.id}
-                initialDocuments={patientDocuments}
-                onUploadSuccess={handleDocumentsUpdate}
-                onUploadError={handleDocumentError}
-                disabled={false}
-              />
-            </div>
-
             {/* Complete Medical History */}
             <div className="bg-white rounded-xl shadow p-6">
               <h4 className="font-medium text-gray-900 mb-4">Historique médical complet</h4>
@@ -1028,6 +995,50 @@ const PatientDetail: React.FC = () => {
               </div>
             )}
 
+            {/* Documents */}
+            {patient.documents && patient.documents.length > 0 && (
+              <div className="bg-white rounded-xl shadow p-6">
+                <h4 className="font-medium text-gray-900 mb-4">Documents médicaux</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {patient.documents.map((document, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <FileText size={16} className="mr-2 text-gray-500" />
+                          <div>
+                            <div className="font-medium text-gray-900">{document.originalName}</div>
+                            <div className="text-sm text-gray-500">{document.category}</div>
+                          </div>
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            leftIcon={<Eye size={14} />}
+                            onClick={() => window.open(document.url, '_blank')}
+                          >
+                            Voir
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            leftIcon={<Download size={14} />}
+                            onClick={() => {
+                              const link = document.createElement('a');
+                              link.href = document.url;
+                              link.download = document.originalName;
+                              link.click();
+                            }}
+                          >
+                            Télécharger
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
