@@ -1,7 +1,7 @@
 import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { Patient } from '../types';
-import { HDSCompliance } from '../utils/hdsCompliance';
+import { hdsCompliance } from '../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import { ConsultationService } from './consultationService';
 import { getEffectiveOsteopathId } from '../utils/substituteAuth';
@@ -29,7 +29,7 @@ export class PatientService {
       );
       
       // Récupération avec déchiffrement HDS
-      const patientData = await HDSCompliance.getCompliantData(
+      const patientData = await hdsCompliance.getCompliantData(
         this.COLLECTION_NAME,
         patientId
       );
@@ -86,7 +86,7 @@ export class PatientService {
       
       for (const docSnap of snapshot.docs) {
         const data = docSnap.data();
-        const decryptedData = HDSCompliance.decryptDataForDisplay(
+        const decryptedData = hdsCompliance.decryptDataForDisplay(
           data,
           this.COLLECTION_NAME,
           effectiveOsteopathId
@@ -139,7 +139,7 @@ export class PatientService {
       };
       
       // Sauvegarde avec chiffrement HDS
-      await HDSCompliance.saveCompliantData(
+      await hdsCompliance.saveCompliantData(
         this.COLLECTION_NAME,
         patientId,
         dataWithMetadata
@@ -201,7 +201,7 @@ export class PatientService {
       };
       
       // Mise à jour avec chiffrement HDS
-      await HDSCompliance.updateCompliantData(
+      await hdsCompliance.updateCompliantData(
         this.COLLECTION_NAME,
         patientId,
         updatesWithMetadata

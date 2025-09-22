@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, RefreshCw, CheckCircle, AlertTriangle, Database, ArrowRight } from 'lucide-react';
 import { Button } from './Button';
-import { HDSCompliance } from '../../utils/hdsCompliance';
+import { hdsCompliance } from '../../utils/hdsCompliance';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 
@@ -168,7 +168,7 @@ const HDSDataMigrationTool: React.FC<HDSDataMigrationToolProps> = ({ onClose, on
       // Migrer les patients
       for (const patient of corruptedData.patients) {
         try {
-          const success = await HDSCompliance.repairCorruptedData('patients', patient.id);
+          const success = await hdsCompliance.repairCorruptedData('patients', patient.id);
           if (success) {
             successCount++;
           } else {
@@ -183,7 +183,7 @@ const HDSDataMigrationTool: React.FC<HDSDataMigrationToolProps> = ({ onClose, on
       // Migrer les consultations
       for (const consultation of corruptedData.consultations) {
         try {
-          const success = await HDSCompliance.repairCorruptedData('consultations', consultation.id);
+          const success = await hdsCompliance.repairCorruptedData('consultations', consultation.id);
           if (success) {
             successCount++;
           } else {
@@ -198,7 +198,7 @@ const HDSDataMigrationTool: React.FC<HDSDataMigrationToolProps> = ({ onClose, on
       // Migrer les factures
       for (const invoice of corruptedData.invoices) {
         try {
-          const success = await HDSCompliance.repairCorruptedData('invoices', invoice.id);
+          const success = await hdsCompliance.repairCorruptedData('invoices', invoice.id);
           if (success) {
             successCount++;
           } else {

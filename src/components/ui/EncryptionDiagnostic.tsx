@@ -3,7 +3,7 @@ import { Shield, AlertTriangle, CheckCircle, RefreshCw, Key, Database } from 'lu
 import { Button } from './Button';
 import { auth } from '../../firebase/config';
 import { encryptData, decryptData, isEncrypted, isValidEncryptedFormat } from '../../utils/encryption';
-import { HDSCompliance } from '../../utils/hdsCompliance';
+import { hdsCompliance } from '../../utils/hdsCompliance';
 
 interface EncryptionDiagnosticProps {
   onClose?: () => void;
@@ -43,7 +43,7 @@ const EncryptionDiagnostic: React.FC<EncryptionDiagnosticProps> = ({ onClose }) 
           error: null
         },
         hdsCompliance: {
-          enabled: HDSCompliance.isEnabled(),
+          enabled: hdsCompliance.isEnabled(),
           version: null
         }
       };
