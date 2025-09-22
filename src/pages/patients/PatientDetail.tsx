@@ -1148,27 +1148,28 @@ const PatientDetail: React.FC = () => {
               </div>
             )}
 
-            {/* Historique des traitements */}
-            {patient.treatmentHistory && patient.treatmentHistory.length > 0 && (
+            {/* AJOUT : Section Rendez-vous passés - Champ manquant dans la vue d'ensemble */}
+            {patient.pastAppointments && patient.pastAppointments.length > 0 && (
               <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                  <History size={20} className="mr-2 text-gray-600" />
-                  Historique des traitements
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <Calendar size={20} className="mr-2 text-gray-600" />
+                  Rendez-vous passés
                 </h3>
-                <div className="space-y-4">
-                  {patient.treatmentHistory.map((treatment, index) => (
-                    <div key={index} className="border-l-4 border-primary-200 pl-4 py-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-gray-900">
-                          {treatment.date ? new Date(treatment.date).toLocaleDateString('fr-FR') : 'Date non spécifiée'}
-                        </span>
-                        {treatment.provider && (
-                          <span className="text-sm text-gray-500">{treatment.provider}</span>
+                <div className="space-y-3">
+                  {patient.pastAppointments.map((appointment, index) => (
+                    <div key={index} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          {appointment.date ? new Date(appointment.date).toLocaleDateString('fr-FR') : 'Date non spécifiée'}
+                        </div>
+                        {appointment.notes && (
+                          <p className="text-sm text-gray-600 mt-1">{appointment.notes}</p>
                         )}
                       </div>
-                      <p className="text-gray-700">{treatment.treatment}</p>
-                      {treatment.notes && (
-                        <p className="text-sm text-gray-600 mt-1">{treatment.notes}</p>
+                      {appointment.isHistorical && (
+                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                          Historique
+                        </span>
                       )}
                     </div>
                   ))}
