@@ -73,7 +73,7 @@ const Patients: React.FC = () => {
       }
       
       // ✅ Sort by lastName in memory instead of using orderBy
-      patientsList.sort((a, b) => a.lastName.localeCompare(b.lastName));
+      patientsList.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
 
       // Convertir les dates en objets Date pour le tri
       patientsList.forEach(patient => {
