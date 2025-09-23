@@ -560,7 +560,7 @@ const Consultations: React.FC = () => {
     setError(null);
 
     // Chargement initial
-    Promise.all([loadAppointments(), loadConsultations()])
+    Promise.all([loadAppointments(), loadConsultations(), loadConsultationsForCalendar()])
       .then(() => {
         console.log('✅ Initial data load completed');
         setLoading(false);
@@ -604,7 +604,10 @@ const Consultations: React.FC = () => {
         (snapshot) => {
           console.log('🔄 Consultations real-time update received, docs count:', snapshot.docs.length);
           if (!loading) {
-            loadConsultations().catch(console.error);
+            Promise.all([
+              loadConsultations(),
+              loadConsultationsForCalendar()
+            ]).catch(console.error);
           }
         },
         (error) => {
@@ -660,7 +663,11 @@ const Consultations: React.FC = () => {
       setRefreshing(true);
     }
     try {
-      await Promise.all([loadAppointments(), loadConsultations()]);
+      await Promise.all([
+        loadAppointments(),
+        loadConsultations(),
+        loadConsultationsForCalendar()
+      ]);
       console.log('✅ Manual refresh completed');
       setLastRefreshTime(new Date());
     } catch (error) {

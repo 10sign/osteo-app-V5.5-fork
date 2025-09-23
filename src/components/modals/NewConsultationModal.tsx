@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, Clock, FileText, User, Plus, Trash2, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import { Patient } from '../../types';
@@ -69,7 +69,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
     defaultValues: {
       duration: 60,
       price: 60,
-      status: 'completed',
+      status: 'draft',
       examinations: [],
       prescriptions: [],
       date: preselectedDate || new Date().toISOString().split('T')[0],
@@ -218,7 +218,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         endTime: endTime,
         duration: data.duration,
         type: data.reason || 'Consultation ostéopathique',
-        status: 'completed',
+        status: 'confirmed',
         location: {
           type: 'office',
           name: 'Cabinet principal'
