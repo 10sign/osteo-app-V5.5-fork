@@ -1204,3 +1204,30 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                   </h3>
                   <p className="text-gray-600 mb-6">
                     Vous avez des modifications non sauvegardées. Êtes-vous sûr de
+                    vouloir fermer sans sauvegarder ?
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleCancelClose}
+                    >
+                      Continuer l'édition
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={handleConfirmClose}
+                    >
+                      Fermer sans sauvegarder
+                    </Button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};
