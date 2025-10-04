@@ -5,6 +5,8 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
+import AutoResizeTextarea from '../ui/AutoResizeTextarea';
+import SuccessBanner from '../ui/SuccessBanner';
 import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { HDSCompliance } from '../../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../../utils/auditLogger';
@@ -44,6 +46,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
   const [success, setSuccess] = useState<string | null>(null);
   const [consultationData, setConsultationData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showSuccessBanner, setShowSuccessBanner] = useState(false);
 
   const { register, handleSubmit, formState: { errors, isValid }, reset, control } = useForm<ConsultationFormData>({
     mode: 'onChange',
@@ -199,11 +202,12 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
       
       console.log('✅ Consultation updated successfully in Firestore');
       
-      // Afficher le message de succès
-      setSuccess('Consultation modifiée avec succès');
+      // Afficher le message de succès après que tout soit enregistré
+      setShowSuccessBanner(true);
       
       // Attendre 2 secondes avant de fermer le modal
       setTimeout(() => {
+        setShowSuccessBanner(false);
         reset();
         onSuccess();
         onClose();
@@ -246,6 +250,11 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-4">
+              <SuccessBanner
+                message="Consultation modifiée avec succès. Toutes les informations saisies ont été sauvegardées."
+                isVisible={showSuccessBanner}
+              />
+              
               {error && (
                 <div className="mb-4 p-3 bg-error/5 border border-error/20 rounded-lg text-error text-sm">
                   {error}
@@ -333,9 +342,10 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       <label htmlFor="treatment" className="block text-sm font-medium text-gray-700 mb-1">
                         Traitement effectué *
                       </label>
-                      <textarea
+                      <AutoResizeTextarea
                         id="treatment"
-                        rows={4}
+                        minRows={4}
+                        maxRows={8}
                         className={`input w-full resize-none ${errors.treatment ? 'border-error focus:border-error focus:ring-error' : ''}`}
                         {...register('treatment', { required: 'Ce champ est requis' })}
                         placeholder="Décrivez le traitement effectué..."
@@ -384,8 +394,9 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                         <div className="space-y-2">
                           {examinationFields.map((field, index) => (
                             <div key={field.id} className="flex items-center space-x-2">
-                              <input
-                                type="text"
+                              <AutoResizeTextarea
+                                minRows={1}
+                                maxRows={3}
                                 className="input flex-1"
                                 placeholder="Ex: Radiographie lombaire..."
                                 {...register(`examinations.${index}.value`)}
@@ -429,8 +440,9 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                         <div className="space-y-2">
                           {prescriptionFields.map((field, index) => (
                             <div key={field.id} className="flex items-center space-x-2">
-                              <input
-                                type="text"
+                              <AutoResizeTextarea
+                                minRows={1}
+                                maxRows={3}
                                 className="input flex-1"
                                 placeholder="Ex: Antalgiques, repos..."
                                 {...register(`prescriptions.${index}.value`)}
@@ -457,9 +469,10 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
                         Notes complémentaires
                       </label>
-                      <textarea
+                      <AutoResizeTextarea
                         id="notes"
-                        rows={3}
+                        minRows={3}
+                        maxRows={6}
                         className="input w-full resize-none"
                         {...register('notes')}
                         placeholder="Notes additionnelles..."
