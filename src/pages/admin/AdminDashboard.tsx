@@ -25,6 +25,7 @@ import SystemConfig from '../../components/admin/SystemConfig';
 import AddUserModal from '../../components/admin/AddUserModal';
 import DataMigrationDashboard from '../../components/admin/DataMigrationDashboard';
 import SubstituteManagement from '../../components/admin/SubstituteManagement';
+import RetroactiveInvoiceGenerator from '../../components/admin/RetroactiveInvoiceGenerator';
 import { trackEvent } from '../../lib/clarityClient';
 import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
 import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
@@ -50,6 +51,7 @@ const AdminDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showEncryptionDiagnostic, setShowEncryptionDiagnostic] = useState(false);
   const [showDataRepairTool, setShowDataRepairTool] = useState(false);
+  const [showRetroactiveInvoiceGenerator, setShowRetroactiveInvoiceGenerator] = useState(false);
 
   useEffect(() => {
     // Charger les statistiques
@@ -279,6 +281,24 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Outil de nettoyage des doublons de patients */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <FileText size={20} className="mr-2 text-accent-600" />
+                  Génération rétroactive de factures
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Génère automatiquement des factures pour toutes les consultations qui n'en ont pas encore. 
+                  Chaque consultation sera associée à une facture de 55€ par défaut.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowRetroactiveInvoiceGenerator(true)}
+                  leftIcon={<FileText size={16} />}
+                >
+                  Générer les factures manquantes
+                </Button>
+              </div>
+              
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
                   <Users size={20} className="mr-2 text-primary-600" />
@@ -568,6 +588,19 @@ const AdminDashboard: React.FC = () => {
             onSuccess={() => {
               setShowDataRepairTool(false);
               setSuccess('Données réparées avec succès. Actualisez vos pages de consultation pour voir les changements.');
+            // setSuccess('Données réparées avec succès. Actualisez vos pages de consultation pour voir les changements.');
+          />
+        </div>
+      )}
+
+      {/* Modal de génération rétroactive de factures */}
+      {showRetroactiveInvoiceGenerator && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <RetroactiveInvoiceGenerator 
+            onClose={() => setShowRetroactiveInvoiceGenerator(false)}
+            onSuccess={() => {
+              setShowRetroactiveInvoiceGenerator(false);
+              // Optionally refresh stats or show success message
             }}
           />
         </div>
