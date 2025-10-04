@@ -9,8 +9,8 @@ import { Patient, PatientFormData, TreatmentHistoryEntry } from '../../types';
 import { validatePatientData } from '../../utils/validation';
 import { ConsultationService } from '../../services/consultationService';
 import { InvoiceService } from '../../services/invoiceService';
+import AutoResizeTextarea from '../ui/AutoResizeTextarea';
 import AutoCapitalizeInput from '../ui/AutoCapitalizeInput';
-import AutoCapitalizeTextarea from '../ui/AutoCapitalizeTextarea';
 import { patientCache } from '../../utils/patientCache';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
@@ -846,9 +846,10 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                   <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
                     Adresse postale complète
                   </label>
-                  <AutoCapitalizeTextarea
+                  <AutoResizeTextarea
                     id="address"
-                    rows={3}
+                    minRows={3}
+                    maxRows={6}
                     className={`input w-full resize-none ${errors.address ? 'border-error focus:border-error focus:ring-error' : ''}`}
                     {...register('address')}
                     placeholder="123 rue des Fleurs, 75001 Paris"
@@ -892,9 +893,10 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                   <label htmlFor="consultationReason" className="block text-sm font-medium text-gray-700 mb-1">
                     Motif de consultation
                   </label>
-                  <AutoCapitalizeTextarea
+                  <AutoResizeTextarea
                     id="consultationReason"
-                    rows={3}
+                    minRows={3}
+                    maxRows={6}
                     className="input w-full resize-none"
                     {...register('consultationReason')}
                     placeholder="Raison principale de la consultation"
@@ -905,9 +907,10 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                   <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
                     Traitement actuel
                   </label>
-                  <AutoCapitalizeTextarea
+                  <AutoResizeTextarea
                     id="currentTreatment"
-                    rows={3}
+                    minRows={3}
+                    maxRows={6}
                     className="input w-full resize-none"
                     {...register('currentTreatment')}
                     placeholder="Traitements médicamenteux ou autres thérapies en cours"
@@ -918,9 +921,10 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                   <label htmlFor="medicalAntecedents" className="block text-sm font-medium text-gray-700 mb-1">
                     Antécédents médicaux
                   </label>
-                  <AutoCapitalizeTextarea
+                  <AutoResizeTextarea
                     id="medicalAntecedents"
-                    rows={4}
+                    minRows={4}
+                    maxRows={8}
                     className="input w-full resize-none"
                     {...register('medicalAntecedents')}
                     placeholder="Antécédents médicaux significatifs, chirurgies, etc."
@@ -931,9 +935,10 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                   <label htmlFor="medicalHistory" className="block text-sm font-medium text-gray-700 mb-1">
                     Historique médical général
                   </label>
-                  <AutoCapitalizeTextarea
+                  <AutoResizeTextarea
                     id="medicalHistory"
-                    rows={4}
+                    minRows={4}
+                    maxRows={8}
                     className="input w-full resize-none"
                     {...register('medicalHistory')}
                   />
@@ -1009,11 +1014,12 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               Traitement
                             </label>
-                            <textarea
+                            <AutoResizeTextarea
                               value={entry.treatment}
                               onChange={(e) => updateTreatmentHistoryEntry(index, 'treatment', e.target.value)}
+                              minRows={2}
+                              maxRows={4}
                               className="input w-full resize-none"
-                              rows={2}
                               placeholder="Description du traitement"
                             />
                           </div>
@@ -1021,11 +1027,12 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               Notes
                             </label>
-                            <textarea
+                            <AutoResizeTextarea
                               value={entry.notes || ''}
                               onChange={(e) => updateTreatmentHistoryEntry(index, 'notes', e.target.value)}
+                              minRows={2}
+                              maxRows={4}
                               className="input w-full resize-none"
-                              rows={2}
                               placeholder="Notes complémentaires"
                             />
                           </div>
@@ -1109,9 +1116,10 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                   <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
                     Notes complémentaires
                   </label>
-                  <AutoCapitalizeTextarea
+                  <AutoResizeTextarea
                     id="notes"
-                    rows={4}
+                    minRows={4}
+                    maxRows={8}
                     className="input w-full resize-none"
                     {...register('notes')}
                     placeholder="Notes générales sur le patient"
@@ -1195,32 +1203,4 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
                     Données non sauvegardées
                   </h3>
                   <p className="text-gray-600 mb-6">
-                    Vous avez des modifications non sauvegardées. Êtes-vous sûr de vouloir fermer sans sauvegarder ?
-                  </p>
-                  <div className="flex items-center justify-end gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleCancelClose}
-                    >
-                      Continuer l'édition
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={handleConfirmClose}
-                    >
-                      Fermer sans sauvegarder
-                    </Button>
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
-    </AnimatePresence>
-  );
-};
-
-export default NewPatientModal;
+                    Vous avez des modifications non sauvegardées. Êtes-vous sûr de

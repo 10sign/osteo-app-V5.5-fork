@@ -231,16 +231,24 @@ export class ConsultationService {
       const docRef = await addDoc(collection(db, 'consultations'), dataToStore);
       const consultationId = docRef.id;
       
-      // Créer automatiquement une facture pour cette consultation (seulement si pas déjà existante)
+      // Créer automatiquement une facture pour cette consultation
       try {
         const { InvoiceService } = await import('./invoiceService');
         
+        // Générer un numéro de facture unique
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const time = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
+        const invoiceNumber = `F-${year}${month}${day}-${time}-${consultationId.slice(-4)}`;
+        
         const invoiceData = {
+          number: invoiceNumber,
           patientId: consultationData.patientId,
           patientName: consultationData.patientName,
           osteopathId: userId,
           consultationId: consultationId,
-          number: `F-${Date.now()}`,
           issueDate: new Date().toISOString().split('T')[0],
           dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // +30 jours
           items: [{
@@ -253,14 +261,14 @@ export class ConsultationService {
           subtotal: consultationData.price || 60,
           tax: 0,
           total: consultationData.price || 60,
-          status: 'paid', // Toujours payé par défaut
+          status: 'draft', // Statut brouillon par défaut
           notes: `Facture générée automatiquement pour la consultation du ${new Date(consultationData.date).toLocaleDateString('fr-FR')}`,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
         
         await InvoiceService.createInvoice(invoiceData);
-        console.log('✅ Facture créée automatiquement pour la consultation:', consultationId);
+        console.log('✅ Facture créée automatiquement pour la consultation:', consultationId, 'Numéro:', invoiceNumber);
       } catch (invoiceError) {
         console.warn('⚠️ Erreur lors de la création de la facture automatique:', invoiceError);
         // Ne pas faire échouer la création de la consultation si la facture échoue

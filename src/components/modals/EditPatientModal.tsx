@@ -6,7 +6,7 @@ import { doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import AutoCapitalizeInput from '../ui/AutoCapitalizeInput';
-import AutoCapitalizeTextarea from '../ui/AutoCapitalizeTextarea';
+import AutoResizeTextarea from '../ui/AutoResizeTextarea';
 import { Patient, PatientFormData, TreatmentHistoryEntry } from '../../types';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
@@ -697,9 +697,10 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                   <label htmlFor="consultationReason" className="block text-sm font-medium text-gray-700 mb-1">
                     Motif de consultation
                   </label>
-                  <textarea
+                  <AutoResizeTextarea
                     id="consultationReason"
-                    rows={3}
+                    minRows={3}
+                    maxRows={6}
                     className="input w-full resize-none"
                     {...register('consultationReason')}
                     placeholder="Raison principale de la consultation"
@@ -710,9 +711,10 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                   <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
                     Traitement actuel
                   </label>
-                  <textarea
+                  <AutoResizeTextarea
                     id="currentTreatment"
-                    rows={3}
+                    minRows={3}
+                    maxRows={6}
                     className="input w-full resize-none"
                     {...register('currentTreatment')}
                     placeholder="Traitements médicamenteux ou autres thérapies en cours"
@@ -723,9 +725,10 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                   <label htmlFor="medicalAntecedents" className="block text-sm font-medium text-gray-700 mb-1">
                     Antécédents médicaux
                   </label>
-                  <textarea
+                  <AutoResizeTextarea
                     id="medicalAntecedents"
-                    rows={4}
+                    minRows={4}
+                    maxRows={8}
                     className="input w-full resize-none"
                     {...register('medicalAntecedents')}
                     placeholder="Antécédents médicaux significatifs, chirurgies, etc."
@@ -736,9 +739,10 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                   <label htmlFor="medicalHistory" className="block text-sm font-medium text-gray-700 mb-1">
                     Historique médical général
                   </label>
-                  <textarea
+                  <AutoResizeTextarea
                     id="medicalHistory"
-                    rows={4}
+                    minRows={4}
+                    maxRows={8}
                     className="input w-full resize-none"
                     {...register('medicalHistory')}
                   />
@@ -815,11 +819,12 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               Traitement
                             </label>
-                            <textarea
+                            <AutoResizeTextarea
                               value={entry.treatment}
                               onChange={(e) => updateTreatmentHistoryEntry(index, 'treatment', e.target.value)}
+                              minRows={2}
+                              maxRows={4}
                               className="input w-full resize-none"
-                              rows={2}
                               placeholder="Description du traitement"
                             />
                           </div>
@@ -827,11 +832,12 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               Notes
                             </label>
-                            <textarea
+                            <AutoResizeTextarea
                               value={entry.notes || ''}
                               onChange={(e) => updateTreatmentHistoryEntry(index, 'notes', e.target.value)}
+                              minRows={2}
+                              maxRows={4}
                               className="input w-full resize-none"
-                              rows={2}
                               placeholder="Notes complémentaires"
                             />
                           </div>
@@ -903,11 +909,12 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               Notes
                             </label>
-                            <textarea
+                            <AutoResizeTextarea
                               value={appointment.notes}
                               onChange={(e) => updatePastAppointment(index, 'notes', e.target.value)}
+                              minRows={2}
+                              maxRows={4}
                               className="input w-full resize-none"
-                              rows={2}
                               placeholder="Motif du rendez-vous, traitement effectué..."
                             />
                           </div>
@@ -989,9 +996,10 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                   <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
                     Note sur le patient
                   </label>
-                  <textarea
+                  <AutoResizeTextarea
                     id="notes"
-                    rows={4}
+                    minRows={4}
+                    maxRows={8}
                     className="input w-full resize-none"
                     {...register('notes')}
                   />
@@ -1001,9 +1009,10 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                   <label htmlFor="osteopathicTreatment" className="block text-sm font-medium text-gray-700 mb-1">
                     Traitement ostéopathique
                   </label>
-                  <textarea
+                  <AutoResizeTextarea
                     id="osteopathicTreatment"
-                    rows={4}
+                    minRows={4}
+                    maxRows={8}
                     className="input w-full resize-none"
                     {...register('osteopathicTreatment')}
                     placeholder="Description du traitement ostéopathique effectué ou à effectuer"

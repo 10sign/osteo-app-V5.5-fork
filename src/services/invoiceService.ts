@@ -27,18 +27,18 @@ export class InvoiceService {
     }
 
     try {
-      // Vérifier s'il existe déjà une facture pour ce patient
-      if (invoiceData.patientId) {
+      // Vérifier s'il existe déjà une facture pour cette consultation spécifique
+      if (invoiceData.consultationId) {
         const existingInvoicesRef = collection(db, 'invoices');
         const existingQuery = query(
           existingInvoicesRef,
-          where('patientId', '==', invoiceData.patientId),
+          where('consultationId', '==', invoiceData.consultationId),
           where('osteopathId', '==', auth.currentUser.uid)
         );
         
         const existingSnapshot = await getDocs(existingQuery);
         if (!existingSnapshot.empty) {
-          console.log('⚠️ Invoice already exists for this patient, skipping creation');
+          console.log('⚠️ Invoice already exists for this consultation, skipping creation');
           return existingSnapshot.docs[0].id;
         }
       }
