@@ -14,7 +14,8 @@ import {
   Clock,
   TrendingUp,
   UserPlus,
-  RefreshCw
+  RefreshCw,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
@@ -33,6 +34,7 @@ import { collection, query, getDocs, getCountFromServer } from 'firebase/firesto
 import { db } from '../../firebase/config';
 import EncryptionDiagnostic from '../../components/ui/EncryptionDiagnostic';
 import DataRepairTool from '../../components/ui/DataRepairTool';
+import { DataMigrationService } from '../../services/dataMigrationService';
 
 const AdminDashboard: React.FC = () => {
   const { user, logout, hasPermission } = useAuth();
@@ -49,6 +51,7 @@ const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [showEncryptionDiagnostic, setShowEncryptionDiagnostic] = useState(false);
   const [showDataRepairTool, setShowDataRepairTool] = useState(false);
   const [showRetroactiveInvoiceGenerator, setShowRetroactiveInvoiceGenerator] = useState(false);
@@ -280,7 +283,7 @@ const AdminDashboard: React.FC = () => {
           
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              {/* Outil de nettoyage des doublons de patients */}
+              {/* Outil de génération rétroactive de factures */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
                   <FileText size={20} className="mr-2 text-accent-600" />
@@ -299,6 +302,7 @@ const AdminDashboard: React.FC = () => {
                 </Button>
               </div>
               
+              {/* Outil de nettoyage des doublons de patients */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
                   <Users size={20} className="mr-2 text-primary-600" />
@@ -588,7 +592,7 @@ const AdminDashboard: React.FC = () => {
             onSuccess={() => {
               setShowDataRepairTool(false);
               setSuccess('Données réparées avec succès. Actualisez vos pages de consultation pour voir les changements.');
-            // setSuccess('Données réparées avec succès. Actualisez vos pages de consultation pour voir les changements.');
+            }}
           />
         </div>
       )}
@@ -600,7 +604,7 @@ const AdminDashboard: React.FC = () => {
             onClose={() => setShowRetroactiveInvoiceGenerator(false)}
             onSuccess={() => {
               setShowRetroactiveInvoiceGenerator(false);
-              // Optionally refresh stats or show success message
+              loadStats(); // Refresh stats after successful generation
             }}
           />
         </div>
