@@ -46,7 +46,7 @@ const COMMON_PATHOLOGIES = [
 
 const FORM_ID = 'new_patient_form';
 
-const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSuccess }) => {
+export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatientModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -1230,4 +1230,4 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onSu
       )}
     </AnimatePresence>
   );
-};
+}
