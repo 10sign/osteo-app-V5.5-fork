@@ -1,31 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  Edit, 
-  Trash2, 
-  Calendar, 
-  Phone, 
-  Mail, 
-  MapPin, 
-  User, 
-  FileText, 
-  Plus,
-  Clock,
-  AlertCircle,
-  CheckCircle,
-  Eye,
-  Download,
-  Upload,
-  History,
-  Stethoscope,
-  CreditCard,
-  Info,
-  RefreshCw,
-  Pill,
-  AlertTriangle,
-  Image as ImageIcon
-} from 'lucide-react';
+import { ArrowLeft, CreditCard as Edit, Trash2, Calendar, Phone, Mail, MapPin, User, FileText, Plus, Clock, AlertCircle, CheckCircle, Eye, Download, Upload, History, Stethoscope, CreditCard, Info, RefreshCw, Pill, AlertTriangle, Image as ImageIcon } from 'lucide-react';
 import { doc, getDoc, collection, query, where, getDocs, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../../components/ui/Button';

@@ -1,17 +1,5 @@
 import React from 'react';
-import {
-  FileText,
-  Stethoscope,
-  Pill,
-  AlertTriangle,
-  Info,
-  Plus,
-  Upload,
-  Edit,
-  ArrowLeft,
-  Eye,
-  ImageIcon
-} from 'lucide-react';
+import { FileText, Stethoscope, Pill, AlertTriangle, Info, Plus, Upload, CreditCard as Edit, ArrowLeft, Eye, Image as ImageIcon } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Patient, Consultation, Invoice } from '../../types';
 import { format } from 'date-fns';
