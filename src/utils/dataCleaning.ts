@@ -55,6 +55,15 @@ export function cleanDecryptedField(
     'Données non récupérables',
     'Adresse non disponible'
   ];
+
+  // Liste des valeurs de test à masquer
+  const testDataValues = [
+    'AAAAAA',
+    'AAAAAAA',
+    'AAAAAAAAA',
+    'BBBBBB',
+    'uoboboub'
+  ];
   
   // Vérifier si la valeur contient un marqueur d'erreur
   const hasErrorMarker = errorMarkers.some(marker => stringValue.includes(marker));
@@ -63,6 +72,10 @@ export function cleanDecryptedField(
   // Vérifier si c'est une valeur par défaut
   const isDefaultValue = defaultValues.includes(stringValue.trim());
   console.log('🧹 Is default value:', isDefaultValue);
+
+  // Vérifier si c'est une valeur de test
+  const isTestData = testDataValues.includes(stringValue.trim());
+  console.log('🧹 Is test data:', isTestData);
   
   // Vérifier les caractères de remplacement UTF-8 ou caractères non imprimables
   const hasInvalidChars = stringValue.includes('�') || 
@@ -70,15 +83,21 @@ export function cleanDecryptedField(
   console.log('🧹 Has invalid chars:', hasInvalidChars);
   
   // Si c'est pour l'édition et qu'il y a un problème, retourner une chaîne vide
-  if (forEditing && (hasErrorMarker || isDefaultValue || hasInvalidChars)) {
+  if (forEditing && (hasErrorMarker || isDefaultValue || hasInvalidChars || isTestData)) {
     console.log('🧹 For editing with problems, returning empty string');
     return '';
   }
-  
+
   // Si ce n'est pas pour l'édition et qu'il y a un problème, retourner le message par défaut
   if (!forEditing && (hasErrorMarker || isDefaultValue || hasInvalidChars)) {
     console.log('🧹 For display with problems, returning default value:', defaultValue);
     return defaultValue;
+  }
+
+  // Si c'est une donnée de test pour l'affichage, retourner "—"
+  if (!forEditing && isTestData) {
+    console.log('🧹 For display with test data, returning "—"');
+    return '—';
   }
   
   // Sinon, retourner la valeur nettoyée
