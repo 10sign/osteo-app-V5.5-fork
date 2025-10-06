@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, X as XIcon, User, Calendar, Trash2, CheckCircle, Upload } from 'lucide-react';
+import { X, Plus, User, Calendar, Trash2, CheckCircle, Upload } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { doc, setDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
@@ -15,6 +15,7 @@ import { patientCache } from '../../utils/patientCache';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
 import { saveFormData, getFormData, clearFormData } from '../../utils/sessionPersistence';
+import SymptomsSyndromesField from '../ui/SymptomsSyndromesField';
 
 interface NewPatientModalProps {
   isOpen: boolean;
@@ -28,21 +29,6 @@ interface PastAppointment {
   notes: string;
 }
 
-const COMMON_PATHOLOGIES = [
-  'Lombalgie',
-  'Cervicalgie',
-  'Dorsalgie',
-  'Sciatique',
-  'Migraine',
-  'Vertiges',
-  'Entorse',
-  'Tendinite',
-  'Arthrose',
-  'Scoliose',
-  'Stress',
-  'Troubles digestifs',
-  'Troubles du sommeil'
-];
 
 const FORM_ID = 'new_patient_form';
 
@@ -50,7 +36,6 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [customTag, setCustomTag] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -282,23 +267,9 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
     // Cette fonction est conservée mais n'est plus utilisée
   }, []);
 
-  const handleAddTag = useCallback((tag: string) => {
-    if (!selectedTags.includes(tag)) {
-      setSelectedTags(prev => [...prev, tag]);
-    }
-  }, [selectedTags]);
-
-  const handleRemoveTag = useCallback((tagToRemove: string) => {
-    setSelectedTags(prev => prev.filter(tag => tag !== tagToRemove));
+  const handleTagsChange = useCallback((tags: string[]) => {
+    setSelectedTags(tags);
   }, []);
-
-  const handleAddCustomTag = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && customTag.trim()) {
-      e.preventDefault();
-      handleAddTag(customTag.trim());
-      setCustomTag('');
-    }
-  }, [customTag, handleAddTag]);
 
   // Fonctions pour gérer l'historique des traitements
   const addTreatmentHistoryEntry = () => {
@@ -1033,71 +1004,11 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Symptômes / Syndromes
-                  </label>
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap gap-2">
-                      {selectedTags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-primary-50 text-primary-700"
-                        >
-                          {tag}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveTag(tag)}
-                            className="ml-2 text-primary-600 hover:text-primary-800"
-                          >
-                            <XIcon size={14} />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={customTag}
-                        onChange={(e) => setCustomTag(e.target.value)}
-                        onKeyDown={handleAddCustomTag}
-                        placeholder="Ajouter des symptômes / syndromes personnalisés"
-                        className="input flex-1"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (customTag.trim()) {
-                            handleAddTag(customTag.trim());
-                            setCustomTag('');
-                          }
-                        }}
-                        disabled={!customTag.trim()}
-                      >
-                        Ajouter
-                      </Button>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {COMMON_PATHOLOGIES.map((pathology) => (
-                        <button
-                          key={pathology}
-                          type="button"
-                          onClick={() => handleAddTag(pathology)}
-                          disabled={selectedTags.includes(pathology)}
-                          className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-                            selectedTags.includes(pathology)
-                              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          {pathology}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <SymptomsSyndromesField
+                  selectedTags={selectedTags}
+                  onTagsChange={handleTagsChange}
+                  disabled={isSubmitting}
+                />
 
                 <div>
                   <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
