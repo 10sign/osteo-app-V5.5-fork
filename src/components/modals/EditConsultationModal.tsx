@@ -31,6 +31,14 @@ interface ConsultationFormData {
   status: string;
   examinations: { value: string }[];
   prescriptions: { value: string }[];
+
+  // Champs cliniques
+  currentTreatment?: string;
+  consultationReason?: string;
+  medicalAntecedents?: string;
+  medicalHistory?: string;
+  osteopathicTreatment?: string;
+  symptoms?: string;
 }
 
 const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
@@ -141,7 +149,15 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
           price: consultation.price || 60,
           status: consultation.status || 'completed',
           examinations: consultation.examinations?.map((exam: string) => ({ value: exam })) || [],
-          prescriptions: consultation.prescriptions?.map((presc: string) => ({ value: presc })) || []
+          prescriptions: consultation.prescriptions?.map((presc: string) => ({ value: presc })) || [],
+
+          // Champs cliniques
+          currentTreatment: cleanDecryptedField(consultation.currentTreatment, true, ''),
+          consultationReason: cleanDecryptedField(consultation.consultationReason, true, ''),
+          medicalAntecedents: cleanDecryptedField(consultation.medicalAntecedents, true, ''),
+          medicalHistory: cleanDecryptedField(consultation.medicalHistory, true, ''),
+          osteopathicTreatment: cleanDecryptedField(consultation.osteopathicTreatment, true, ''),
+          symptoms: (consultation.symptoms || []).join(', ')
         });
         
         console.log('📝 Form initialized with cleaned data');
@@ -187,7 +203,15 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         status: data.status,
         examinations: data.examinations.map(item => item.value),
         prescriptions: data.prescriptions.map(item => item.value),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+
+        // Champs cliniques
+        currentTreatment: data.currentTreatment || '',
+        consultationReason: data.consultationReason || '',
+        medicalAntecedents: data.medicalAntecedents || '',
+        medicalHistory: data.medicalHistory || '',
+        osteopathicTreatment: data.osteopathicTreatment || '',
+        symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : []
       };
       
       console.log('💾 Prepared update data:', updateData);
@@ -371,6 +395,103 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {errors.status && (
                         <p className="mt-1 text-sm text-error">{errors.status.message}</p>
                       )}
+                    </div>
+
+                    {/* Section Données Cliniques */}
+                    <div className="border-t pt-6 mt-6 col-span-full">
+                      <h3 className="text-lg font-medium text-gray-900 mb-4">Données cliniques de la consultation</h3>
+
+                      {/* Motif de consultation détaillé */}
+                      <div className="mb-4">
+                        <label htmlFor="consultationReason" className="block text-sm font-medium text-gray-700 mb-1">
+                          Motif de consultation détaillé
+                        </label>
+                        <AutoResizeTextarea
+                          id="consultationReason"
+                          minRows={2}
+                          maxRows={4}
+                          className="input w-full resize-none"
+                          {...register('consultationReason')}
+                          placeholder="Détaillez le motif de consultation..."
+                        />
+                      </div>
+
+                      {/* Traitement actuel */}
+                      <div className="mb-4">
+                        <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
+                          Traitement actuel du patient
+                        </label>
+                        <AutoResizeTextarea
+                          id="currentTreatment"
+                          minRows={2}
+                          maxRows={4}
+                          className="input w-full resize-none"
+                          {...register('currentTreatment')}
+                          placeholder="Traitements médicamenteux ou thérapies en cours..."
+                        />
+                      </div>
+
+                      {/* Antécédents médicaux */}
+                      <div className="mb-4">
+                        <label htmlFor="medicalAntecedents" className="block text-sm font-medium text-gray-700 mb-1">
+                          Antécédents médicaux
+                        </label>
+                        <AutoResizeTextarea
+                          id="medicalAntecedents"
+                          minRows={3}
+                          maxRows={6}
+                          className="input w-full resize-none"
+                          {...register('medicalAntecedents')}
+                          placeholder="Antécédents médicaux significatifs..."
+                        />
+                      </div>
+
+                      {/* Historique médical */}
+                      <div className="mb-4">
+                        <label htmlFor="medicalHistory" className="block text-sm font-medium text-gray-700 mb-1">
+                          Historique médical
+                        </label>
+                        <AutoResizeTextarea
+                          id="medicalHistory"
+                          minRows={3}
+                          maxRows={6}
+                          className="input w-full resize-none"
+                          {...register('medicalHistory')}
+                          placeholder="Historique médical général..."
+                        />
+                      </div>
+
+                      {/* Traitement ostéopathique */}
+                      <div className="mb-4">
+                        <label htmlFor="osteopathicTreatment" className="block text-sm font-medium text-gray-700 mb-1">
+                          Traitement ostéopathique
+                        </label>
+                        <AutoResizeTextarea
+                          id="osteopathicTreatment"
+                          minRows={3}
+                          maxRows={6}
+                          className="input w-full resize-none"
+                          {...register('osteopathicTreatment')}
+                          placeholder="Décrivez le traitement ostéopathique..."
+                        />
+                      </div>
+
+                      {/* Symptômes */}
+                      <div className="mb-4">
+                        <label htmlFor="symptoms" className="block text-sm font-medium text-gray-700 mb-1">
+                          Symptômes
+                        </label>
+                        <input
+                          type="text"
+                          id="symptoms"
+                          className="input w-full"
+                          {...register('symptoms')}
+                          placeholder="Symptômes séparés par des virgules..."
+                        />
+                        <p className="mt-1 text-xs text-gray-500">
+                          Séparez les symptômes par des virgules (ex: Lombalgie, Cervicalgie, Fatigue)
+                        </p>
+                      </div>
                     </div>
 
                     {/* Examens demandés */}

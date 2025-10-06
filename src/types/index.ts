@@ -237,3 +237,79 @@ export interface RegisterFormData extends AuthFormData {
   lastName: string;
   confirmPassword: string;
 }
+
+// Consultation related types
+export interface Consultation {
+  id: string;
+  patientId: string;
+  patientName: string;
+  osteopathId: string;
+  date: Date;
+  reason: string;
+  treatment: string;
+  notes?: string;
+  duration: number;
+  price: number;
+  status: 'draft' | 'completed' | 'cancelled';
+  appointmentId?: string;
+  examinations?: string[];
+  prescriptions?: string[];
+  createdAt: Date;
+  updatedAt: Date;
+
+  // Champs cliniques du patient (snapshot au moment de la consultation)
+  patientFirstName?: string;
+  patientLastName?: string;
+  patientDateOfBirth?: string;
+  patientGender?: 'male' | 'female' | 'other';
+  patientPhone?: string;
+  patientEmail?: string;
+  patientProfession?: string;
+  patientAddress?: string;
+  patientInsurance?: string;
+  patientInsuranceNumber?: string;
+
+  // Champs cliniques spécifiques
+  currentTreatment?: string;
+  consultationReason?: string;
+  medicalAntecedents?: string;
+  medicalHistory?: string;
+  osteopathicTreatment?: string;
+  symptoms?: string[];
+  treatmentHistory?: TreatmentHistoryEntry[];
+}
+
+export interface ConsultationFormData {
+  patientId: string;
+  patientName: string;
+  date: Date | string;
+  reason: string;
+  treatment: string;
+  notes?: string;
+  duration: number;
+  price: number;
+  status: 'draft' | 'completed' | 'cancelled';
+  examinations?: string[];
+  prescriptions?: string[];
+
+  // Champs cliniques du patient (snapshot)
+  patientFirstName?: string;
+  patientLastName?: string;
+  patientDateOfBirth?: string;
+  patientGender?: string;
+  patientPhone?: string;
+  patientEmail?: string;
+  patientProfession?: string;
+  patientAddress?: string;
+  patientInsurance?: string;
+  patientInsuranceNumber?: string;
+
+  // Champs cliniques spécifiques
+  currentTreatment?: string;
+  consultationReason?: string;
+  medicalAntecedents?: string;
+  medicalHistory?: string;
+  osteopathicTreatment?: string;
+  symptoms?: string[];
+  treatmentHistory?: TreatmentHistoryEntry[];
+}

@@ -28,6 +28,26 @@ interface Consultation {
   appointmentId?: string;
   examinations?: string[];
   prescriptions?: string[];
+
+  // Champs cliniques
+  currentTreatment?: string;
+  consultationReason?: string;
+  medicalAntecedents?: string;
+  medicalHistory?: string;
+  osteopathicTreatment?: string;
+  symptoms?: string[];
+
+  // Champs d'identité patient (snapshot)
+  patientFirstName?: string;
+  patientLastName?: string;
+  patientDateOfBirth?: string;
+  patientGender?: string;
+  patientPhone?: string;
+  patientEmail?: string;
+  patientProfession?: string;
+  patientAddress?: string;
+  patientInsurance?: string;
+  patientInsuranceNumber?: string;
 }
 
 const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
@@ -251,6 +271,96 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                           ))}
                         </ul>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Section Données Cliniques */}
+                  {(consultation.consultationReason || consultation.currentTreatment || consultation.medicalAntecedents ||
+                    consultation.medicalHistory || consultation.osteopathicTreatment || (consultation.symptoms && consultation.symptoms.length > 0)) && (
+                    <div className="border-t pt-6 mt-6">
+                      <h3 className="text-lg font-medium text-gray-900 mb-4">Données cliniques de la consultation</h3>
+
+                      {/* Motif détaillé */}
+                      {consultation.consultationReason && cleanDecryptedField(consultation.consultationReason, false, '') && (
+                        <div className="mb-4">
+                          <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                            <FileText size={16} className="mr-2 text-gray-600" />
+                            Motif de consultation détaillé
+                          </h4>
+                          <div className="bg-white border border-gray-200 rounded-lg p-4">
+                            <p className="text-gray-900 whitespace-pre-wrap">
+                              {cleanDecryptedField(consultation.consultationReason, false, '')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Traitement actuel */}
+                      {consultation.currentTreatment && cleanDecryptedField(consultation.currentTreatment, false, '') && (
+                        <div className="mb-4">
+                          <h4 className="font-medium text-gray-900 mb-2">Traitement actuel du patient</h4>
+                          <div className="bg-white border border-gray-200 rounded-lg p-4">
+                            <p className="text-gray-900 whitespace-pre-wrap">
+                              {cleanDecryptedField(consultation.currentTreatment, false, '')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Antécédents médicaux */}
+                      {consultation.medicalAntecedents && cleanDecryptedField(consultation.medicalAntecedents, false, '') && (
+                        <div className="mb-4">
+                          <h4 className="font-medium text-gray-900 mb-2">Antécédents médicaux</h4>
+                          <div className="bg-white border border-gray-200 rounded-lg p-4">
+                            <p className="text-gray-900 whitespace-pre-wrap">
+                              {cleanDecryptedField(consultation.medicalAntecedents, false, '')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Historique médical */}
+                      {consultation.medicalHistory && cleanDecryptedField(consultation.medicalHistory, false, '') && (
+                        <div className="mb-4">
+                          <h4 className="font-medium text-gray-900 mb-2">Historique médical</h4>
+                          <div className="bg-white border border-gray-200 rounded-lg p-4">
+                            <p className="text-gray-900 whitespace-pre-wrap">
+                              {cleanDecryptedField(consultation.medicalHistory, false, '')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Traitement ostéopathique */}
+                      {consultation.osteopathicTreatment && cleanDecryptedField(consultation.osteopathicTreatment, false, '') && (
+                        <div className="mb-4">
+                          <h4 className="font-medium text-gray-900 mb-2">Traitement ostéopathique</h4>
+                          <div className="bg-white border border-gray-200 rounded-lg p-4">
+                            <p className="text-gray-900 whitespace-pre-wrap">
+                              {cleanDecryptedField(consultation.osteopathicTreatment, false, '')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Symptômes */}
+                      {consultation.symptoms && consultation.symptoms.length > 0 && (
+                        <div className="mb-4">
+                          <h4 className="font-medium text-gray-900 mb-2">Symptômes</h4>
+                          <div className="bg-white border border-gray-200 rounded-lg p-4">
+                            <div className="flex flex-wrap gap-2">
+                              {consultation.symptoms.map((symptom, index) => (
+                                <span
+                                  key={index}
+                                  className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-primary-50 text-primary-700"
+                                >
+                                  {symptom}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
