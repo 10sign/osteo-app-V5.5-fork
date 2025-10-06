@@ -98,11 +98,11 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
       // Mettre à jour le statut
       updateFileStatus(index, 'uploading', 10);
 
-      // Uploader le document
+      // Uploader le document avec le displayName
       const result = await uploadDocument(
         file,
         folderPath,
-        undefined,
+        displayName, // Passer le displayName à la fonction d'upload
         (progress) => {
           updateFileStatus(index, progress.status, progress.progress);
           if (progress.status === 'error') {
