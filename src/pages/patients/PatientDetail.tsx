@@ -96,13 +96,14 @@ const PatientDetail: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [documentSuccess, setDocumentSuccess] = useState<string | null>(null);
+  const [latestConsultation, setLatestConsultation] = useState<Consultation | null>(null);
 
   // Mise à jour de l'heure actuelle toutes les secondes
   useEffect(() => {
     const clockInterval = setInterval(() => {
       setCurrentDateTime(new Date());
     }, 1000);
-    
+
     return () => clearInterval(clockInterval);
   }, []);
 
@@ -283,7 +284,14 @@ const PatientDetail: React.FC = () => {
       // Sort by date (most recent first)
       consultationsData.sort((a, b) => b.date.getTime() - a.date.getTime());
       setConsultations(consultationsData);
-      
+
+      // Set latest consultation for Overview tab
+      if (consultationsData.length > 0) {
+        setLatestConsultation(consultationsData[0]);
+      } else {
+        setLatestConsultation(null);
+      }
+
     } catch (error) {
       console.error('Error loading consultations:', error);
     }
@@ -1032,7 +1040,19 @@ const PatientDetail: React.FC = () => {
       <div className="space-y-6">
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* AJOUT: Résumé rapide des statistiques du patient */}
+            {/* Masquer les patients de test */}
+            {patient.isTestData && (
+              <div className="p-4 border border-yellow-200 rounded-lg lg:col-span-2 bg-yellow-50">
+                <div className="flex items-center">
+                  <AlertTriangle size={20} className="mr-3 text-yellow-600" />
+                  <div>
+                    <p className="font-medium text-yellow-900">Donnée de test</p>
+                    <p className="text-sm text-yellow-700">Ce patient est une donnée de test et ne représente pas un vrai patient.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Résumé rapide des statistiques du patient */}
             <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
               <h3 className="mb-4 text-lg font-medium text-gray-900">Résumé du dossier</h3>
               <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -1059,119 +1079,8 @@ const PatientDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* AJOUT : Section Profession - Champ manquant dans la vue d'ensemble */}
-            {patient.profession && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                  <User size={20} className="mr-2 text-gray-600" />
-                  Profession
-                </h3>
-                <p className="text-gray-700">{patient.profession}</p>
-              </div>
-            )}
-
-            {/* AJOUT : Section Traitement actuel - Champ manquant dans la vue d'ensemble */}
-            {patient.currentTreatment && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                  <Pill size={20} className="mr-2 text-gray-600" />
-                  Traitement actuel
-                </h3>
-                <p className="text-gray-700 whitespace-pre-wrap">{patient.currentTreatment}</p>
-              </div>
-            )}
-
-            {/* AJOUT : Section Motif de consultation - Champ manquant dans la vue d'ensemble */}
-            {patient.consultationReason && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                  <FileText size={20} className="mr-2 text-gray-600" />
-                  Motif de consultation
-                </h3>
-                <p className="text-gray-700 whitespace-pre-wrap">{patient.consultationReason}</p>
-              </div>
-            )}
-
-            {/* AJOUT : Section Antécédents médicaux - Champ manquant dans la vue d'ensemble */}
-            {patient.medicalAntecedents && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                  <AlertTriangle size={20} className="mr-2 text-gray-600" />
-                  Antécédents médicaux
-                </h3>
-                <p className="text-gray-700 whitespace-pre-wrap">{patient.medicalAntecedents}</p>
-              </div>
-            )}
-
-            {/* AJOUT : Section Traitement ostéopathique - Champ manquant dans la vue d'ensemble */}
-            {patient.osteopathicTreatment && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                  <Stethoscope size={20} className="mr-2 text-gray-600" />
-                  Traitement ostéopathique
-                </h3>
-                <p className="text-gray-700 whitespace-pre-wrap">{patient.osteopathicTreatment}</p>
-              </div>
-            )}
-
-            {/* AJOUT : Section Historique des traitements - Champ manquant dans la vue d'ensemble */}
-            {patient.treatmentHistory && patient.treatmentHistory.length > 0 && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                  <History size={20} className="mr-2 text-gray-600" />
-                  Historique des traitements
-                </h3>
-                <div className="space-y-4">
-                  {patient.treatmentHistory.map((treatment, index) => (
-                    <div key={index} className="py-2 pl-4 border-l-4 border-primary-200">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-gray-900">
-                          {treatment.date ? new Date(treatment.date).toLocaleDateString('fr-FR') : 'Date non spécifiée'}
-                        </span>
-                        {treatment.provider && (
-                          <span className="text-sm text-gray-500">{treatment.provider}</span>
-                        )}
-                      </div>
-                      <p className="text-gray-700">{treatment.treatment}</p>
-                      {treatment.notes && (
-                        <p className="mt-1 text-sm text-gray-600">{treatment.notes}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Historique des traitements */}
-            {patient.treatmentHistory && patient.treatmentHistory.length > 0 && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
-                  <History size={20} className="mr-2 text-gray-600" />
-                  Historique des traitements
-                </h3>
-                <div className="space-y-4">
-                  {patient.treatmentHistory.map((treatment, index) => (
-                    <div key={index} className="py-2 pl-4 border-l-4 border-primary-200">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-gray-900">
-                          {treatment.date ? new Date(treatment.date).toLocaleDateString('fr-FR') : 'Date non spécifiée'}
-                        </span>
-                        {treatment.provider && (
-                          <span className="text-sm text-gray-500">{treatment.provider}</span>
-                        )}
-                      </div>
-                      <p className="text-gray-700">{treatment.treatment}</p>
-                      {treatment.notes && (
-                        <p className="mt-1 text-sm text-gray-600">{treatment.notes}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* AJOUT : Section Métadonnées du dossier - Informations système manquantes */}
-            <div className="p-6 bg-white shadow rounded-xl">
+            {/* Informations du dossier - UNIQUE BLOCK from patient document */}
+            <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
               <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
                 <Info size={20} className="mr-2 text-gray-600" />
                 Informations du dossier
@@ -1203,98 +1112,102 @@ const PatientDetail: React.FC = () => {
               </div>
             </div>
 
-            
+            {/* Clinical fields from LATEST CONSULTATION ONLY - Deduplicated */}
+            {latestConsultation ? (
+              <>
+                {/* Traitement actuel - FROM LATEST CONSULTATION */}
+                {latestConsultation.currentTreatment && cleanDecryptedField(latestConsultation.currentTreatment, false, '') && (
+                  <div className="p-6 bg-white shadow rounded-xl">
+                    <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                      <Pill size={20} className="mr-2 text-gray-600" />
+                      Traitement actuel
+                    </h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {cleanDecryptedField(latestConsultation.currentTreatment, false, '')}
+                    </p>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Dernière mise à jour : {formatDateTime(latestConsultation.date)}
+                    </p>
+                  </div>
+                )}
 
-            
+                {/* Motif de consultation - FROM LATEST CONSULTATION */}
+                {latestConsultation.consultationReason && cleanDecryptedField(latestConsultation.consultationReason, false, '') && (
+                  <div className="p-6 bg-white shadow rounded-xl">
+                    <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                      <FileText size={20} className="mr-2 text-gray-600" />
+                      Motif de consultation
+                    </h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {cleanDecryptedField(latestConsultation.consultationReason, false, '')}
+                    </p>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Dernière mise à jour : {formatDateTime(latestConsultation.date)}
+                    </p>
+                  </div>
+                )}
 
-            {/* AJOUT: Section Traitement ostéopathique - Information manquante */}
-            {patient.osteopathicTreatment && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
-                  <Stethoscope size={20} className="mr-2 text-gray-600" />
-                  Traitement ostéopathique
-                </h3>
-                <p className="text-gray-900 whitespace-pre-wrap">
-                  {cleanDecryptedField(patient.osteopathicTreatment, false, 'Aucun traitement ostéopathique spécifique renseigné')}
+                {/* Antécédents médicaux - FROM LATEST CONSULTATION */}
+                {latestConsultation.medicalAntecedents && cleanDecryptedField(latestConsultation.medicalAntecedents, false, '') && (
+                  <div className="p-6 bg-white shadow rounded-xl">
+                    <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                      <AlertTriangle size={20} className="mr-2 text-gray-600" />
+                      Antécédents médicaux
+                    </h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {cleanDecryptedField(latestConsultation.medicalAntecedents, false, '')}
+                    </p>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Dernière mise à jour : {formatDateTime(latestConsultation.date)}
+                    </p>
+                  </div>
+                )}
+
+                {/* Traitement ostéopathique - FROM LATEST CONSULTATION */}
+                {latestConsultation.osteopathicTreatment && cleanDecryptedField(latestConsultation.osteopathicTreatment, false, '') && (
+                  <div className="p-6 bg-white shadow rounded-xl">
+                    <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                      <Stethoscope size={20} className="mr-2 text-gray-600" />
+                      Traitement ostéopathique
+                    </h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {cleanDecryptedField(latestConsultation.osteopathicTreatment, false, '')}
+                    </p>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Dernière mise à jour : {formatDateTime(latestConsultation.date)}
+                    </p>
+                  </div>
+                )}
+
+                {/* Historique médical - FROM LATEST CONSULTATION */}
+                {latestConsultation.medicalHistory && cleanDecryptedField(latestConsultation.medicalHistory, false, '') && (
+                  <div className="p-6 bg-white shadow rounded-xl">
+                    <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                      <History size={20} className="mr-2 text-gray-600" />
+                      Historique médical
+                    </h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {cleanDecryptedField(latestConsultation.medicalHistory, false, '')}
+                    </p>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Dernière mise à jour : {formatDateTime(latestConsultation.date)}
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
+                <p className="text-center text-gray-500">— Aucune consultation enregistrée —</p>
+                <p className="mt-2 text-sm text-center text-gray-400">
+                  Les données cliniques seront affichées après la première consultation
                 </p>
               </div>
             )}
 
-            {/* AJOUT: Section Historique des traitements - Information manquante */}
-            {patient.treatmentHistory && patient.treatmentHistory.length > 0 && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
-                  <History size={20} className="mr-2 text-gray-600" />
-                  Historique des traitements
-                </h3>
-                <div className="space-y-4">
-                  {patient.treatmentHistory.map((treatment, index) => (
-                    <div key={index} className="py-2 pl-4 border-l-4 border-primary-200">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-gray-900">{treatment.treatment}</span>
-                        {treatment.date && (
-                          <span className="text-sm text-gray-500">
-                            {new Date(treatment.date).toLocaleDateString('fr-FR')}
-                          </span>
-                        )}
-                      </div>
-                      {treatment.provider && (
-                        <p className="text-sm text-gray-600">Prestataire: {treatment.provider}</p>
-                      )}
-                      {treatment.notes && (
-                        <p className="mt-1 text-sm text-gray-600">{treatment.notes}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            
-
-            
-
-            
-
-            {/* AJOUT: Section Métadonnées du dossier - Informations manquantes */}
-            <div className="p-6 bg-white shadow rounded-xl">
-              <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
-                <Info size={20} className="mr-2 text-gray-600" />
-                Informations du dossier
-              </h3>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <span className="text-sm font-medium text-gray-500">Créé le: </span>
-                  <span className="text-gray-900">
-                    {patient.createdAt ? new Date(patient.createdAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-gray-500">Dernière modification: </span>
-                  <span className="text-gray-900">
-                    {patient.updatedAt ? new Date(patient.updatedAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
-                  </span>
-                </div>
-                {patient.createdBy && (
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Créé par: </span>
-                    <span className="text-gray-900">{patient.createdBy}</span>
-                  </div>
-                )}
-                {patient.isTestData && (
-                  <div>
-                    <span className="inline-flex items-center px-2 py-1 text-xs font-medium text-yellow-800 bg-yellow-100 rounded-full">
-                      Données de test
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* AJOUT: Dernières consultations (aperçu rapide) */}
+            {/* Historique des consultations (READ-ONLY) */}
             <div className="p-6 bg-white shadow rounded-xl">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Dernières consultations</h3>
+                <h3 className="text-lg font-medium text-gray-900">Historique des consultations</h3>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1306,7 +1219,7 @@ const PatientDetail: React.FC = () => {
               </div>
               {consultations.length > 0 ? (
                 <div className="space-y-3">
-                  {consultations.slice(0, 3).map((consultation) => (
+                  {consultations.slice(0, 5).map((consultation) => (
                     <div key={consultation.id} className="p-3 rounded-lg bg-gray-50">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-900">
@@ -1325,9 +1238,9 @@ const PatientDetail: React.FC = () => {
                       </div>
                     </div>
                   ))}
-                  {consultations.length > 3 && (
+                  {consultations.length > 5 && (
                     <p className="text-sm text-center text-gray-500">
-                      +{consultations.length - 3} autres consultations
+                      +{consultations.length - 5} autres consultations
                     </p>
                   )}
                 </div>
@@ -1336,10 +1249,10 @@ const PatientDetail: React.FC = () => {
               )}
             </div>
 
-            {/* AJOUT: Factures récentes (aperçu rapide) */}
+            {/* Historique des factures (READ-ONLY) */}
             <div className="p-6 bg-white shadow rounded-xl">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Factures récentes</h3>
+                <h3 className="text-lg font-medium text-gray-900">Historique des factures</h3>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1351,7 +1264,7 @@ const PatientDetail: React.FC = () => {
               </div>
               {invoices.length > 0 ? (
                 <div className="space-y-3">
-                  {invoices.slice(0, 3).map((invoice) => (
+                  {invoices.slice(0, 5).map((invoice) => (
                     <div key={invoice.id} className="p-3 rounded-lg bg-gray-50">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-900">
@@ -1369,9 +1282,9 @@ const PatientDetail: React.FC = () => {
                       </div>
                     </div>
                   ))}
-                  {invoices.length > 3 && (
+                  {invoices.length > 5 && (
                     <p className="text-sm text-center text-gray-500">
-                      +{invoices.length - 3} autres factures
+                      +{invoices.length - 5} autres factures
                     </p>
                   )}
                 </div>
@@ -1380,82 +1293,65 @@ const PatientDetail: React.FC = () => {
               )}
             </div>
 
-            {/* AJOUT: Alertes et informations importantes */}
-            <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
-              <h3 className="mb-4 text-lg font-medium text-gray-900">Alertes et informations importantes</h3>
-              <div className="space-y-3">
-                {/* Alerte pour prochain rendez-vous */}
-                {patient.nextAppointment && (
-                  <div className="flex items-center p-3 border border-blue-200 rounded-lg bg-blue-50">
-                    <Calendar size={16} className="mr-3 text-blue-600" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-900">Prochain rendez-vous programmé</p>
-                      <p className="text-sm text-blue-700">
-                        {formatDate(patient.nextAppointment.split('T')[0])} à {patient.nextAppointment.split('T')[1]?.slice(0, 5)}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Alerte pour factures impayées */}
-                {invoices.filter(i => i.status === 'draft' || i.status === 'sent').length > 0 && (
-                  <div className="flex items-center p-3 border border-yellow-200 rounded-lg bg-yellow-50">
-                    <AlertCircle size={16} className="mr-3 text-yellow-600" />
-                    <div>
-                      <p className="text-sm font-medium text-yellow-900">
-                        {invoices.filter(i => i.status === 'draft' || i.status === 'sent').length} facture(s) en attente de paiement
-                      </p>
-                      <p className="text-sm text-yellow-700">
-                        Total: {invoices.filter(i => i.status === 'draft' || i.status === 'sent').reduce((sum, i) => sum + i.total, 0)} €
-                      </p>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Alerte si aucune consultation récente */}
-                {consultations.length === 0 && (
-                  <div className="flex items-center p-3 border border-gray-200 rounded-lg bg-gray-50">
-                    <Stethoscope size={16} className="mr-3 text-gray-600" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Aucune consultation enregistrée</p>
-                      <p className="text-sm text-gray-600">Commencez par ajouter une première consultation</p>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Message si tout va bien */}
-                {patient.nextAppointment && 
-                 invoices.filter(i => i.status === 'draft' || i.status === 'sent').length === 0 && 
-                 consultations.length > 0 && (
-                  <div className="flex items-center p-3 border border-green-200 rounded-lg bg-green-50">
-                    <CheckCircle size={16} className="mr-3 text-green-600" />
-                    <div>
-                      <p className="text-sm font-medium text-green-900">Dossier à jour</p>
-                      <p className="text-sm text-green-700">Toutes les informations sont complètes</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Medical History */}
+            {/* Historique des documents (READ-ONLY) */}
             <div className="p-6 bg-white shadow rounded-xl">
-              <h3 className="mb-4 text-lg font-medium text-gray-900">Historique médical</h3>
-              {patient.medicalHistory ? (
-                <div className="prose-sm prose max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {cleanDecryptedField(patient.medicalHistory, false, 'Aucun historique médical renseigné')}
-                  </p>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Documents récents</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab('documents')}
+                  rightIcon={<ArrowLeft className="rotate-180" size={14} />}
+                >
+                  Voir tout
+                </Button>
+              </div>
+              {patient.documents && patient.documents.length > 0 ? (
+                <div className="space-y-3">
+                  {patient.documents.slice(0, 5).map((document, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex-shrink-0">
+                          {document.type?.startsWith('image/') ? (
+                            <ImageIcon size={20} className="text-blue-500" />
+                          ) : (
+                            <FileText size={20} className="text-gray-500" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900 truncate max-w-[200px]">
+                            {document.originalName || document.name}
+                          </h4>
+                          <p className="text-xs text-gray-500">
+                            {document.uploadedAt ? new Date(document.uploadedAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => window.open(document.url, '_blank')}
+                        leftIcon={<Eye size={14} />}
+                      >
+                        Voir
+                      </Button>
+                    </div>
+                  ))}
+                  {patient.documents.length > 5 && (
+                    <p className="text-sm text-center text-gray-500">
+                      +{patient.documents.length - 5} autres documents
+                    </p>
+                  )}
                 </div>
               ) : (
-                <p className="italic text-gray-500">Aucun historique médical renseigné</p>
+                <p className="py-4 italic text-center text-gray-500">Aucun document</p>
               )}
             </div>
 
-            {/* AJOUT: Actions rapides */}
-            <div className="p-6 bg-white shadow rounded-xl">
+            {/* Actions rapides - NON-DESTRUCTIVE CTAs to navigate to other tabs */}
+            <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
               <h3 className="mb-4 text-lg font-medium text-gray-900">Actions rapides</h3>
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
                 <Button
                   variant="outline"
                   fullWidth
@@ -1476,7 +1372,7 @@ const PatientDetail: React.FC = () => {
                   variant="outline"
                   fullWidth
                   leftIcon={<Upload size={16} />}
-                  onClick={() => setIsAddDocumentModalOpen(true)}
+                  onClick={() => setActiveTab('documents')}
                 >
                   Ajouter un document
                 </Button>
@@ -1484,139 +1380,13 @@ const PatientDetail: React.FC = () => {
                   variant="outline"
                   fullWidth
                   leftIcon={<Edit size={16} />}
-                  onClick={() => setIsEditModalOpen(true)}
+                  onClick={() => setActiveTab('consultations')}
                 >
-                  Modifier le dossier
+                  Modifier consultation
                 </Button>
               </div>
             </div>
 
-            {/* Current Treatment */}
-            {patient.currentTreatment && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="mb-4 text-lg font-medium text-gray-900">Traitement actuel</h3>
-                <div className="prose-sm prose max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {cleanDecryptedField(patient.currentTreatment, false, 'Aucun traitement actuel')}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Consultation Reason */}
-            {patient.consultationReason && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="mb-4 text-lg font-medium text-gray-900">Motif de consultation</h3>
-                <div className="prose-sm prose max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {cleanDecryptedField(patient.consultationReason, false, 'Aucun motif spécifique')}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Medical Antecedents */}
-            {patient.medicalAntecedents && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="mb-4 text-lg font-medium text-gray-900">Antécédents médicaux</h3>
-                <div className="prose-sm prose max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {cleanDecryptedField(patient.medicalAntecedents, false, 'Aucun antécédent médical renseigné')}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Osteopathic Treatment */}
-            {patient.osteopathicTreatment && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="mb-4 text-lg font-medium text-gray-900">Traitement ostéopathique</h3>
-                <div className="prose-sm prose max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {cleanDecryptedField(patient.osteopathicTreatment, false, 'Aucun traitement ostéopathique spécifique')}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Notes */}
-            {patient.notes && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="mb-4 text-lg font-medium text-gray-900">Notes</h3>
-                <div className="prose-sm prose max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {cleanDecryptedField(patient.notes, false, 'Aucune note')}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Insurance */}
-            {patient.insurance && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="mb-4 text-lg font-medium text-gray-900">Assurance</h3>
-                <div className="space-y-2">
-                  <p className="text-gray-700">
-                    <span className="font-medium">Mutuelle:</span> {cleanDecryptedField(patient.insurance.provider, false, 'Non renseignée')}
-                  </p>
-                  {patient.insurance.policyNumber && (
-                    <p className="text-gray-700">
-                      <span className="font-medium">Numéro:</span> {cleanDecryptedField(patient.insurance.policyNumber, false, 'Non renseigné')}
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Treatment History */}
-            {patient.treatmentHistory && patient.treatmentHistory.length > 0 && (
-              <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
-                <h3 className="mb-4 text-lg font-medium text-gray-900">Historique des traitements</h3>
-                <div className="space-y-4">
-                  {patient.treatmentHistory.map((treatment, index) => (
-                    <div key={index} className="p-4 border border-gray-200 rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-900">
-                          {formatDate(treatment.date)}
-                        </span>
-                        {treatment.provider && (
-                          <span className="text-sm text-gray-500">{treatment.provider}</span>
-                        )}
-                      </div>
-                      <p className="mb-2 text-gray-700">{treatment.treatment}</p>
-                      {treatment.notes && (
-                        <p className="text-sm text-gray-500">{treatment.notes}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Past Appointments */}
-            {patient.pastAppointments && patient.pastAppointments.length > 0 && (
-              <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
-                <h3 className="mb-4 text-lg font-medium text-gray-900">Rendez-vous passés</h3>
-                <div className="space-y-3">
-                  {patient.pastAppointments.map((appointment, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-                      <div className="flex items-center">
-                        <History size={16} className="mr-3 text-gray-400" />
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {formatDate(appointment.date.split('T')[0])} à {appointment.date.split('T')[1]?.slice(0, 5)}
-                          </div>
-                          {appointment.notes && (
-                            <div className="text-sm text-gray-500">{appointment.notes}</div>
-                          )}
-                        </div>
-                      </div>
-                      <span className="text-xs text-gray-400">Historique</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
