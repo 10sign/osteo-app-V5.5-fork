@@ -10,6 +10,7 @@ import SuccessBanner from '../ui/SuccessBanner';
 import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { HDSCompliance } from '../../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../../utils/auditLogger';
+import SymptomsSyndromesField from '../ui/SymptomsSyndromesField';
 
 interface EditConsultationModalProps {
   isOpen: boolean;
@@ -55,6 +56,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
   const [consultationData, setConsultationData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
 
   const { register, handleSubmit, formState: { errors, isValid }, reset, control } = useForm<ConsultationFormData>({
     mode: 'onChange',
@@ -156,9 +158,11 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
           consultationReason: cleanDecryptedField(consultation.consultationReason, true, ''),
           medicalAntecedents: cleanDecryptedField(consultation.medicalAntecedents, true, ''),
           medicalHistory: cleanDecryptedField(consultation.medicalHistory, true, ''),
-          osteopathicTreatment: cleanDecryptedField(consultation.osteopathicTreatment, true, ''),
-          symptoms: (consultation.symptoms || []).join(', ')
+          osteopathicTreatment: cleanDecryptedField(consultation.osteopathicTreatment, true, '')
         });
+
+        // Set symptoms separately
+        setSelectedSymptoms(consultation.symptoms || []);
         
         console.log('📝 Form initialized with cleaned data');
       } catch (error) {
@@ -211,7 +215,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         medicalAntecedents: data.medicalAntecedents || '',
         medicalHistory: data.medicalHistory || '',
         osteopathicTreatment: data.osteopathicTreatment || '',
-        symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : []
+        symptoms: selectedSymptoms
       };
       
       console.log('💾 Prepared update data:', updateData);
@@ -233,6 +237,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
       setTimeout(() => {
         setShowSuccessBanner(false);
         reset();
+        setSelectedSymptoms([]);
         onSuccess();
         onClose();
       }, 2000);
@@ -478,19 +483,11 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                       {/* Symptômes */}
                       <div className="mb-4">
-                        <label htmlFor="symptoms" className="block text-sm font-medium text-gray-700 mb-1">
-                          Symptômes
-                        </label>
-                        <input
-                          type="text"
-                          id="symptoms"
-                          className="input w-full"
-                          {...register('symptoms')}
-                          placeholder="Symptômes séparés par des virgules..."
+                        <SymptomsSyndromesField
+                          selectedTags={selectedSymptoms}
+                          onTagsChange={setSelectedSymptoms}
+                          disabled={isSubmitting}
                         />
-                        <p className="mt-1 text-xs text-gray-500">
-                          Séparez les symptômes par des virgules (ex: Lombalgie, Cervicalgie, Fatigue)
-                        </p>
                       </div>
                     </div>
 

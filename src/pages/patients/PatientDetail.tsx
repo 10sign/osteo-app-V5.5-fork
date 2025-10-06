@@ -30,7 +30,6 @@ import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
 import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
 import { DocumentMetadata, deleteDocument } from '../../utils/documentStorage';
 import { uploadPatientFile, UploadProgress } from '../../utils/fileUpload';
-import { PatientOverview } from '../../components/patients/PatientOverview';
 
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -72,13 +71,14 @@ const PatientDetail: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [documentSuccess, setDocumentSuccess] = useState<string | null>(null);
+  const [latestConsultation, setLatestConsultation] = useState<Consultation | null>(null);
 
   // Mise à jour de l'heure actuelle toutes les secondes
   useEffect(() => {
     const clockInterval = setInterval(() => {
       setCurrentDateTime(new Date());
     }, 1000);
-    
+
     return () => clearInterval(clockInterval);
   }, []);
 
@@ -259,7 +259,14 @@ const PatientDetail: React.FC = () => {
       // Sort by date (most recent first)
       consultationsData.sort((a, b) => b.date.getTime() - a.date.getTime());
       setConsultations(consultationsData);
-      
+
+      // Set latest consultation for Overview tab
+      if (consultationsData.length > 0) {
+        setLatestConsultation(consultationsData[0]);
+      } else {
+        setLatestConsultation(null);
+      }
+
     } catch (error) {
       console.error('Error loading consultations:', error);
     }
@@ -1007,22 +1014,357 @@ const PatientDetail: React.FC = () => {
       {/* Tab content */}
       <div className="space-y-6">
         {activeTab === 'overview' && (
-          <PatientOverview
-            patient={patient}
-            consultations={consultations}
-            invoices={invoices}
-            onNewConsultation={() => setIsNewConsultationModalOpen(true)}
-            onNewInvoice={() => setIsNewInvoiceModalOpen(true)}
-            onEditPatient={() => setIsEditModalOpen(true)}
-            onNavigateToTab={setActiveTab}
-            getConsultationStatusColor={getConsultationStatusColor}
-            getConsultationStatusText={getConsultationStatusText}
-            getStatusColor={getStatusColor}
-            getStatusText={getStatusText}
-            formatDate={formatDate}
-            formatDateTime={formatDateTime}
-          />
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Masquer les patients de test */}
+            {patient.isTestData && (
+              <div className="p-4 border border-yellow-200 rounded-lg lg:col-span-2 bg-yellow-50">
+                <div className="flex items-center">
+                  <AlertTriangle size={20} className="mr-3 text-yellow-600" />
+                  <div>
+                    <p className="font-medium text-yellow-900">Donnée de test</p>
+                    <p className="text-sm text-yellow-700">Ce patient est une donnée de test et ne représente pas un vrai patient.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Résumé rapide des statistiques du patient */}
+            <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
+              <h3 className="mb-4 text-lg font-medium text-gray-900">Résumé du dossier</h3>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <div className="p-3 text-center rounded-lg bg-primary-50">
+                  <div className="text-2xl font-bold text-primary-600">{consultations.length}</div>
+                  <div className="text-sm text-gray-600">Consultations</div>
+                </div>
+                <div className="p-3 text-center rounded-lg bg-secondary-50">
+                  <div className="text-2xl font-bold text-secondary-600">{invoices.length}</div>
+                  <div className="text-sm text-gray-600">Factures</div>
+                </div>
+                <div className="p-3 text-center rounded-lg bg-accent-50">
+                  <div className="text-2xl font-bold text-accent-600">
+                    {invoices.filter(i => i.status === 'paid').length}
+                  </div>
+                  <div className="text-sm text-gray-600">Factures payées</div>
+                </div>
+                <div className="p-3 text-center rounded-lg bg-green-50">
+                  <div className="text-2xl font-bold text-green-600">
+                    {consultations.filter(c => c.status === 'completed').length}
+                  </div>
+                  <div className="text-sm text-gray-600">Consultations terminées</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Informations du dossier - UNIQUE BLOCK from patient document */}
+            <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
+              <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                <Info size={20} className="mr-2 text-gray-600" />
+                Informations du dossier
+              </h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <div className="text-sm text-gray-500">Dossier créé le</div>
+                  <div className="font-medium text-gray-900">
+                    {patient.createdAt ? new Date(patient.createdAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Dernière modification</div>
+                  <div className="font-medium text-gray-900">
+                    {patient.updatedAt ? new Date(patient.updatedAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Statut du dossier</div>
+                  <div className="flex items-center">
+                    <div className="w-2 h-2 mr-2 bg-green-500 rounded-full"></div>
+                    <span className="font-medium text-green-700">Actif</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">ID du dossier</div>
+                  <div className="font-mono text-sm text-gray-600">{patient.id}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Clinical fields from LATEST CONSULTATION ONLY - Deduplicated */}
+            {latestConsultation ? (
+              <>
+                {/* Traitement actuel - FROM LATEST CONSULTATION */}
+                {latestConsultation.currentTreatment && cleanDecryptedField(latestConsultation.currentTreatment, false, '') && (
+                  <div className="p-6 bg-white shadow rounded-xl">
+                    <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                      <Pill size={20} className="mr-2 text-gray-600" />
+                      Traitement actuel
+                    </h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {cleanDecryptedField(latestConsultation.currentTreatment, false, '')}
+                    </p>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Dernière mise à jour : {formatDateTime(latestConsultation.date)}
+                    </p>
+                  </div>
+                )}
+
+                {/* Motif de consultation - FROM LATEST CONSULTATION */}
+                {latestConsultation.consultationReason && cleanDecryptedField(latestConsultation.consultationReason, false, '') && (
+                  <div className="p-6 bg-white shadow rounded-xl">
+                    <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                      <FileText size={20} className="mr-2 text-gray-600" />
+                      Motif de consultation
+                    </h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {cleanDecryptedField(latestConsultation.consultationReason, false, '')}
+                    </p>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Dernière mise à jour : {formatDateTime(latestConsultation.date)}
+                    </p>
+                  </div>
+                )}
+
+                {/* Antécédents médicaux - FROM LATEST CONSULTATION */}
+                {latestConsultation.medicalAntecedents && cleanDecryptedField(latestConsultation.medicalAntecedents, false, '') && (
+                  <div className="p-6 bg-white shadow rounded-xl">
+                    <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                      <AlertTriangle size={20} className="mr-2 text-gray-600" />
+                      Antécédents médicaux
+                    </h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {cleanDecryptedField(latestConsultation.medicalAntecedents, false, '')}
+                    </p>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Dernière mise à jour : {formatDateTime(latestConsultation.date)}
+                    </p>
+                  </div>
+                )}
+
+                {/* Traitement ostéopathique - FROM LATEST CONSULTATION */}
+                {latestConsultation.osteopathicTreatment && cleanDecryptedField(latestConsultation.osteopathicTreatment, false, '') && (
+                  <div className="p-6 bg-white shadow rounded-xl">
+                    <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                      <Stethoscope size={20} className="mr-2 text-gray-600" />
+                      Traitement ostéopathique
+                    </h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {cleanDecryptedField(latestConsultation.osteopathicTreatment, false, '')}
+                    </p>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Dernière mise à jour : {formatDateTime(latestConsultation.date)}
+                    </p>
+                  </div>
+                )}
+
+                {/* Historique médical - FROM LATEST CONSULTATION */}
+                {latestConsultation.medicalHistory && cleanDecryptedField(latestConsultation.medicalHistory, false, '') && (
+                  <div className="p-6 bg-white shadow rounded-xl">
+                    <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                      <History size={20} className="mr-2 text-gray-600" />
+                      Historique médical
+                    </h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {cleanDecryptedField(latestConsultation.medicalHistory, false, '')}
+                    </p>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Dernière mise à jour : {formatDateTime(latestConsultation.date)}
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
+                <p className="text-center text-gray-500">— Aucune consultation enregistrée —</p>
+                <p className="mt-2 text-sm text-center text-gray-400">
+                  Les données cliniques seront affichées après la première consultation
+                </p>
+              </div>
+            )}
+
+            {/* Historique des consultations (READ-ONLY) */}
+            <div className="p-6 bg-white shadow rounded-xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Historique des consultations</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab('consultations')}
+                  rightIcon={<ArrowLeft className="rotate-180" size={14} />}
+                >
+                  Voir tout
+                </Button>
+              </div>
+              {consultations.length > 0 ? (
+                <div className="space-y-3">
+                  {consultations.slice(0, 5).map((consultation) => (
+                    <div key={consultation.id} className="p-3 rounded-lg bg-gray-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-900">
+                          {formatDateTime(consultation.date)}
+                        </span>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getConsultationStatusColor(consultation.status)}`}>
+                          {getConsultationStatusText(consultation.status)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-700 truncate">
+                        {cleanDecryptedField(consultation.reason, false, 'Consultation ostéopathique')}
+                      </p>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-xs text-gray-500">{consultation.duration || 60} min</span>
+                        <span className="text-xs font-medium text-gray-700">{consultation.price || 60} €</span>
+                      </div>
+                    </div>
+                  ))}
+                  {consultations.length > 5 && (
+                    <p className="text-sm text-center text-gray-500">
+                      +{consultations.length - 5} autres consultations
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="py-4 italic text-center text-gray-500">Aucune consultation enregistrée</p>
+              )}
+            </div>
+
+            {/* Historique des factures (READ-ONLY) */}
+            <div className="p-6 bg-white shadow rounded-xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Historique des factures</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab('invoices')}
+                  rightIcon={<ArrowLeft className="rotate-180" size={14} />}
+                >
+                  Voir tout
+                </Button>
+              </div>
+              {invoices.length > 0 ? (
+                <div className="space-y-3">
+                  {invoices.slice(0, 5).map((invoice) => (
+                    <div key={invoice.id} className="p-3 rounded-lg bg-gray-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-900">
+                          {invoice.number}
+                        </span>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(invoice.status)}`}>
+                          {getStatusText(invoice.status)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-700">
+                          {formatDate(invoice.issueDate)}
+                        </span>
+                        <span className="text-sm font-medium text-gray-900">{invoice.total} €</span>
+                      </div>
+                    </div>
+                  ))}
+                  {invoices.length > 5 && (
+                    <p className="text-sm text-center text-gray-500">
+                      +{invoices.length - 5} autres factures
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="py-4 italic text-center text-gray-500">Aucune facture créée</p>
+              )}
+            </div>
+
+            {/* Historique des documents (READ-ONLY) */}
+            <div className="p-6 bg-white shadow rounded-xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Documents récents</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab('documents')}
+                  rightIcon={<ArrowLeft className="rotate-180" size={14} />}
+                >
+                  Voir tout
+                </Button>
+              </div>
+              {patient.documents && patient.documents.length > 0 ? (
+                <div className="space-y-3">
+                  {patient.documents.slice(0, 5).map((document, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex-shrink-0">
+                          {document.type?.startsWith('image/') ? (
+                            <ImageIcon size={20} className="text-blue-500" />
+                          ) : (
+                            <FileText size={20} className="text-gray-500" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900 truncate max-w-[200px]">
+                            {document.displayName || document.originalName || document.name}
+                          </h4>
+                          <p className="text-xs text-gray-500">
+                            {document.uploadedAt ? new Date(document.uploadedAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => window.open(document.url, '_blank')}
+                        leftIcon={<Eye size={14} />}
+                      >
+                        Voir
+                      </Button>
+                    </div>
+                  ))}
+                  {patient.documents.length > 5 && (
+                    <p className="text-sm text-center text-gray-500">
+                      +{patient.documents.length - 5} autres documents
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="py-4 italic text-center text-gray-500">Aucun document</p>
+              )}
+            </div>
+
+            {/* Actions rapides - NON-DESTRUCTIVE CTAs to navigate to other tabs */}
+            <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
+              <h3 className="mb-4 text-lg font-medium text-gray-900">Actions rapides</h3>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+                <Button
+                  variant="outline"
+                  fullWidth
+                  leftIcon={<Plus size={16} />}
+                  onClick={() => setIsNewConsultationModalOpen(true)}
+                >
+                  Nouvelle consultation
+                </Button>
+                <Button
+                  variant="outline"
+                  fullWidth
+                  leftIcon={<FileText size={16} />}
+                  onClick={() => setIsNewInvoiceModalOpen(true)}
+                >
+                  Nouvelle facture
+                </Button>
+                <Button
+                  variant="outline"
+                  fullWidth
+                  leftIcon={<Upload size={16} />}
+                  onClick={() => setActiveTab('documents')}
+                >
+                  Ajouter un document
+                </Button>
+                <Button
+                  variant="outline"
+                  fullWidth
+                  leftIcon={<Edit size={16} />}
+                  onClick={() => setActiveTab('consultations')}
+                >
+                  Modifier consultation
+                </Button>
+              </div>
+            </div>
+
+          </div>
         )}
+
         {activeTab === 'consultations' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -1264,7 +1606,7 @@ const PatientDetail: React.FC = () => {
                           </div>
                           <div>
                             <h4 className="text-sm font-medium text-gray-900">
-                              {document.originalName || document.name}
+                              {document.displayName || document.originalName || document.name}
                             </h4>
                             <p className="text-sm text-gray-500">
                               {document.size ? `${(document.size / (1024 * 1024)).toFixed(2)} MB` : 'Taille inconnue'}
@@ -1287,7 +1629,7 @@ const PatientDetail: React.FC = () => {
                             onClick={() => {
                               const link = document.createElement('a');
                               link.href = document.url;
-                              link.download = document.originalName || document.name;
+                              link.download = document.displayName || document.originalName || document.name;
                               link.click();
                             }}
                             leftIcon={<Download size={14} />}
