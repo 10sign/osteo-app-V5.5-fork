@@ -12,7 +12,6 @@ import { ConsultationService } from '../../services/consultationService';
 import { AppointmentService } from '../../services/appointmentService';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata, moveFile } from '../../utils/documentStorage';
-import SymptomsSyndromesField from '../ui/SymptomsSyndromesField';
 
 interface NewConsultationModalProps {
   isOpen: boolean;
@@ -76,7 +75,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
   const [isPatientPreselected, setIsPatientPreselected] = useState(false);
   const [consultationDocuments, setConsultationDocuments] = useState<DocumentMetadata[]>([]);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
-  const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
 
   const { register, handleSubmit, formState: { errors, isValid }, reset, control, watch, setValue } = useForm<ConsultationFormData>({
     mode: 'onChange',
@@ -200,7 +198,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
     setValue('medicalAntecedents', patient.medicalAntecedents || '');
     setValue('medicalHistory', patient.medicalHistory || '');
     setValue('osteopathicTreatment', patient.osteopathicTreatment || '');
-    setSelectedSymptoms(patient.pathologies || patient.tags || []);
+    setValue('symptoms', (patient.tags || []).join(', ') || '');
   };
 
   const onSubmit = async (data: ConsultationFormData) => {
@@ -285,7 +283,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         medicalAntecedents: data.medicalAntecedents || '',
         medicalHistory: data.medicalHistory || '',
         osteopathicTreatment: data.osteopathicTreatment || '',
-        symptoms: selectedSymptoms
+        symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : []
       };
 
       const consultationId = await ConsultationService.createConsultation(consultationData);
@@ -330,8 +328,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
       setTimeout(() => {
         setShowSuccessBanner(false);
         reset();
-        setSelectedSymptoms([]);
-        setConsultationDocuments([]);
         onSuccess();
         onClose();
       }, 2000);
@@ -603,11 +599,19 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
 
                   {/* Symptômes */}
                   <div className="mb-4">
-                    <SymptomsSyndromesField
-                      selectedTags={selectedSymptoms}
-                      onTagsChange={setSelectedSymptoms}
-                      disabled={isSubmitting}
+                    <label htmlFor="symptoms" className="block text-sm font-medium text-gray-700 mb-1">
+                      Symptômes
+                    </label>
+                    <input
+                      type="text"
+                      id="symptoms"
+                      className="input w-full"
+                      {...register('symptoms')}
+                      placeholder="Symptômes séparés par des virgules..."
                     />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Séparez les symptômes par des virgules (ex: Lombalgie, Cervicalgie, Fatigue)
+                    </p>
                   </div>
                 </div>
 

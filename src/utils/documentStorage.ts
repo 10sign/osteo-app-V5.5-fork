@@ -1,4 +1,4 @@
-import { ref, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import { storage, auth } from '../firebase/config';
 import imageCompression from 'browser-image-compression';
 
@@ -34,16 +34,18 @@ export interface DocumentMetadata {
 }
 
 // Configuration des types de fichiers autorisés
-// Selon spécifications: PDF, DOC, DOCX, JPG, PNG ≤ 10 Mo
 const ALLOWED_FILE_TYPES = {
   // Documents
   'application/pdf': { extension: 'pdf', maxSize: 10 * 1024 * 1024 }, // 10MB
-  'application/msword': { extension: 'doc', maxSize: 10 * 1024 * 1024 }, // 10MB
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { extension: 'docx', maxSize: 10 * 1024 * 1024 }, // 10MB
-
+  'application/msword': { extension: 'doc', maxSize: 10 * 1024 * 1024 },
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { extension: 'docx', maxSize: 10 * 1024 * 1024 },
+  'text/plain': { extension: 'txt', maxSize: 5 * 1024 * 1024 }, // 5MB
+  
   // Images
-  'image/jpeg': { extension: 'jpg', maxSize: 10 * 1024 * 1024 }, // 10MB
-  'image/png': { extension: 'png', maxSize: 10 * 1024 * 1024 } // 10MB
+  'image/jpeg': { extension: 'jpg', maxSize: 10 * 1024 * 1024 },
+  'image/png': { extension: 'png', maxSize: 10 * 1024 * 1024 },
+  'image/gif': { extension: 'gif', maxSize: 5 * 1024 * 1024 },
+  'image/webp': { extension: 'webp', maxSize: 10 * 1024 * 1024 }
 } as const;
 
 // Configuration de compression d'images
@@ -97,7 +99,7 @@ export async function validateFile(file: File): Promise<void> {
   // Vérifier le type de fichier
   const fileConfig = ALLOWED_FILE_TYPES[file.type as keyof typeof ALLOWED_FILE_TYPES];
   if (!fileConfig) {
-    const error = `Type de fichier non autorisé: ${file.type}. Types acceptés: PDF, DOC, DOCX, JPG, PNG`;
+    const error = `Type de fichier non autorisé: ${file.type}. Types acceptés: PDF, DOC, DOCX, TXT, JPG, PNG, GIF, WEBP`;
     console.error('❌', error);
     throw new Error(error);
   }
@@ -182,54 +184,23 @@ export async function compressImageIfNeeded(
 }
 
 /**
- * Slugify un nom de document pour un nom de fichier sécurisé
- * Transforme "Mon Document Important" en "mon-document-important"
+ * Génère un nom de fichier unique
  */
-export function slugifyDocumentName(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    // Remplacer les espaces multiples par un seul espace
-    .replace(/\s+/g, ' ')
-    // Remplacer les espaces par des tirets
-    .replace(/\s/g, '-')
-    // Supprimer les caractères non autorisés (garder lettres, chiffres, tirets, underscores et accents)
-    .replace(/[^a-z0-9\-_àâäæçéèêëïîôùûüÿœ]/g, '')
-    // Remplacer les tirets/underscores multiples par un seul
-    .replace(/[-_]+/g, '-')
-    // Supprimer les tirets au début et à la fin
-    .replace(/^-+|-+$/g, '');
-}
-
-/**
- * Génère un nom de fichier unique basé sur le displayName ou le nom de fichier original
- */
-export function generateUniqueFileName(
-  originalName: string,
-  folder: string,
-  displayName?: string
-): string {
+export function generateUniqueFileName(originalName: string, folder: string): string {
   const timestamp = Date.now();
+  const randomId = Math.random().toString(36).substring(2, 8);
   const extension = originalName.split('.').pop()?.toLowerCase() || '';
-
-  // Utiliser le displayName s'il est fourni, sinon utiliser le nom original sans extension
-  const nameToUse = displayName || originalName.replace(/\.[^/.]+$/, '');
-
-  // Slugifier le nom
-  const slugifiedName = slugifyDocumentName(nameToUse);
-
-  // Limiter la longueur du nom de base (laisser de la place pour timestamp et extension)
-  const baseName = slugifiedName.substring(0, 100);
-
-  // Format final: baseName_timestamp.extension
-  const fileName = `${baseName}_${timestamp}.${extension}`;
-  console.log('📝 Nom de fichier généré:', {
-    originalName,
-    displayName,
-    slugified: baseName,
-    final: fileName
-  });
-
+  const baseName = originalName.replace(/\.[^/.]+$/, '').substring(0, 50);
+  
+  // Nettoyer le nom de base
+  const cleanBaseName = baseName
+    .replace(/[^a-zA-Z0-9\-_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+  
+  const fileName = `${timestamp}_${randomId}_${cleanBaseName}.${extension}`;
+  console.log('📝 Nom de fichier généré:', fileName);
+  
   return fileName;
 }
 
@@ -274,15 +245,14 @@ export function createFolderStructure(
 export async function uploadDocument(
   file: File,
   folder: string,
-  displayName?: string,
+  fileName?: string,
   onProgress?: (progress: UploadProgress) => void
 ): Promise<UploadResult> {
   console.log('🚀 Début de l\'upload:', {
     fileName: file.name,
     fileSize: file.size,
     fileType: file.type,
-    folder,
-    displayName
+    folder
   });
 
   if (!auth.currentUser) {
@@ -314,9 +284,9 @@ export async function uploadDocument(
 
     const processedFile = await compressImageIfNeeded(file, onProgress);
 
-    // Étape 3: Génération du nom unique avec displayName
+    // Étape 3: Génération du nom unique
     console.log('📝 Étape 3: Génération du nom de fichier');
-    const uniqueFileName = generateUniqueFileName(file.name, folder, displayName);
+    const uniqueFileName = fileName || generateUniqueFileName(file.name, folder);
     const uploadPath = `${folder}/${uniqueFileName}`;
 
     console.log('📍 Chemin d\'upload final:', uploadPath);
@@ -338,12 +308,11 @@ export async function uploadDocument(
     console.log('☁️ Étape 4: Upload vers Firebase Storage');
     const storageRef = ref(storage, uploadPath);
     
-    // Métadonnées personnalisées incluant displayName
+    // Métadonnées personnalisées
     const metadata = {
       contentType: processedFile.type,
       customMetadata: {
         originalName: file.name,
-        displayName: displayName || file.name.replace(/\.[^/.]+$/, ''), // Nom personnalisé ou nom sans extension
         uploadedBy: auth.currentUser.uid,
         uploadedAt: new Date().toISOString(),
         originalSize: file.size.toString(),
@@ -542,7 +511,6 @@ export async function listDocuments(folderPath: string): Promise<DocumentMetadat
           id: itemRef.name,
           name: itemRef.name,
           originalName: metadata.customMetadata?.originalName || itemRef.name,
-          displayName: metadata.customMetadata?.displayName, // Récupérer le displayName des métadonnées
           url,
           type: metadata.contentType || 'application/octet-stream',
           size: metadata.size,
