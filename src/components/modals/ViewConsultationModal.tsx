@@ -77,7 +77,31 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
         }
         
         console.log('✅ Consultation data loaded:', consultationData);
-        setConsultation(consultationData);
+
+        // Rétrocompatibilité : s'assurer que tous les champs existent
+        const completeConsultation = {
+          ...consultationData,
+          patientFirstName: consultationData.patientFirstName || '',
+          patientLastName: consultationData.patientLastName || '',
+          patientDateOfBirth: consultationData.patientDateOfBirth || '',
+          patientGender: consultationData.patientGender || '',
+          patientPhone: consultationData.patientPhone || '',
+          patientProfession: consultationData.patientProfession || '',
+          patientEmail: consultationData.patientEmail || '',
+          patientAddress: consultationData.patientAddress || '',
+          patientInsurance: consultationData.patientInsurance || '',
+          patientInsuranceNumber: consultationData.patientInsuranceNumber || '',
+          currentTreatment: consultationData.currentTreatment || '',
+          consultationReason: consultationData.consultationReason || '',
+          medicalAntecedents: consultationData.medicalAntecedents || '',
+          medicalHistory: consultationData.medicalHistory || '',
+          osteopathicTreatment: consultationData.osteopathicTreatment || '',
+          symptoms: consultationData.symptoms || [],
+          examinations: consultationData.examinations || [],
+          prescriptions: consultationData.prescriptions || []
+        };
+
+        setConsultation(completeConsultation);
         
       } catch (error) {
         console.error('Error loading consultation:', error);
