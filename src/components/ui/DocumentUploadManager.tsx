@@ -34,6 +34,7 @@ interface UploadingFile {
   status: 'validating' | 'compressing' | 'uploading' | 'complete' | 'error';
   error?: string;
   category: string;
+  displayName?: string;
 }
 
 const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
@@ -49,45 +50,54 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedCategory, setSelectedCategory] = useState(DOCUMENT_CATEGORIES[0].value);
+  const [documentName, setDocumentName] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || !auth.currentUser) return;
-    
+
     const files = Array.from(event.target.files);
-    
+
+    // Valider et nettoyer le nom du document
+    const cleanedDisplayName = documentName.trim();
+    const finalDisplayName = cleanedDisplayName || undefined;
+
     // Ajouter les fichiers à la liste des uploads en cours
     const newUploadingFiles = files.map(file => ({
       file,
       progress: 0,
       status: 'validating' as const,
-      category: selectedCategory
+      category: selectedCategory,
+      displayName: finalDisplayName || file.name.replace(/\.[^/.]+$/, '') // Par défaut : nom sans extension
     }));
-    
+
     setUploadingFiles(prev => [...prev, ...newUploadingFiles]);
-    
+
     // Traiter chaque fichier
     files.forEach((file, index) => {
-      processFile(file, selectedCategory, newUploadingFiles.length - files.length + index);
+      const uploadIndex = newUploadingFiles.length - files.length + index;
+      const fileDisplayName = newUploadingFiles[uploadIndex].displayName;
+      processFile(file, selectedCategory, uploadIndex, fileDisplayName);
     });
-    
-    // Réinitialiser l'input pour permettre de sélectionner à nouveau le même fichier
+
+    // Réinitialiser le nom du document et l'input après upload
+    setDocumentName('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  }, [selectedCategory, patientId]);
+  }, [selectedCategory, documentName, patientId]);
 
-  const processFile = async (file: File, category: string, index: number) => {
+  const processFile = async (file: File, category: string, index: number, displayName?: string) => {
     if (!auth.currentUser) return;
-    
+
     try {
       // Créer le chemin du dossier
       const folderPath = `users/${auth.currentUser.uid}/patients/${patientId}/documents/${category}`;
-      
+
       // Mettre à jour le statut
       updateFileStatus(index, 'uploading', 10);
-      
+
       // Uploader le document
       const result = await uploadDocument(
         file,
@@ -100,13 +110,14 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
           }
         }
       );
-      
-      // Ajouter les métadonnées de catégorie
+
+      // Ajouter les métadonnées de catégorie et displayName
       const documentWithCategory: DocumentMetadata = {
         ...result,
         id: result.fileName,
         name: result.fileName,
         originalName: file.name,
+        displayName: displayName, // Nom personnalisé du document
         url: result.url,
         type: file.type,
         size: result.fileSize,
@@ -166,25 +177,35 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
   const handleDrop = (event: React.DragEvent) => {
     event.preventDefault();
     setDragOver(false);
-    
+
     if (disabled || !event.dataTransfer.files.length) return;
-    
+
     const files = Array.from(event.dataTransfer.files);
-    
+
+    // Valider et nettoyer le nom du document
+    const cleanedDisplayName = documentName.trim();
+    const finalDisplayName = cleanedDisplayName || undefined;
+
     // Ajouter les fichiers à la liste des uploads en cours
     const newUploadingFiles = files.map(file => ({
       file,
       progress: 0,
       status: 'validating' as const,
-      category: selectedCategory
+      category: selectedCategory,
+      displayName: finalDisplayName || file.name.replace(/\.[^/.]+$/, '') // Par défaut : nom sans extension
     }));
-    
+
     setUploadingFiles(prev => [...prev, ...newUploadingFiles]);
-    
+
     // Traiter chaque fichier
     files.forEach((file, index) => {
-      processFile(file, selectedCategory, newUploadingFiles.length - files.length + index);
+      const uploadIndex = newUploadingFiles.length - files.length + index;
+      const fileDisplayName = newUploadingFiles[uploadIndex].displayName;
+      processFile(file, selectedCategory, uploadIndex, fileDisplayName);
     });
+
+    // Réinitialiser le nom du document après upload
+    setDocumentName('');
   };
 
   const handleDeleteDocument = async (document: DocumentMetadata) => {
@@ -265,6 +286,27 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
         </div>
         
         <div className="w-full md:w-2/3">
+          <label htmlFor="documentName" className="block text-sm font-medium text-gray-700 mb-1">
+            Nom du document (optionnel)
+          </label>
+          <input
+            id="documentName"
+            type="text"
+            value={documentName}
+            onChange={(e) => {
+              const value = e.target.value;
+              // Filtrer les caractères de contrôle, autoriser accents et espaces
+              const cleaned = value.replace(/[\x00-\x1F\x7F]/g, '');
+              if (cleaned.length <= 120) {
+                setDocumentName(cleaned);
+              }
+            }}
+            placeholder="Ex: Ordonnance Dr. Martin du 15/12/2024"
+            className="input w-full mb-3"
+            disabled={disabled}
+            maxLength={120}
+          />
+
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Téléverser un document
           </label>
@@ -376,7 +418,7 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
                   
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">
-                      {document.originalName || document.name}
+                      {document.displayName || document.originalName || document.name}
                     </p>
                     <div className="flex items-center space-x-2">
                       <p className="text-xs text-gray-500">
