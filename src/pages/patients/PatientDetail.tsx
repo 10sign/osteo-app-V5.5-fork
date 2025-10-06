@@ -1042,112 +1042,203 @@ const PatientDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* Dernière consultation - Résumé */}
-            {lastConsultation ? (
-              <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-medium text-gray-900">Dernière consultation</h3>
-                  <span className={`px-3 py-1 text-sm font-medium rounded-full ${getConsultationStatusColor(lastConsultation.status)}`}>
-                    {getConsultationStatusText(lastConsultation.status)}
-                  </span>
-                </div>
+            {/* Motif de consultation (dernière consultation) */}
+            <div className="p-6 bg-white shadow rounded-xl">
+              <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
+                <FileText size={20} className="mr-2 text-gray-600" />
+                Motif de consultation
+              </h3>
+              <p className="text-gray-900">
+                {lastConsultation?.reason
+                  ? cleanDecryptedField(lastConsultation.reason, false, '—')
+                  : '—'}
+              </p>
+            </div>
 
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div>
-                      <div className="flex items-center text-sm text-gray-500 mb-1">
-                        <Calendar size={16} className="mr-2" />
-                        Date et heure
-                      </div>
-                      <div className="font-medium text-gray-900">
-                        {formatDateTime(lastConsultation.date)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex items-center text-sm text-gray-500 mb-1">
-                        <Clock size={16} className="mr-2" />
-                        Durée et tarif
-                      </div>
-                      <div className="font-medium text-gray-900">
-                        {lastConsultation.duration || 60} min · {lastConsultation.price || 60} €
-                      </div>
-                    </div>
-                  </div>
+            {/* Antécédents médicaux (dernière consultation) */}
+            <div className="p-6 bg-white shadow rounded-xl">
+              <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
+                <AlertTriangle size={20} className="mr-2 text-gray-600" />
+                Antécédents médicaux
+              </h3>
+              <p className="text-gray-900 whitespace-pre-wrap">
+                {lastConsultation?.medicalAntecedents
+                  ? cleanDecryptedField(lastConsultation.medicalAntecedents, false, '—')
+                  : '—'}
+              </p>
+            </div>
 
-                  {lastConsultation.reason && (
-                    <div>
-                      <div className="flex items-center text-sm font-medium text-gray-700 mb-1">
-                        <FileText size={16} className="mr-2" />
-                        Motif
-                      </div>
-                      <p className="text-gray-900">
-                        {cleanDecryptedField(lastConsultation.reason, false, 'Consultation ostéopathique')}
-                      </p>
-                    </div>
-                  )}
+            {/* Traitement ostéopathique (dernière consultation) */}
+            <div className="p-6 bg-white shadow rounded-xl">
+              <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
+                <Stethoscope size={20} className="mr-2 text-gray-600" />
+                Traitement ostéopathique
+              </h3>
+              <p className="text-gray-900 whitespace-pre-wrap">
+                {lastConsultation?.osteopathicTreatment
+                  ? cleanDecryptedField(lastConsultation.osteopathicTreatment, false, '—')
+                  : '—'}
+              </p>
+            </div>
 
-                  {lastConsultation.symptoms && lastConsultation.symptoms.length > 0 && (
-                    <div>
-                      <div className="text-sm font-medium text-gray-700 mb-2">Symptômes</div>
-                      <div className="flex flex-wrap gap-2">
-                        {lastConsultation.symptoms.slice(0, 5).map((symptom, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-primary-50 text-primary-700"
-                          >
-                            {symptom}
-                          </span>
-                        ))}
-                        {lastConsultation.symptoms.length > 5 && (
-                          <span className="text-sm text-gray-500">+{lastConsultation.symptoms.length - 5} autres</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
+            {/* Notes (dernière consultation) */}
+            <div className="p-6 bg-white shadow rounded-xl">
+              <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
+                <FileText size={20} className="mr-2 text-gray-600" />
+                Notes
+              </h3>
+              <p className="text-gray-900 whitespace-pre-wrap">
+                {lastConsultation?.notes
+                  ? cleanDecryptedField(lastConsultation.notes, false, '—')
+                  : '—'}
+              </p>
+            </div>
 
-                  {lastConsultation.treatment && (
-                    <div>
-                      <div className="flex items-center text-sm font-medium text-gray-700 mb-1">
-                        <Stethoscope size={16} className="mr-2" />
-                        Traitement (aperçu)
-                      </div>
-                      <p className="text-gray-900 line-clamp-2">
-                        {cleanDecryptedField(lastConsultation.treatment, false, 'Traitement ostéopathique')}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="pt-4 border-t">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedConsultationId(lastConsultation.id);
-                        setIsViewConsultationModalOpen(true);
-                      }}
-                      leftIcon={<Eye size={16} />}
-                    >
-                      Voir les détails complets
-                    </Button>
+            {/* Informations du dossier (document patient) */}
+            <div className="p-6 bg-white shadow rounded-xl">
+              <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
+                <Info size={20} className="mr-2 text-gray-600" />
+                Informations du dossier
+              </h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <div className="text-sm text-gray-500">Dossier créé le</div>
+                  <div className="font-medium text-gray-900">
+                    {patient.createdAt ? new Date(patient.createdAt).toLocaleDateString('fr-FR') : '—'}
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
-                <div className="text-center py-8">
-                  <Stethoscope size={48} className="mx-auto text-gray-300 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Aucune consultation</h3>
-                  <p className="text-gray-500 mb-4">Ce patient n'a pas encore de consultation enregistrée.</p>
-                  <Button
-                    variant="primary"
-                    onClick={() => setIsNewConsultationModalOpen(true)}
-                    leftIcon={<Plus size={16} />}
-                  >
-                    Créer une consultation
-                  </Button>
+                <div>
+                  <div className="text-sm text-gray-500">Dernière modification</div>
+                  <div className="font-medium text-gray-900">
+                    {patient.updatedAt ? new Date(patient.updatedAt).toLocaleDateString('fr-FR') : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Statut du dossier</div>
+                  <div className="flex items-center">
+                    <div className="w-2 h-2 mr-2 bg-green-500 rounded-full"></div>
+                    <span className="font-medium text-green-700">Actif</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">ID du dossier</div>
+                  <div className="font-mono text-sm text-gray-600">{patient.id}</div>
                 </div>
               </div>
-            )}
+            </div>
+
+            {/* Dernières consultations (historique condensé) */}
+            <div className="p-6 bg-white shadow rounded-xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Dernières consultations</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab('consultations')}
+                  rightIcon={<ArrowLeft className="rotate-180" size={14} />}
+                >
+                  Voir tout
+                </Button>
+              </div>
+              {consultations.length > 0 ? (
+                <div className="space-y-3">
+                  {consultations.slice(0, 3).map((consultation) => (
+                    <div key={consultation.id} className="p-3 rounded-lg bg-gray-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-900">
+                          {formatDateTime(consultation.date)}
+                        </span>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getConsultationStatusColor(consultation.status)}`}>
+                          {getConsultationStatusText(consultation.status)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-700 truncate">
+                        {cleanDecryptedField(consultation.reason, false, 'Consultation ostéopathique')}
+                      </p>
+                    </div>
+                  ))}
+                  {consultations.length > 3 && (
+                    <p className="text-sm text-center text-gray-500">
+                      +{consultations.length - 3} autres consultations
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="py-4 italic text-center text-gray-500">Aucune consultation enregistrée</p>
+              )}
+            </div>
+
+            {/* Factures récentes (historique condensé) */}
+            <div className="p-6 bg-white shadow rounded-xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Factures récentes</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab('invoices')}
+                  rightIcon={<ArrowLeft className="rotate-180" size={14} />}
+                >
+                  Voir tout
+                </Button>
+              </div>
+              {invoices.length > 0 ? (
+                <div className="space-y-3">
+                  {invoices.slice(0, 3).map((invoice) => (
+                    <div key={invoice.id} className="p-3 rounded-lg bg-gray-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-900">
+                          {invoice.number}
+                        </span>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(invoice.status)}`}>
+                          {getStatusText(invoice.status)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-700">
+                          {formatDate(invoice.issueDate)}
+                        </span>
+                        <span className="text-sm font-medium text-gray-900">{invoice.total} €</span>
+                      </div>
+                    </div>
+                  ))}
+                  {invoices.length > 3 && (
+                    <p className="text-sm text-center text-gray-500">
+                      +{invoices.length - 3} autres factures
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="py-4 italic text-center text-gray-500">Aucune facture enregistrée</p>
+              )}
+            </div>
+
+            {/* Actions rapides */}
+            <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
+              <h3 className="mb-4 text-lg font-medium text-gray-900">Actions rapides</h3>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  variant="primary"
+                  onClick={() => setIsNewConsultationModalOpen(true)}
+                  leftIcon={<Plus size={16} />}
+                >
+                  Nouvelle consultation
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsNewInvoiceModalOpen(true)}
+                  leftIcon={<CreditCard size={16} />}
+                >
+                  Nouvelle facture
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setActiveTab('documents')}
+                  leftIcon={<Upload size={16} />}
+                >
+                  Ajouter un document
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 
