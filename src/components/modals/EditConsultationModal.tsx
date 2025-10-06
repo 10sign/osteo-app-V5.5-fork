@@ -116,31 +116,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         const consultation = {
           id: consultationDoc.id,
           ...decryptedData,
-          date: rawData.date?.toDate?.() || new Date(rawData.date),
-
-          // Rétrocompatibilité : initialiser les champs manquants avec des valeurs vides
-          patientFirstName: decryptedData.patientFirstName || '',
-          patientLastName: decryptedData.patientLastName || '',
-          patientDateOfBirth: decryptedData.patientDateOfBirth || '',
-          patientGender: decryptedData.patientGender || '',
-          patientPhone: decryptedData.patientPhone || '',
-          patientProfession: decryptedData.patientProfession || '',
-          patientEmail: decryptedData.patientEmail || '',
-          patientAddress: decryptedData.patientAddress || '',
-          patientInsurance: decryptedData.patientInsurance || '',
-          patientInsuranceNumber: decryptedData.patientInsuranceNumber || '',
-          currentTreatment: decryptedData.currentTreatment || '',
-          consultationReason: decryptedData.consultationReason || '',
-          medicalAntecedents: decryptedData.medicalAntecedents || '',
-          medicalHistory: decryptedData.medicalHistory || '',
-          osteopathicTreatment: decryptedData.osteopathicTreatment || '',
-          symptoms: decryptedData.symptoms || []
+          date: rawData.date?.toDate?.() || new Date(rawData.date)
         };
-
+        
         setConsultationData(consultation);
-
-        console.log('✅ Final consultation data for form (with defaults):', consultation);
-
+        
+        console.log('✅ Final consultation data for form:', consultation);
+        
         // Pre-fill form with consultation data
         const consultationDate = consultation.date?.toDate ? consultation.date.toDate() : new Date(consultation.date);
         const dateString = consultationDate.toISOString().split('T')[0];
@@ -209,8 +191,8 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
     try {
       const consultationDate = new Date(`${data.date}T${data.time}`);
-
-      // Préparer les données de mise à jour COMPLETES
+      
+      // Préparer les données de mise à jour
       const updateData = {
         date: consultationDate,
         reason: data.reason,
@@ -223,21 +205,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         prescriptions: data.prescriptions.map(item => item.value),
         updatedAt: new Date().toISOString(),
 
-        // Champs d'identité patient (snapshot) - CONSERVER lors de la mise à jour
-        patientId: consultationData.patientId,
-        patientName: consultationData.patientName,
-        patientFirstName: consultationData.patientFirstName || '',
-        patientLastName: consultationData.patientLastName || '',
-        patientDateOfBirth: consultationData.patientDateOfBirth || '',
-        patientGender: consultationData.patientGender || '',
-        patientPhone: consultationData.patientPhone || '',
-        patientProfession: consultationData.patientProfession || '',
-        patientEmail: consultationData.patientEmail || '',
-        patientAddress: consultationData.patientAddress || '',
-        patientInsurance: consultationData.patientInsurance || '',
-        patientInsuranceNumber: consultationData.patientInsuranceNumber || '',
-
-        // Champs cliniques (modifiables)
+        // Champs cliniques
         currentTreatment: data.currentTreatment || '',
         consultationReason: data.consultationReason || '',
         medicalAntecedents: data.medicalAntecedents || '',
@@ -245,9 +213,9 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         osteopathicTreatment: data.osteopathicTreatment || '',
         symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : []
       };
-
-      console.log('💾 Prepared update data (complete):', updateData);
-
+      
+      console.log('💾 Prepared update data:', updateData);
+      
       // Mettre à jour via le service
       const consultationRef = doc(db, 'consultations', consultationId);
       await updateDoc(consultationRef, {
@@ -255,12 +223,12 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         date: Timestamp.fromDate(consultationDate),
         updatedAt: Timestamp.now()
       });
-
+      
       console.log('✅ Consultation updated successfully in Firestore');
-
+      
       // Afficher le message de succès après que tout soit enregistré
       setShowSuccessBanner(true);
-
+      
       // Attendre 2 secondes avant de fermer le modal
       setTimeout(() => {
         setShowSuccessBanner(false);
