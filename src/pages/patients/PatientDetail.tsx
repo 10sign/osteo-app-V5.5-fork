@@ -1295,7 +1295,7 @@ const PatientDetail: React.FC = () => {
                         </div>
                         <div>
                           <h4 className="text-sm font-medium text-gray-900 truncate max-w-[200px]">
-                            {document.displayName || document.originalName || document.name}
+                            {document.originalName || document.name}
                           </h4>
                           <p className="text-xs text-gray-500">
                             {document.uploadedAt ? new Date(document.uploadedAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
@@ -1606,7 +1606,7 @@ const PatientDetail: React.FC = () => {
                           </div>
                           <div>
                             <h4 className="text-sm font-medium text-gray-900">
-                              {document.displayName || document.originalName || document.name}
+                              {document.originalName || document.name}
                             </h4>
                             <p className="text-sm text-gray-500">
                               {document.size ? `${(document.size / (1024 * 1024)).toFixed(2)} MB` : 'Taille inconnue'}
@@ -1629,7 +1629,7 @@ const PatientDetail: React.FC = () => {
                             onClick={() => {
                               const link = document.createElement('a');
                               link.href = document.url;
-                              link.download = document.displayName || document.originalName || document.name;
+                              link.download = document.originalName || document.name;
                               link.click();
                             }}
                             leftIcon={<Download size={14} />}
