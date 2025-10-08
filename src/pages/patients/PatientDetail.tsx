@@ -1623,7 +1623,10 @@ const PatientDetail: React.FC = () => {
         {activeTab === 'consultations' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium text-gray-900">Consultations</h3>
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">Historique des consultations</h3>
+                <p className="text-sm text-gray-500">Chaque consultation conserve un snapshot indépendant des données du patient au moment T</p>
+              </div>
               <Button
                 variant="primary"
                 leftIcon={<Plus size={16} />}
@@ -1650,13 +1653,13 @@ const PatientDetail: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {consultations.map((consultation) => (
-                  <div key={consultation.id} className="p-6 bg-white shadow rounded-xl">
+                {consultations.map((consultation, index) => (
+                  <div key={consultation.id} className="p-6 bg-white shadow rounded-xl border-l-4 border-primary-500">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
                         <div className="flex items-center mb-2 space-x-3">
                           <h4 className="text-lg font-medium text-gray-900">
-                            {formatDateTime(consultation.date)}
+                            Consultation #{consultations.length - index} - {formatDateTime(consultation.date)}
                           </h4>
                           <span className={`px-2 py-1 text-xs font-medium rounded-full ${getConsultationStatusColor(consultation.status)}`}>
                             {getConsultationStatusText(consultation.status)}
@@ -1703,14 +1706,14 @@ const PatientDetail: React.FC = () => {
 
                     <div className="space-y-4">
                       <div>
-                        <h5 className="mb-1 text-sm font-medium text-gray-700">Motif</h5>
+                        <h5 className="mb-1 text-sm font-medium text-gray-700">Motif de consultation</h5>
                         <p className="text-gray-900">
                           {cleanDecryptedField(consultation.reason, false, 'Consultation ostéopathique')}
                         </p>
                       </div>
 
                       <div>
-                        <h5 className="mb-1 text-sm font-medium text-gray-700">Traitement</h5>
+                        <h5 className="mb-1 text-sm font-medium text-gray-700">Traitement effectué</h5>
                         <p className="text-gray-900 whitespace-pre-wrap">
                           {cleanDecryptedField(consultation.treatment, false, 'Traitement ostéopathique standard')}
                         </p>
@@ -1718,12 +1721,47 @@ const PatientDetail: React.FC = () => {
 
                       {consultation.notes && cleanDecryptedField(consultation.notes, false, '') && (
                         <div>
-                          <h5 className="mb-1 text-sm font-medium text-gray-700">Notes</h5>
+                          <h5 className="mb-1 text-sm font-medium text-gray-700">Notes complémentaires</h5>
                           <p className="text-gray-900 whitespace-pre-wrap">
                             {cleanDecryptedField(consultation.notes, false, '')}
                           </p>
                         </div>
                       )}
+
+                      <div className="grid grid-cols-1 gap-4 pt-4 border-t md:grid-cols-2">
+                        {consultation.consultationReason && (
+                          <div>
+                            <h5 className="mb-1 text-xs font-medium text-gray-500 uppercase">Motif détaillé</h5>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                              {cleanDecryptedField(consultation.consultationReason, false, '-')}
+                            </p>
+                          </div>
+                        )}
+                        {consultation.currentTreatment && (
+                          <div>
+                            <h5 className="mb-1 text-xs font-medium text-gray-500 uppercase">Traitement en cours</h5>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                              {cleanDecryptedField(consultation.currentTreatment, false, '-')}
+                            </p>
+                          </div>
+                        )}
+                        {consultation.medicalAntecedents && (
+                          <div>
+                            <h5 className="mb-1 text-xs font-medium text-gray-500 uppercase">Antécédents</h5>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                              {cleanDecryptedField(consultation.medicalAntecedents, false, '-')}
+                            </p>
+                          </div>
+                        )}
+                        {consultation.osteopathicTreatment && (
+                          <div>
+                            <h5 className="mb-1 text-xs font-medium text-gray-500 uppercase">Traitement ostéopathique</h5>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                              {cleanDecryptedField(consultation.osteopathicTreatment, false, '-')}
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
