@@ -1059,14 +1059,15 @@ const PatientDetail: React.FC = () => {
                       {cleanDecryptedField(latestConsultation.notes, false, '')}
                     </p>
                   ) : (
-                    <p className="text-gray-500 italic">Aucune note complémentaire pour cette consultation</p>
+                    <p className="italic text-gray-500">Aucune note complémentaire pour cette consultation</p>
                   )}
                 </div>
               );
             })()}
 
             {/* ✅ NOUVEAU : Section Dernière consultation - Informations spécifiques à la consultation */}
-            {(() => {
+            {/* Bloc masqué selon les spécifications - redondant avec "Dernières consultations" */}
+            {/* {(() => {
               const latestConsultation = getLatestConsultation();
               return latestConsultation && (
                 <div className="p-6 bg-white shadow rounded-xl">
@@ -1115,7 +1116,7 @@ const PatientDetail: React.FC = () => {
                   </div>
                 </div>
               );
-            })()}
+            })()} */}
 
 
             {/* AJOUT : Section Métadonnées du dossier - Informations système manquantes */}
