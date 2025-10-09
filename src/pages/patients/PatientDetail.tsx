@@ -16,7 +16,6 @@ import {
   CheckCircle,
   Eye,
   Download,
-  Upload,
   History,
   Stethoscope,
   CreditCard,
@@ -1326,7 +1325,8 @@ const PatientDetail: React.FC = () => {
                 >
                   Nouvelle consultation
                 </Button>
-                <Button
+                {/* Boutons masqués selon les spécifications */}
+                {/* <Button
                   variant="outline"
                   fullWidth
                   leftIcon={<FileText size={16} />}
@@ -1341,7 +1341,7 @@ const PatientDetail: React.FC = () => {
                   onClick={() => setIsAddDocumentModalOpen(true)}
                 >
                   Ajouter un document
-                </Button>
+                </Button> */}
                 <Button
                   variant="outline"
                   fullWidth
