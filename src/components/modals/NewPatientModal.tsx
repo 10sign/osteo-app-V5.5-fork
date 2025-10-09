@@ -429,6 +429,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         patientName: `${data.firstName.trim()} ${data.lastName.trim()}`,
         osteopathId: auth.currentUser.uid,
         date: new Date(),
+        // ✅ CORRECTION: Mapping correct des champs principaux
         reason: data.consultationReason || 'Première consultation',
         treatment: data.osteopathicTreatment || 'Évaluation initiale et anamnèse',
         notes: data.notes || 'Consultation générée automatiquement lors de la création du patient.',
@@ -450,7 +451,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         patientInsurance: data.insurance || '',
         patientInsuranceNumber: data.insuranceNumber || '',
 
-        // ✅ SNAPSHOT COMPLET - Champs cliniques au moment T
+        // ✅ SNAPSHOT COMPLET - Champs cliniques au moment T (mapping correct)
         currentTreatment: data.currentTreatment || '',
         consultationReason: data.consultationReason || '',
         medicalAntecedents: data.medicalAntecedents || '',
