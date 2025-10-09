@@ -56,7 +56,25 @@ const SENSITIVE_FIELDS: Record<string, string[]> = {
   consultations: [
     'reason',
     'treatment',
-    'notes'
+    'notes',
+    // ✅ AJOUT: Champs cliniques manquants
+    'consultationReason',
+    'currentTreatment',
+    'medicalAntecedents',
+    'medicalHistory',
+    'osteopathicTreatment',
+    'symptoms',
+    // Champs d'identité patient (snapshot)
+    'patientFirstName',
+    'patientLastName',
+    'patientDateOfBirth',
+    'patientGender',
+    'patientPhone',
+    'patientEmail',
+    'patientProfession',
+    'patientAddress',
+    'patientInsurance',
+    'patientInsuranceNumber'
   ],
   invoices: [
     'patientName',
