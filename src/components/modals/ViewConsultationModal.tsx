@@ -229,31 +229,8 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Motif de consultation */}
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                      <FileText size={16} className="mr-2 text-gray-600" />
-                      Motif de consultation
-                    </h4>
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <p className="text-gray-900 font-medium">
-                        {cleanDecryptedField(consultation.reason, false, 'Consultation ostéopathique')}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Traitement */}
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                      <Stethoscope size={16} className="mr-2 text-gray-600" />
-                      Traitement effectué
-                    </h4>
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <p className="text-gray-900 whitespace-pre-wrap">
-                        {cleanDecryptedField(consultation.treatment, false, 'Traitement ostéopathique standard')}
-                      </p>
-                    </div>
-                  </div>
+                  {/* ✅ SUPPRIMÉ : Anciens champs "Motif de consultation" et "Traitement effectué" 
+                      Ces champs sont remplacés par les champs détaillés dans la section "Données cliniques" */}
 
                   {/* Notes complémentaires */}
                   {consultation.notes && cleanDecryptedField(consultation.notes, false, '') && (
@@ -319,10 +296,10 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                         </div>
                       )}
 
-                      {/* Traitement actuel */}
+                      {/* Traitement effectué */}
                       {consultation.currentTreatment && cleanDecryptedField(consultation.currentTreatment, false, '') && (
                         <div className="mb-4">
-                          <h4 className="font-medium text-gray-900 mb-2">Traitement actuel du patient</h4>
+                          <h4 className="font-medium text-gray-900 mb-2">Traitement effectué du patient</h4>
                           <div className="bg-white border border-gray-200 rounded-lg p-4">
                             <p className="text-gray-900 whitespace-pre-wrap">
                               {cleanDecryptedField(consultation.currentTreatment, false, '')}

@@ -652,10 +652,11 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                   <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
                     Adresse postale complète
                   </label>
-                  <textarea
+                  <AutoResizeTextarea
                     id="address"
-                    rows={3}
-                    className={`input w-full resize-none ${errors.address ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                    minRows={3}
+                    maxRows={6}
+                    className={`input w-full ${errors.address ? 'border-error focus:border-error focus:ring-error' : ''}`}
                     {...register('address')}
                   />
                   {errors.address && (
@@ -709,7 +710,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
 
                 <div>
                   <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
-                    Traitement actuel
+                    Traitement effectué
                   </label>
                   <AutoResizeTextarea
                     id="currentTreatment"

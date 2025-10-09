@@ -892,7 +892,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
 
                 <div>
                   <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
-                    Traitement actuel
+                    Traitement effectué
                   </label>
                   <AutoResizeTextarea
                     id="currentTreatment"

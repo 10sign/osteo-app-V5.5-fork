@@ -5,6 +5,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
+import AutoResizeTextarea from '../ui/AutoResizeTextarea';
 import { Patient } from '../../types';
 import { InvoiceService } from '../../services/invoiceService';
 
@@ -537,10 +538,11 @@ const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
                   <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
                     Notes
                   </label>
-                  <textarea
+                  <AutoResizeTextarea
                     id="notes"
-                    rows={3}
-                    className="input w-full resize-none"
+                    minRows={3}
+                    maxRows={6}
+                    className="input w-full"
                     {...register('notes')}
                     placeholder="Notes additionnelles..."
                   />

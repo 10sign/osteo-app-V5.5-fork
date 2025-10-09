@@ -4,6 +4,7 @@ import { Shield, Lock, Database, Eye, EyeOff, Save, RefreshCw, CheckCircle, Aler
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { auth, db, hdsConfig } from '../firebase/config';
 import { Button } from '../components/ui/Button';
+import AutoResizeTextarea from '../components/ui/AutoResizeTextarea';
 import HDSComplianceBadge from '../components/ui/HDSComplianceBadge';
 import HDSComplianceInfo from '../components/ui/HDSComplianceInfo';
 import ConsultationMigrationPanel from '../components/admin/ConsultationMigrationPanel';
@@ -312,10 +313,9 @@ const Settings: React.FC = () => {
                   type="tel"
                   id="phone"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 input"
-                  placeholder="Votre numéro de téléphone"
+                  placeholder="Votre numéro de téléphone (ex: 06 12 34 56 78)"
                   value={generalSettings.phone}
                   onChange={(e) => handleGeneralSettingsChange('phone', e.target.value)}
-                  placeholder="06 12 34 56 78"
                 />
                 {auth.currentUser?.email === 'julie.boddaert@hotmail.fr' && (
                   <p className="mt-1 text-xs text-blue-600">
@@ -328,14 +328,14 @@ const Settings: React.FC = () => {
                 <label htmlFor="address" className="block text-sm font-medium text-gray-700">
                   Adresse du cabinet
                 </label>
-                <textarea
+                <AutoResizeTextarea
                   id="address"
-                  rows={3}
+                  minRows={3}
+                  maxRows={6}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 input"
                   value={generalSettings.address}
-                  placeholder="Votre adresse de cabinet"
+                  placeholder="Votre adresse de cabinet (ex: 123 rue de la Santé, 75014 Paris)"
                   onChange={(e) => handleGeneralSettingsChange('address', e.target.value)}
-                  placeholder="123 rue de la Santé, 75014 Paris"
                 />
               </div>
               

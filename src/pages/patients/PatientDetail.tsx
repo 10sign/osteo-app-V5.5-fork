@@ -26,7 +26,7 @@ import {
   AlertTriangle,
   Image as ImageIcon
 } from 'lucide-react';
-import { doc, getDoc, collection, query, where, getDocs, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../../components/ui/Button';
 import EditPatientModal from '../../components/modals/EditPatientModal';
@@ -39,7 +39,6 @@ import NewConsultationModal from '../../components/modals/NewConsultationModal';
 import EditConsultationModal from '../../components/modals/EditConsultationModal';
 import ViewConsultationModal from '../../components/modals/ViewConsultationModal';
 import DeleteConsultationModal from '../../components/modals/DeleteConsultationModal';
-import DocumentUploadManager from '../../components/ui/DocumentUploadManager';
 import { Patient, Consultation, Invoice } from '../../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -48,13 +47,10 @@ import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { PatientService } from '../../services/patientService';
 import { ConsultationService } from '../../services/consultationService';
 import { InvoiceService } from '../../services/invoiceService';
-import { AppointmentService } from '../../services/appointmentService';
 import { patientCache } from '../../utils/patientCache';
 import { trackEvent } from '../../lib/clarityClient';
 import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
 import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
-import { DocumentMetadata, deleteDocument } from '../../utils/documentStorage';
-import { uploadPatientFile, UploadProgress } from '../../utils/fileUpload';
 
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -90,12 +86,6 @@ const PatientDetail: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress>({ progress: 0, status: 'uploading' });
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
-  const [isDeleting, setIsDeleting] = useState<number | null>(null);
-  const [documentError, setDocumentError] = useState<string | null>(null);
-  const [documentSuccess, setDocumentSuccess] = useState<string | null>(null);
 
   // Mise à jour de l'heure actuelle toutes les secondes
   useEffect(() => {
@@ -114,6 +104,16 @@ const PatientDetail: React.FC = () => {
     
     return () => clearInterval(refreshInterval);
   }, []);
+
+  // Effect to ensure UI updates when consultations change
+  useEffect(() => {
+    if (consultations.length > 0) {
+      console.log('📊 Consultations updated in UI:', consultations.length, 'consultations');
+      console.log('📅 Most recent consultation date:', consultations[0]?.date);
+      console.log('📋 Most recent consultation reason:', consultations[0]?.reason);
+    }
+  }, [consultations]);
+
 
   // Load patient data
   const loadPatientData = useCallback(async () => {
@@ -280,14 +280,42 @@ const PatientDetail: React.FC = () => {
         } as Consultation);
       }
 
-      // Sort by date (most recent first)
-      consultationsData.sort((a, b) => b.date.getTime() - a.date.getTime());
+      // Sort by date (most recent first) - ensure proper sorting
+      consultationsData.sort((a, b) => {
+        const dateA = a.date instanceof Date ? a.date : new Date(a.date);
+        const dateB = b.date instanceof Date ? b.date : new Date(b.date);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      console.log('📋 Loaded consultations:', consultationsData.length, 'consultations');
+      if (consultationsData.length > 0) {
+        console.log('📅 Most recent consultation:', {
+          id: consultationsData[0].id,
+          date: consultationsData[0].date,
+          reason: consultationsData[0].reason
+        });
+      }
+      
       setConsultations(consultationsData);
       
     } catch (error) {
       console.error('Error loading consultations:', error);
     }
   }, [id]);
+
+  // Get the most recent consultation for overview display
+  const getLatestConsultation = useCallback(() => {
+    if (consultations.length === 0) return null;
+    
+    // Sort by date to ensure we get the most recent
+    const sortedConsultations = [...consultations].sort((a, b) => {
+      const dateA = a.date instanceof Date ? a.date : new Date(a.date);
+      const dateB = b.date instanceof Date ? b.date : new Date(b.date);
+      return dateB.getTime() - dateA.getTime();
+    });
+    
+    return sortedConsultations[0];
+  }, [consultations]);
 
   // Load invoices
   const loadInvoices = useCallback(async () => {
@@ -455,106 +483,6 @@ const PatientDetail: React.FC = () => {
     loadPatientData();
   };
 
-  const handleDeleteDocument = async (documentId: string, documentUrl: string) => {
-    if (!patient) return;
-    
-    setDeletingDocumentId(documentId);
-    setDeleteError(null);
-    
-    try {
-      // Delete from Firebase Storage
-      await deleteDocument(documentUrl);
-      
-      // Update patient data to remove document reference
-      const updatedDocuments = patient.documents?.filter(doc => doc.id !== documentId) || [];
-      
-      await updateDoc(doc(db, 'patients', patient.id), {
-        documents: updatedDocuments,
-        updatedAt: new Date().toISOString()
-      });
-      
-      // Update local state
-      setPatient(prev => prev ? {
-        ...prev,
-        documents: updatedDocuments
-      } : null);
-      
-      setDeleteSuccess('Document supprimé');
-      setTimeout(() => setDeleteSuccess(null), 3000);
-      
-    } catch (error) {
-      console.error('Error deleting document:', error);
-      setDeleteError('Erreur lors de la suppression du document');
-      setTimeout(() => setDeleteError(null), 5000);
-    } finally {
-      setDeletingDocumentId(null);
-      setDeleteConfirmId(null);
-    }
-  };
-
-  // Handle document upload success
-  const handleDocumentsUpdate = (documents: DocumentMetadata[]) => {
-    if (patient) {
-      setPatient(prev => prev ? { ...prev, documents } : null);
-      setDocumentSuccess('Document ajouté avec succès');
-      setTimeout(() => setDocumentSuccess(null), 3000);
-    }
-  };
-
-  // Handle document upload error
-  const handleDocumentError = (error: string) => {
-    setDocumentError(error);
-    setTimeout(() => setDocumentError(null), 5000);
-  };
-
-  // Handle document edit
-  const handleEditDocument = (index: number) => {
-    // For now, just show a placeholder - this would open an edit modal
-    console.log('Edit document at index:', index);
-  };
-
-  // Handle document deletion
-  const handleDeleteDocumentNew = async (index: number) => {
-    if (!patient || !patient.documents || !patient.documents[index]) return;
-
-    const document = patient.documents[index];
-    setIsDeleting(index);
-    setDocumentError(null);
-
-    try {
-      // Delete from storage if URL exists
-      if (document.url) {
-        // Extract file path from URL or use folder/name
-        const filePath = `${document.folder}/${document.name}`;
-        await deleteDocument(filePath);
-      }
-
-      // Update patient data - remove document from array
-      const updatedDocuments = patient.documents.filter((_, i) => i !== index);
-      
-      // Update in Firestore
-      const patientRef = doc(db, 'patients', patient.id);
-      await updateDoc(patientRef, {
-        documents: updatedDocuments,
-        updatedAt: new Date().toISOString()
-      });
-
-      // Update local state
-      setPatient(prev => prev ? { ...prev, documents: updatedDocuments } : null);
-      
-      // Show success message
-      setDocumentSuccess('Document supprimé');
-      setTimeout(() => setDocumentSuccess(null), 3000);
-
-    } catch (error) {
-      console.error('Error deleting document:', error);
-      setDocumentError('Erreur lors de la suppression du document');
-      setTimeout(() => setDocumentError(null), 5000);
-    } finally {
-      setIsDeleting(null);
-      setShowDeleteConfirm(null);
-    }
-  };
 
   // Invoice handlers
   const handleEditInvoice = (invoiceId: string) => {
@@ -640,14 +568,22 @@ const PatientDetail: React.FC = () => {
     }
   };
 
-  const handleConsultationSuccess = () => {
+  const handleConsultationSuccess = async () => {
     setIsNewConsultationModalOpen(false);
     setIsEditConsultationModalOpen(false);
     setIsViewConsultationModalOpen(false);
     setSelectedConsultationId(null);
     
-    // Reload consultations
-    loadConsultations();
+    console.log('✅ Consultation created successfully, refreshing all data...');
+    
+    // Recharger toutes les données pour s'assurer que la vue d'ensemble est à jour
+    await Promise.all([
+      loadConsultations(),
+      loadInvoices(),
+      loadPatientData() // Recharger aussi les données du patient
+    ]);
+    
+    console.log('🔄 All data refreshed successfully');
   };
 
   // Format date for display
@@ -866,20 +802,6 @@ const PatientDetail: React.FC = () => {
         </div>
       </div>
 
-      {/* Document Success/Error Messages */}
-      {documentSuccess && (
-        <div className="flex items-center p-3 border border-green-200 rounded-lg bg-green-50">
-          <CheckCircle size={16} className="mr-2 text-green-500" />
-          <span className="text-sm text-green-700">{documentSuccess}</span>
-        </div>
-      )}
-
-      {documentError && (
-        <div className="flex items-center p-3 border border-red-200 rounded-lg bg-red-50">
-          <AlertCircle size={16} className="mr-2 text-red-500" />
-          <span className="text-sm text-red-700">{documentError}</span>
-        </div>
-      )}
 
       {/* Patient overview card */}
       <div className="p-6 bg-white shadow rounded-xl">
@@ -1016,16 +938,6 @@ const PatientDetail: React.FC = () => {
         >
           Factures ({invoices.length})
         </button>
-        <button
-          className={`px-6 py-3 text-sm font-medium border-b-2 whitespace-nowrap ${
-            activeTab === 'documents'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-          onClick={() => setActiveTab('documents')}
-        >
-          Documents
-        </button>
       </div>
 
       {/* Tab content */}
@@ -1070,105 +982,142 @@ const PatientDetail: React.FC = () => {
               </div>
             )}
 
-            {/* AJOUT : Section Traitement actuel - Champ manquant dans la vue d'ensemble */}
-            {patient.currentTreatment && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                  <Pill size={20} className="mr-2 text-gray-600" />
-                  Traitement actuel
-                </h3>
-                <p className="text-gray-700 whitespace-pre-wrap">{patient.currentTreatment}</p>
-              </div>
-            )}
-
-            {/* AJOUT : Section Motif de consultation - Champ manquant dans la vue d'ensemble */}
-            {patient.consultationReason && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                  <FileText size={20} className="mr-2 text-gray-600" />
-                  Motif de consultation
-                </h3>
-                <p className="text-gray-700 whitespace-pre-wrap">{patient.consultationReason}</p>
-              </div>
-            )}
-
-            {/* AJOUT : Section Antécédents médicaux - Champ manquant dans la vue d'ensemble */}
-            {patient.medicalAntecedents && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                  <AlertTriangle size={20} className="mr-2 text-gray-600" />
-                  Antécédents médicaux
-                </h3>
-                <p className="text-gray-700 whitespace-pre-wrap">{patient.medicalAntecedents}</p>
-              </div>
-            )}
-
-            {/* AJOUT : Section Traitement ostéopathique - Champ manquant dans la vue d'ensemble */}
-            {patient.osteopathicTreatment && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                  <Stethoscope size={20} className="mr-2 text-gray-600" />
-                  Traitement ostéopathique
-                </h3>
-                <p className="text-gray-700 whitespace-pre-wrap">{patient.osteopathicTreatment}</p>
-              </div>
-            )}
-
-            {/* AJOUT : Section Historique des traitements - Champ manquant dans la vue d'ensemble */}
-            {patient.treatmentHistory && patient.treatmentHistory.length > 0 && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                  <History size={20} className="mr-2 text-gray-600" />
-                  Historique des traitements
-                </h3>
-                <div className="space-y-4">
-                  {patient.treatmentHistory.map((treatment, index) => (
-                    <div key={index} className="py-2 pl-4 border-l-4 border-primary-200">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-gray-900">
-                          {treatment.date ? new Date(treatment.date).toLocaleDateString('fr-FR') : 'Date non spécifiée'}
-                        </span>
-                        {treatment.provider && (
-                          <span className="text-sm text-gray-500">{treatment.provider}</span>
-                        )}
-                      </div>
-                      <p className="text-gray-700">{treatment.treatment}</p>
-                      {treatment.notes && (
-                        <p className="mt-1 text-sm text-gray-600">{treatment.notes}</p>
-                      )}
-                    </div>
-                  ))}
+            {/* ✅ CORRIGÉ : Section Traitement effectué - Affiche les données de la dernière consultation */}
+            {(() => {
+              const latestConsultation = getLatestConsultation();
+              return latestConsultation?.currentTreatment && (
+                <div className="p-6 bg-white shadow rounded-xl">
+                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                    <Pill size={20} className="mr-2 text-gray-600" />
+                    Traitement effectué (dernière consultation)
+                  </h3>
+                  <p className="text-gray-700 whitespace-pre-wrap">{latestConsultation.currentTreatment}</p>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
-            {/* Historique des traitements */}
-            {patient.treatmentHistory && patient.treatmentHistory.length > 0 && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
-                  <History size={20} className="mr-2 text-gray-600" />
-                  Historique des traitements
-                </h3>
-                <div className="space-y-4">
-                  {patient.treatmentHistory.map((treatment, index) => (
-                    <div key={index} className="py-2 pl-4 border-l-4 border-primary-200">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-gray-900">
-                          {treatment.date ? new Date(treatment.date).toLocaleDateString('fr-FR') : 'Date non spécifiée'}
-                        </span>
-                        {treatment.provider && (
-                          <span className="text-sm text-gray-500">{treatment.provider}</span>
-                        )}
-                      </div>
-                      <p className="text-gray-700">{treatment.treatment}</p>
-                      {treatment.notes && (
-                        <p className="mt-1 text-sm text-gray-600">{treatment.notes}</p>
-                      )}
-                    </div>
-                  ))}
+            {/* ✅ CORRIGÉ : Section Motif de consultation - Affiche les données de la dernière consultation */}
+            {(() => {
+              const latestConsultation = getLatestConsultation();
+              return latestConsultation?.consultationReason && (
+                <div className="p-6 bg-white shadow rounded-xl">
+                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                    <FileText size={20} className="mr-2 text-gray-600" />
+                    Motif de consultation (dernière consultation)
+                  </h3>
+                  <p className="text-gray-700 whitespace-pre-wrap">{latestConsultation.consultationReason}</p>
                 </div>
-              </div>
-            )}
+              );
+            })()}
+
+            {/* ✅ CORRIGÉ : Section Antécédents médicaux - Affiche les données de la dernière consultation */}
+            {(() => {
+              const latestConsultation = getLatestConsultation();
+              return latestConsultation?.medicalAntecedents && (
+                <div className="p-6 bg-white shadow rounded-xl">
+                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                    <AlertTriangle size={20} className="mr-2 text-gray-600" />
+                    Antécédents médicaux (dernière consultation)
+                  </h3>
+                  <p className="text-gray-700 whitespace-pre-wrap">{latestConsultation.medicalAntecedents}</p>
+                </div>
+              );
+            })()}
+
+            {/* ✅ CORRIGÉ : Section Traitement ostéopathique - Affiche les données de la dernière consultation */}
+            {(() => {
+              const latestConsultation = getLatestConsultation();
+              return latestConsultation?.osteopathicTreatment && (
+                <div className="p-6 bg-white shadow rounded-xl">
+                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                    <Stethoscope size={20} className="mr-2 text-gray-600" />
+                    Traitement ostéopathique (dernière consultation)
+                  </h3>
+                  <p className="text-gray-700 whitespace-pre-wrap">{latestConsultation.osteopathicTreatment}</p>
+                </div>
+              );
+            })()}
+
+            {/* ✅ NOUVEAU : Section Notes complémentaires - Affiche les notes de la dernière consultation */}
+            {(() => {
+              const latestConsultation = getLatestConsultation();
+              console.log('🔍 Debug notes complémentaires:', {
+                hasConsultation: !!latestConsultation,
+                hasNotes: !!latestConsultation?.notes,
+                notesValue: latestConsultation?.notes,
+                cleanedNotes: latestConsultation?.notes ? cleanDecryptedField(latestConsultation.notes, false, '') : null
+              });
+              
+              // Afficher la carte si la consultation existe, même sans notes
+              return latestConsultation && (
+                <div className="p-6 bg-white shadow rounded-xl">
+                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                    <FileText size={20} className="mr-2 text-gray-600" />
+                    Notes complémentaires (dernière consultation)
+                  </h3>
+                  {latestConsultation.notes && cleanDecryptedField(latestConsultation.notes, false, '') ? (
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {cleanDecryptedField(latestConsultation.notes, false, '')}
+                    </p>
+                  ) : (
+                    <p className="text-gray-500 italic">Aucune note complémentaire pour cette consultation</p>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ✅ NOUVEAU : Section Dernière consultation - Informations spécifiques à la consultation */}
+            {(() => {
+              const latestConsultation = getLatestConsultation();
+              return latestConsultation && (
+                <div className="p-6 bg-white shadow rounded-xl">
+                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
+                    <Calendar size={20} className="mr-2 text-gray-600" />
+                    Dernière consultation
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <div className="text-sm text-gray-500">Date</div>
+                      <div className="font-medium text-gray-900">
+                        {formatDateTime(latestConsultation.date)}
+                      </div>
+                    </div>
+                    {latestConsultation.reason && (
+                      <div>
+                        <div className="text-sm text-gray-500">Raison</div>
+                        <div className="text-gray-700">{latestConsultation.reason}</div>
+                      </div>
+                    )}
+                    {latestConsultation.treatment && (
+                      <div>
+                        <div className="text-sm text-gray-500">Traitement</div>
+                        <div className="text-gray-700 whitespace-pre-wrap">{latestConsultation.treatment}</div>
+                      </div>
+                    )}
+                    {latestConsultation.notes && (
+                      <div>
+                        <div className="text-sm text-gray-500">Notes</div>
+                        <div className="text-gray-700 whitespace-pre-wrap">{latestConsultation.notes}</div>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                      <div className="flex items-center space-x-4">
+                        <span className="text-sm text-gray-500">
+                          Durée: {latestConsultation.duration || 60} min
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          Prix: {latestConsultation.price || 60} €
+                        </span>
+                      </div>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getConsultationStatusColor(latestConsultation.status)}`}>
+                        {getConsultationStatusText(latestConsultation.status)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
 
             {/* AJOUT : Section Métadonnées du dossier - Informations système manquantes */}
             <div className="p-6 bg-white shadow rounded-xl">
@@ -1200,94 +1149,6 @@ const PatientDetail: React.FC = () => {
                   <div className="text-sm text-gray-500">ID du dossier</div>
                   <div className="font-mono text-sm text-gray-600">{patient.id}</div>
                 </div>
-              </div>
-            </div>
-
-            
-
-            
-
-            {/* AJOUT: Section Traitement ostéopathique - Information manquante */}
-            {patient.osteopathicTreatment && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
-                  <Stethoscope size={20} className="mr-2 text-gray-600" />
-                  Traitement ostéopathique
-                </h3>
-                <p className="text-gray-900 whitespace-pre-wrap">
-                  {cleanDecryptedField(patient.osteopathicTreatment, false, 'Aucun traitement ostéopathique spécifique renseigné')}
-                </p>
-              </div>
-            )}
-
-            {/* AJOUT: Section Historique des traitements - Information manquante */}
-            {patient.treatmentHistory && patient.treatmentHistory.length > 0 && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
-                  <History size={20} className="mr-2 text-gray-600" />
-                  Historique des traitements
-                </h3>
-                <div className="space-y-4">
-                  {patient.treatmentHistory.map((treatment, index) => (
-                    <div key={index} className="py-2 pl-4 border-l-4 border-primary-200">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-gray-900">{treatment.treatment}</span>
-                        {treatment.date && (
-                          <span className="text-sm text-gray-500">
-                            {new Date(treatment.date).toLocaleDateString('fr-FR')}
-                          </span>
-                        )}
-                      </div>
-                      {treatment.provider && (
-                        <p className="text-sm text-gray-600">Prestataire: {treatment.provider}</p>
-                      )}
-                      {treatment.notes && (
-                        <p className="mt-1 text-sm text-gray-600">{treatment.notes}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            
-
-            
-
-            
-
-            {/* AJOUT: Section Métadonnées du dossier - Informations manquantes */}
-            <div className="p-6 bg-white shadow rounded-xl">
-              <h3 className="flex items-center mb-4 text-lg font-medium text-gray-900">
-                <Info size={20} className="mr-2 text-gray-600" />
-                Informations du dossier
-              </h3>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <span className="text-sm font-medium text-gray-500">Créé le: </span>
-                  <span className="text-gray-900">
-                    {patient.createdAt ? new Date(patient.createdAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-gray-500">Dernière modification: </span>
-                  <span className="text-gray-900">
-                    {patient.updatedAt ? new Date(patient.updatedAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
-                  </span>
-                </div>
-                {patient.createdBy && (
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Créé par: </span>
-                    <span className="text-gray-900">{patient.createdBy}</span>
-                  </div>
-                )}
-                {patient.isTestData && (
-                  <div>
-                    <span className="inline-flex items-center px-2 py-1 text-xs font-medium text-yellow-800 bg-yellow-100 rounded-full">
-                      Données de test
-                    </span>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -1438,19 +1299,20 @@ const PatientDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* Medical History */}
-            <div className="p-6 bg-white shadow rounded-xl">
-              <h3 className="mb-4 text-lg font-medium text-gray-900">Historique médical</h3>
-              {patient.medicalHistory ? (
-                <div className="prose-sm prose max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {cleanDecryptedField(patient.medicalHistory, false, 'Aucun historique médical renseigné')}
-                  </p>
+            {/* ✅ CORRIGÉ : Historique médical - Affiche les données de la dernière consultation */}
+            {(() => {
+              const latestConsultation = getLatestConsultation();
+              return latestConsultation?.medicalHistory && (
+                <div className="p-6 bg-white shadow rounded-xl">
+                  <h3 className="mb-4 text-lg font-medium text-gray-900">Historique médical (dernière consultation)</h3>
+                  <div className="prose-sm prose max-w-none">
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {cleanDecryptedField(latestConsultation.medicalHistory, false, 'Aucun historique médical renseigné')}
+                    </p>
+                  </div>
                 </div>
-              ) : (
-                <p className="italic text-gray-500">Aucun historique médical renseigné</p>
-              )}
-            </div>
+              );
+            })()}
 
             {/* AJOUT: Actions rapides */}
             <div className="p-6 bg-white shadow rounded-xl">
@@ -1491,42 +1353,6 @@ const PatientDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* Current Treatment */}
-            {patient.currentTreatment && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="mb-4 text-lg font-medium text-gray-900">Traitement actuel</h3>
-                <div className="prose-sm prose max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {cleanDecryptedField(patient.currentTreatment, false, 'Aucun traitement actuel')}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Consultation Reason */}
-            {patient.consultationReason && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="mb-4 text-lg font-medium text-gray-900">Motif de consultation</h3>
-                <div className="prose-sm prose max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {cleanDecryptedField(patient.consultationReason, false, 'Aucun motif spécifique')}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Medical Antecedents */}
-            {patient.medicalAntecedents && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="mb-4 text-lg font-medium text-gray-900">Antécédents médicaux</h3>
-                <div className="prose-sm prose max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {cleanDecryptedField(patient.medicalAntecedents, false, 'Aucun antécédent médical renseigné')}
-                  </p>
-                </div>
-              </div>
-            )}
-
             {/* Osteopathic Treatment */}
             {patient.osteopathicTreatment && (
               <div className="p-6 bg-white shadow rounded-xl">
@@ -1539,17 +1365,20 @@ const PatientDetail: React.FC = () => {
               </div>
             )}
 
-            {/* Notes */}
-            {patient.notes && (
-              <div className="p-6 bg-white shadow rounded-xl">
-                <h3 className="mb-4 text-lg font-medium text-gray-900">Notes</h3>
-                <div className="prose-sm prose max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {cleanDecryptedField(patient.notes, false, 'Aucune note')}
-                  </p>
+            {/* ✅ CORRIGÉ : Notes - Affiche les données de la dernière consultation */}
+            {(() => {
+              const latestConsultation = getLatestConsultation();
+              return latestConsultation?.notes && (
+                <div className="p-6 bg-white shadow rounded-xl">
+                  <h3 className="mb-4 text-lg font-medium text-gray-900">Notes (dernière consultation)</h3>
+                  <div className="prose-sm prose max-w-none">
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {cleanDecryptedField(latestConsultation.notes, false, 'Aucune note')}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Insurance */}
             {patient.insurance && (
@@ -1654,7 +1483,7 @@ const PatientDetail: React.FC = () => {
             ) : (
               <div className="space-y-4">
                 {consultations.map((consultation, index) => (
-                  <div key={consultation.id} className="p-6 bg-white shadow rounded-xl border-l-4 border-primary-500">
+                  <div key={consultation.id} className="p-6 bg-white border-l-4 shadow rounded-xl border-primary-500">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
                         <div className="flex items-center mb-2 space-x-3">
@@ -1705,19 +1534,8 @@ const PatientDetail: React.FC = () => {
                     </div>
 
                     <div className="space-y-4">
-                      <div>
-                        <h5 className="mb-1 text-sm font-medium text-gray-700">Motif de consultation</h5>
-                        <p className="text-gray-900">
-                          {cleanDecryptedField(consultation.reason, false, 'Consultation ostéopathique')}
-                        </p>
-                      </div>
-
-                      <div>
-                        <h5 className="mb-1 text-sm font-medium text-gray-700">Traitement effectué</h5>
-                        <p className="text-gray-900 whitespace-pre-wrap">
-                          {cleanDecryptedField(consultation.treatment, false, 'Traitement ostéopathique standard')}
-                        </p>
-                      </div>
+                      {/* ✅ SUPPRIMÉ : Anciens champs "Motif de consultation" et "Traitement effectué" 
+                          Ces champs sont remplacés par les champs détaillés dans la section "Données cliniques" */}
 
                       {consultation.notes && cleanDecryptedField(consultation.notes, false, '') && (
                         <div>
@@ -1762,6 +1580,62 @@ const PatientDetail: React.FC = () => {
                           </div>
                         )}
                       </div>
+
+                      {/* ✅ NOUVEAU : Documents de la consultation */}
+                      {consultation.documents && consultation.documents.length > 0 && (
+                        <div className="pt-4 border-t">
+                          <h5 className="mb-3 text-sm font-medium text-gray-700">Documents de la consultation</h5>
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            {consultation.documents.map((document, docIndex) => (
+                              <div key={docIndex} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                                <div className="flex items-center space-x-3">
+                                  <div className="flex-shrink-0">
+                                    {document.type?.startsWith('image/') ? (
+                                      <ImageIcon size={20} className="text-blue-500" />
+                                    ) : (
+                                      <FileText size={20} className="text-gray-500" />
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <h6 className="text-sm font-medium text-gray-900 truncate">
+                                      {document.originalName || document.name}
+                                    </h6>
+                                    <p className="text-xs text-gray-500">
+                                      {document.size ? `${(document.size / (1024 * 1024)).toFixed(2)} MB` : 'Taille inconnue'}
+                                      {document.category && ` • ${document.category}`}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex space-x-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => window.open(document.url, '_blank')}
+                                    leftIcon={<Eye size={12} />}
+                                    className="text-xs"
+                                  >
+                                    Voir
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      const link = document.createElement('a');
+                                      link.href = document.url;
+                                      link.download = document.originalName || document.name;
+                                      link.click();
+                                    }}
+                                    leftIcon={<Download size={12} />}
+                                    className="text-xs"
+                                  >
+                                    Télécharger
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1865,122 +1739,6 @@ const PatientDetail: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'documents' && (
-          <div className="space-y-6">
-            {/* Document Upload Section */}
-            <div className="p-6 bg-white rounded-lg shadow">
-              <h3 className="mb-4 text-lg font-medium text-gray-900">Documents médicaux</h3>
-              <DocumentUploadManager
-                patientId={patient.id}
-                initialDocuments={patient.documents || []}
-                onUploadSuccess={handleDocumentsUpdate}
-                onUploadError={handleDocumentError}
-                disabled={false}
-              />
-            </div>
-
-            {/* Documents List */}
-            <div className="bg-white rounded-lg shadow">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900">Documents du patient</h3>
-              </div>
-              <div className="p-6">
-                {patient.documents && patient.documents.length > 0 ? (
-                  <div className="space-y-4">
-                    {patient.documents.map((document, index) => (
-                      <div key={index} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <div className="flex-shrink-0">
-                            {document.type?.startsWith('image/') ? (
-                              <ImageIcon size={24} className="text-blue-500" />
-                            ) : (
-                              <FileText size={24} className="text-gray-500" />
-                            )}
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-medium text-gray-900">
-                              {document.originalName || document.name}
-                            </h4>
-                            <p className="text-sm text-gray-500">
-                              {document.size ? `${(document.size / (1024 * 1024)).toFixed(2)} MB` : 'Taille inconnue'}
-                              {document.category && ` • ${document.category}`}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.open(document.url, '_blank')}
-                            leftIcon={<Eye size={14} />}
-                          >
-                            Voir
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              const link = document.createElement('a');
-                              link.href = document.url;
-                              link.download = document.originalName || document.name;
-                              link.click();
-                            }}
-                            leftIcon={<Download size={14} />}
-                          >
-                            Télécharger
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditDocument(index)}
-                            leftIcon={<Edit size={14} />}
-                          >
-                            Modifier
-                          </Button>
-                          {showDeleteConfirm === index ? (
-                            <div className="flex space-x-1">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setShowDeleteConfirm(null)}
-                              >
-                                Annuler
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDeleteDocumentNew(index)}
-                                isLoading={isDeleting === index}
-                                className="text-red-600 border-red-200 hover:text-red-700 hover:border-red-300"
-                              >
-                                Confirmer
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowDeleteConfirm(index)}
-                              leftIcon={<Trash2 size={14} />}
-                              className="text-red-600 border-red-200 hover:text-red-700 hover:border-red-300"
-                            >
-                              Supprimer
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="py-8 text-center text-gray-500">
-                    <FileText size={48} className="mx-auto mb-4 text-gray-300" />
-                    <p>Aucun document médical</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Modals */}

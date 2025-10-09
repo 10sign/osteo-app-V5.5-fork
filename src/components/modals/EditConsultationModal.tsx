@@ -10,6 +10,8 @@ import SuccessBanner from '../ui/SuccessBanner';
 import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { HDSCompliance } from '../../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../../utils/auditLogger';
+import DocumentUploadManager from '../ui/DocumentUploadManager';
+import { DocumentMetadata } from '../../utils/documentStorage';
 
 interface EditConsultationModalProps {
   isOpen: boolean;
@@ -55,6 +57,9 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
   const [consultationData, setConsultationData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  
+  // Gestion des documents
+  const [consultationDocuments, setConsultationDocuments] = useState<DocumentMetadata[]>([]);
 
   const { register, handleSubmit, formState: { errors, isValid }, reset, control } = useForm<ConsultationFormData>({
     mode: 'onChange',
@@ -139,6 +144,12 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
         setConsultationData(consultation);
 
+        // 🔧 NOUVEAU : Initialiser les documents existants
+        if (consultation.documents && consultation.documents.length > 0) {
+          setConsultationDocuments(consultation.documents);
+          console.log('📄 Documents existants chargés:', consultation.documents.length);
+        }
+
         console.log('✅ Final consultation data for form (with defaults):', consultation);
 
         // Pre-fill form with consultation data
@@ -147,21 +158,15 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         const timeString = consultationDate.toTimeString().slice(0, 5);
         
         // Nettoyer les champs pour l'édition
-        const cleanReason = cleanDecryptedField(consultation.reason, true, '');
-        const cleanTreatment = cleanDecryptedField(consultation.treatment, true, '');
         const cleanNotes = cleanDecryptedField(consultation.notes, true, '');
         
         console.log('🧹 Cleaned fields for editing:', {
-          reason: { original: consultation.reason, cleaned: cleanReason },
-          treatment: { original: consultation.treatment, cleaned: cleanTreatment },
           notes: { original: consultation.notes, cleaned: cleanNotes }
         });
         
         reset({
           date: dateString,
           time: timeString,
-          reason: cleanReason,
-          treatment: cleanTreatment,
           notes: cleanNotes,
           duration: consultation.duration || 60,
           price: consultation.price || 60,
@@ -191,6 +196,15 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
       loadData();
     }
   }, [isOpen, consultationId, reset]);
+
+  // Gestionnaires pour les documents
+  const handleDocumentsUpdate = (documents: DocumentMetadata[]) => {
+    setConsultationDocuments(documents);
+  };
+
+  const handleDocumentError = (errorMessage: string) => {
+    setError(errorMessage);
+  };
 
   const onSubmit = async (data: ConsultationFormData) => {
     if (!auth.currentUser) {
@@ -238,23 +252,47 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         patientInsuranceNumber: consultationData.patientInsuranceNumber || '',
 
         // Champs cliniques (modifiables)
-        currentTreatment: data.currentTreatment || '',
         consultationReason: data.consultationReason || '',
+        currentTreatment: data.currentTreatment || '',
         medicalAntecedents: data.medicalAntecedents || '',
         medicalHistory: data.medicalHistory || '',
         osteopathicTreatment: data.osteopathicTreatment || '',
-        symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : []
+        symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : [],
+
+        // Inclure les documents
+        documents: consultationDocuments
       };
 
       console.log('💾 Prepared update data (complete):', updateData);
 
-      // Mettre à jour via le service
-      const consultationRef = doc(db, 'consultations', consultationId);
-      await updateDoc(consultationRef, {
-        ...updateData,
+      // Extraire les documents avant le traitement HDS
+      const documents = updateData.documents || [];
+      const { documents: _, ...dataWithoutDocuments } = updateData;
+
+      // Préparation des données avec chiffrement HDS (sans les documents)
+      const dataToStore = HDSCompliance.prepareDataForStorage({
+        ...dataWithoutDocuments,
         date: Timestamp.fromDate(consultationDate),
         updatedAt: Timestamp.now()
+      }, 'consultations', auth.currentUser.uid);
+
+      // Ajouter les documents après le traitement HDS
+      dataToStore.documents = documents;
+
+      // 🔧 NOUVEAU : Nettoyer les champs undefined pour éviter l'erreur updateDoc
+      const cleanedData = Object.fromEntries(
+        Object.entries(dataToStore).filter(([_, value]) => value !== undefined)
+      );
+
+      console.log('🔍 Edit consultation data after HDS processing:', {
+        hasDocuments: !!cleanedData.documents,
+        documentsCount: cleanedData.documents?.length || 0,
+        documents: cleanedData.documents
       });
+
+      // Mettre à jour via le service
+      const consultationRef = doc(db, 'consultations', consultationId);
+      await updateDoc(consultationRef, cleanedData);
 
       console.log('✅ Consultation updated successfully in Firestore');
 
@@ -378,38 +416,6 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       </div>
                     </div>
 
-                    <div>
-                      <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">
-                        Motif de consultation *
-                      </label>
-                      <input
-                        type="text"
-                        id="reason"
-                        className={`input w-full ${errors.reason ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                        {...register('reason', { required: 'Ce champ est requis' })}
-                        placeholder="Ex: Lombalgie, Cervicalgie..."
-                      />
-                      {errors.reason && (
-                        <p className="mt-1 text-sm text-error">{errors.reason.message}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label htmlFor="treatment" className="block text-sm font-medium text-gray-700 mb-1">
-                        Traitement effectué *
-                      </label>
-                      <AutoResizeTextarea
-                        id="treatment"
-                        minRows={4}
-                        maxRows={8}
-                        className={`input w-full resize-none ${errors.treatment ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                        {...register('treatment', { required: 'Ce champ est requis' })}
-                        placeholder="Décrivez le traitement effectué..."
-                      />
-                      {errors.treatment && (
-                        <p className="mt-1 text-sm text-error">{errors.treatment.message}</p>
-                      )}
-                    </div>
 
                     <div>
                       <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
@@ -436,31 +442,37 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Motif de consultation détaillé */}
                       <div className="mb-4">
                         <label htmlFor="consultationReason" className="block text-sm font-medium text-gray-700 mb-1">
-                          Motif de consultation détaillé
+                          Motif de consultation détaillé *
                         </label>
                         <AutoResizeTextarea
                           id="consultationReason"
                           minRows={2}
                           maxRows={4}
                           className="input w-full resize-none"
-                          {...register('consultationReason')}
+                          {...register('consultationReason', { required: 'Ce champ est requis' })}
                           placeholder="Détaillez le motif de consultation..."
                         />
+                        {errors.consultationReason && (
+                          <p className="mt-1 text-sm text-error">{errors.consultationReason.message}</p>
+                        )}
                       </div>
 
-                      {/* Traitement actuel */}
+                      {/* Traitement effectué */}
                       <div className="mb-4">
                         <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
-                          Traitement actuel du patient
+                          Traitement effectué du patient *
                         </label>
                         <AutoResizeTextarea
                           id="currentTreatment"
                           minRows={2}
                           maxRows={4}
                           className="input w-full resize-none"
-                          {...register('currentTreatment')}
+                          {...register('currentTreatment', { required: 'Ce champ est requis' })}
                           placeholder="Traitements médicamenteux ou thérapies en cours..."
                         />
+                        {errors.currentTreatment && (
+                          <p className="mt-1 text-sm text-error">{errors.currentTreatment.message}</p>
+                        )}
                       </div>
 
                       {/* Antécédents médicaux */}
@@ -629,6 +641,20 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                         className="input w-full resize-none"
                         {...register('notes')}
                         placeholder="Notes additionnelles..."
+                      />
+                    </div>
+
+                    {/* Documents de consultation */}
+                    <div className="pt-6 border-t">
+                      <h3 className="mb-4 text-lg font-medium text-gray-900">Documents de consultation</h3>
+                      <DocumentUploadManager
+                        patientId="temp"
+                        entityType="consultation"
+                        entityId={consultationId}
+                        customFolderPath={`users/${auth.currentUser?.uid}/consultations/${consultationId}/documents`}
+                        onUploadSuccess={handleDocumentsUpdate}
+                        onUploadError={handleDocumentError}
+                        disabled={isSubmitting}
                       />
                     </div>
 

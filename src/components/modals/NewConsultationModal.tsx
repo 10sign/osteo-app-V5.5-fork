@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, Clock, FileText, User, Plus, Trash2, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { X, User, Plus, Trash2 } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import AutoResizeTextarea from '../ui/AutoResizeTextarea';
 import SuccessBanner from '../ui/SuccessBanner';
-import { Patient, Consultation, ConsultationFormData as ConsultationFormType } from '../../types';
+import { Patient } from '../../types';
 import { ConsultationService } from '../../services/consultationService';
 import { AppointmentService } from '../../services/appointmentService';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
-import { DocumentMetadata, moveFile } from '../../utils/documentStorage';
+import { DocumentMetadata } from '../../utils/documentStorage';
 
 interface NewConsultationModalProps {
   isOpen: boolean;
@@ -69,7 +69,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [isPatientPreselected, setIsPatientPreselected] = useState(false);
@@ -100,6 +99,30 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
   });
 
   const watchedPatientId = watch('patientId');
+
+  // Fill patient fields function with useCallback
+  const fillPatientFields = useCallback((patient: Patient) => {
+    console.log('Filling patient fields for:', patient.firstName, patient.lastName);
+    // Champs d'identité (lecture seule)
+    setValue('patientFirstName', patient.firstName || '');
+    setValue('patientLastName', patient.lastName || '');
+    setValue('patientDateOfBirth', patient.dateOfBirth || '');
+    setValue('patientGender', patient.gender || '');
+    setValue('patientPhone', patient.phone || '');
+    setValue('patientProfession', patient.profession || '');
+    setValue('patientEmail', patient.email || '');
+    setValue('patientAddress', patient.address?.street || '');
+    setValue('patientInsurance', patient.insurance?.provider || '');
+    setValue('patientInsuranceNumber', patient.insurance?.policyNumber || '');
+
+    // Champs cliniques (pré-remplis avec les données du patient, modifiables)
+    setValue('currentTreatment', patient.currentTreatment || '');
+    setValue('consultationReason', patient.consultationReason || '');
+    setValue('medicalAntecedents', patient.medicalAntecedents || '');
+    setValue('medicalHistory', patient.medicalHistory || '');
+    setValue('osteopathicTreatment', patient.osteopathicTreatment || '');
+    setValue('symptoms', (patient.tags || []).join(', ') || '');
+  }, [setValue]);
 
   // Gestionnaires pour les documents
   const handleDocumentsUpdate = (documents: DocumentMetadata[]) => {
@@ -163,7 +186,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
       loadPatients();
       console.log('NewConsultationModal opened with preselected patient:', preselectedPatientId);
     }
-  }, [isOpen, preselectedPatientId, setValue, preselectedPatientName]);
+  }, [isOpen, preselectedPatientId, setValue, preselectedPatientName, fillPatientFields]);
 
   // Update selected patient when patientId changes
   useEffect(() => {
@@ -175,31 +198,8 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         fillPatientFields(patient);
       }
     }
-  }, [watchedPatientId, patients, isPatientPreselected]);
+  }, [watchedPatientId, patients, isPatientPreselected, fillPatientFields]);
 
-  // Fill patient fields with existing data
-  const fillPatientFields = (patient: Patient) => {
-    console.log('Filling patient fields for:', patient.firstName, patient.lastName);
-    // Champs d'identité (lecture seule)
-    setValue('patientFirstName', patient.firstName || '');
-    setValue('patientLastName', patient.lastName || '');
-    setValue('patientDateOfBirth', patient.dateOfBirth || '');
-    setValue('patientGender', patient.gender || '');
-    setValue('patientPhone', patient.phone || '');
-    setValue('patientProfession', patient.profession || '');
-    setValue('patientEmail', patient.email || '');
-    setValue('patientAddress', patient.address?.street || '');
-    setValue('patientInsurance', patient.insurance?.provider || '');
-    setValue('patientInsuranceNumber', patient.insurance?.policyNumber || '');
-
-    // Champs cliniques (pré-remplis avec les données du patient, modifiables)
-    setValue('currentTreatment', patient.currentTreatment || '');
-    setValue('consultationReason', patient.consultationReason || '');
-    setValue('medicalAntecedents', patient.medicalAntecedents || '');
-    setValue('medicalHistory', patient.medicalHistory || '');
-    setValue('osteopathicTreatment', patient.osteopathicTreatment || '');
-    setValue('symptoms', (patient.tags || []).join(', ') || '');
-  };
 
   const onSubmit = async (data: ConsultationFormData) => {
     if (!auth.currentUser) {
@@ -260,7 +260,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         notes: data.notes,
         duration: data.duration,
         price: data.price,
-        status: data.status,
+        status: data.status as 'draft' | 'completed' | 'cancelled',
         examinations: data.examinations.map(item => item.value),
         prescriptions: data.prescriptions.map(item => item.value),
         appointmentId: appointmentId,
@@ -278,62 +278,47 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         patientInsuranceNumber: data.patientInsuranceNumber,
 
         // Champs cliniques (snapshot au moment de la consultation)
-        currentTreatment: data.currentTreatment || '',
         consultationReason: data.consultationReason || '',
+        currentTreatment: data.currentTreatment || '',
         medicalAntecedents: data.medicalAntecedents || '',
         medicalHistory: data.medicalHistory || '',
         osteopathicTreatment: data.osteopathicTreatment || '',
         symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : []
       };
 
-      const consultationId = await ConsultationService.createConsultation(consultationData);
+      // Inclure les documents dans les données de consultation
+      const consultationDataWithDocuments = {
+        ...consultationData,
+        documents: consultationDocuments
+      };
 
-      // Déplacer les documents du dossier temporaire vers le dossier de la consultation réelle
-      if (consultationDocuments.length > 0) {
-        const updatedDocuments: DocumentMetadata[] = [];
-        for (const doc of consultationDocuments) {
-          try {
-            const oldPath = `${doc.folder}/${doc.name}`;
-            const newFolder = `users/${auth.currentUser.uid}/consultations/${consultationId}/documents`;
-            const newPath = `${newFolder}/${doc.name}`;
+      console.log('📄 Consultation data with documents:', {
+        documentsCount: consultationDocuments.length,
+        documents: consultationDocuments,
+        fullData: consultationDataWithDocuments
+      });
 
-            const newUrl = await moveFile(oldPath, newPath);
-            updatedDocuments.push({
-              ...doc,
-              url: newUrl,
-              folder: newFolder
-            });
-          } catch (moveError) {
-            console.error(`Erreur lors du déplacement du document ${doc.name}:`, moveError);
-          }
-        }
+      const consultationId = await ConsultationService.createConsultation(consultationDataWithDocuments);
 
-        // Mettre à jour la consultation avec les documents déplacés
-        if (updatedDocuments.length > 0) {
-          await updateDoc(doc(db, 'consultations', consultationId), {
-            documents: updatedDocuments
-          });
-        }
-      }
-
-      // Afficher le message de succès après que tout soit enregistré
-      setShowSuccessBanner(true);
-      
       // 3. Lier la consultation au rendez-vous
       await AppointmentService.updateAppointment(appointmentId, {
         consultationId: consultationId
       });
       
+      // Afficher le message de succès après que tout soit enregistré
+      setShowSuccessBanner(true);
+      
       // Attendre 2 secondes avant de fermer le modal
       setTimeout(() => {
         setShowSuccessBanner(false);
-        reset();
+        // Appeler onSuccess AVANT reset pour s'assurer que les données sont rechargées
         onSuccess();
+        reset();
         onClose();
       }, 2000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating consultation:', error);
-      setError('Erreur lors de la création de la consultation: ' + error.message);
+      setError('Erreur lors de la création de la consultation: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
     } finally {
       setIsSubmitting(false);
     }
@@ -362,36 +347,30 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
               <h2 className="text-xl font-semibold text-gray-900">Nouvelle consultation</h2>
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-500 transition-colors"
+                className="text-gray-400 transition-colors hover:text-gray-500"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="flex-1 px-6 py-4 overflow-y-auto">
               <SuccessBanner
                 message="Consultation créée avec succès. Toutes les informations saisies ont été sauvegardées."
                 isVisible={showSuccessBanner}
               />
               
               {error && (
-                <div className="mb-4 p-3 bg-error/5 border border-error/20 rounded-lg text-error text-sm">
+                <div className="p-3 mb-4 text-sm border rounded-lg bg-error/5 border-error/20 text-error">
                   {error}
                 </div>
               )}
 
-              {success && (
-                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center">
-                  <CheckCircle size={20} className="text-green-500 mr-2" />
-                  <span className="text-green-700">{success}</span>
-                </div>
-              )}
 
               <form id="consultationForm" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                 {/* Patient Selection - Conditionnel */}
                 {!isPatientPreselected ? (
                   <div>
-                    <label htmlFor="patientId" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="patientId" className="block mb-1 text-sm font-medium text-gray-700">
                       Patient *
                     </label>
                     <select
@@ -412,9 +391,9 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                     
                     {/* Selected Patient Info */}
                     {selectedPatient && (
-                      <div className="mt-4 p-4 bg-primary-50 rounded-lg">
+                      <div className="p-4 mt-4 rounded-lg bg-primary-50">
                         <div className="flex items-center">
-                          <User size={20} className="text-primary-600 mr-2" />
+                          <User size={20} className="mr-2 text-primary-600" />
                           <div>
                             <div className="font-medium text-primary-900">
                               {selectedPatient.firstName} {selectedPatient.lastName}
@@ -429,12 +408,12 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block mb-1 text-sm font-medium text-gray-700">
                       Patient
                     </label>
-                    <div className="p-4 bg-primary-50 rounded-lg border border-primary-200">
+                    <div className="p-4 border rounded-lg bg-primary-50 border-primary-200">
                       <div className="flex items-center">
-                        <User size={20} className="text-primary-600 mr-2" />
+                        <User size={20} className="mr-2 text-primary-600" />
                         <div>
                           <div className="font-medium text-primary-900">
                             {preselectedPatientName || (selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : 'Patient inconnu')}
@@ -450,9 +429,9 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
 
                 {/* Selected Patient Info - Toujours affiché si patient pré-sélectionné */}
                 {/* Date and Time */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="date" className="block mb-1 text-sm font-medium text-gray-700">
                       Date *
                     </label>
                     <input
@@ -467,7 +446,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                   </div>
 
                   <div>
-                    <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="time" className="block mb-1 text-sm font-medium text-gray-700">
                       Heure *
                     </label>
                     <input
@@ -482,86 +461,60 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                   </div>
                 </div>
 
-                <div>
-                  <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">
-                    Motif de consultation *
-                  </label>
-                  <input
-                    type="text"
-                    id="reason"
-                    className={`input w-full ${errors.reason ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                    {...register('reason', { required: 'Ce champ est requis' })}
-                    placeholder="Ex: Lombalgie, Cervicalgie..."
-                  />
-                  {errors.reason && (
-                    <p className="mt-1 text-sm text-error">{errors.reason.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label htmlFor="treatment" className="block text-sm font-medium text-gray-700 mb-1">
-                    Traitement effectué *
-                  </label>
-                  <AutoResizeTextarea
-                    id="treatment"
-                    minRows={4}
-                    maxRows={8}
-                    className={`input w-full resize-none ${errors.treatment ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                    {...register('treatment', { required: 'Ce champ est requis' })}
-                    placeholder="Décrivez le traitement effectué..."
-                  />
-                  {errors.treatment && (
-                    <p className="mt-1 text-sm text-error">{errors.treatment.message}</p>
-                  )}
-                </div>
 
                 {/* Section Champs Cliniques */}
-                <div className="border-t pt-6 mt-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Données cliniques de la consultation</h3>
-                  <p className="text-sm text-gray-600 mb-4">
+                <div className="pt-6 mt-6 border-t">
+                  <h3 className="mb-4 text-lg font-medium text-gray-900">Données cliniques de la consultation</h3>
+                  <p className="mb-4 text-sm text-gray-600">
                     Ces champs sont pré-remplis avec les données du patient, mais vous pouvez les modifier pour cette consultation spécifique.
                   </p>
 
                   {/* Motif de consultation spécifique */}
                   <div className="mb-4">
-                    <label htmlFor="consultationReason" className="block text-sm font-medium text-gray-700 mb-1">
-                      Motif de consultation détaillé
+                    <label htmlFor="consultationReason" className="block mb-1 text-sm font-medium text-gray-700">
+                      Motif de consultation détaillé *
                     </label>
                     <AutoResizeTextarea
                       id="consultationReason"
                       minRows={2}
                       maxRows={4}
-                      className="input w-full resize-none"
-                      {...register('consultationReason')}
+                      className="w-full resize-none input"
+                      {...register('consultationReason', { required: 'Ce champ est requis' })}
                       placeholder="Détaillez le motif de consultation..."
                     />
+                    {errors.consultationReason && (
+                      <p className="mt-1 text-sm text-error">{errors.consultationReason.message}</p>
+                    )}
                   </div>
 
-                  {/* Traitement actuel */}
+                  {/* Traitement effectué */}
                   <div className="mb-4">
-                    <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
-                      Traitement actuel du patient
+                    <label htmlFor="currentTreatment" className="block mb-1 text-sm font-medium text-gray-700">
+                      Traitement effectué du patient *
                     </label>
                     <AutoResizeTextarea
                       id="currentTreatment"
                       minRows={2}
                       maxRows={4}
-                      className="input w-full resize-none"
-                      {...register('currentTreatment')}
+                      className="w-full resize-none input"
+                      {...register('currentTreatment', { required: 'Ce champ est requis' })}
                       placeholder="Traitements médicamenteux ou thérapies en cours..."
                     />
+                    {errors.currentTreatment && (
+                      <p className="mt-1 text-sm text-error">{errors.currentTreatment.message}</p>
+                    )}
                   </div>
 
                   {/* Antécédents médicaux */}
                   <div className="mb-4">
-                    <label htmlFor="medicalAntecedents" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="medicalAntecedents" className="block mb-1 text-sm font-medium text-gray-700">
                       Antécédents médicaux
                     </label>
                     <AutoResizeTextarea
                       id="medicalAntecedents"
                       minRows={3}
                       maxRows={6}
-                      className="input w-full resize-none"
+                      className="w-full resize-none input"
                       {...register('medicalAntecedents')}
                       placeholder="Antécédents médicaux significatifs..."
                     />
@@ -569,14 +522,14 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
 
                   {/* Historique médical */}
                   <div className="mb-4">
-                    <label htmlFor="medicalHistory" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="medicalHistory" className="block mb-1 text-sm font-medium text-gray-700">
                       Historique médical
                     </label>
                     <AutoResizeTextarea
                       id="medicalHistory"
                       minRows={3}
                       maxRows={6}
-                      className="input w-full resize-none"
+                      className="w-full resize-none input"
                       {...register('medicalHistory')}
                       placeholder="Historique médical général..."
                     />
@@ -584,14 +537,14 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
 
                   {/* Traitement ostéopathique */}
                   <div className="mb-4">
-                    <label htmlFor="osteopathicTreatment" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
                       Traitement ostéopathique prévu
                     </label>
                     <AutoResizeTextarea
                       id="osteopathicTreatment"
                       minRows={3}
                       maxRows={6}
-                      className="input w-full resize-none"
+                      className="w-full resize-none input"
                       {...register('osteopathicTreatment')}
                       placeholder="Décrivez le traitement ostéopathique prévu..."
                     />
@@ -599,13 +552,13 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
 
                   {/* Symptômes */}
                   <div className="mb-4">
-                    <label htmlFor="symptoms" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="symptoms" className="block mb-1 text-sm font-medium text-gray-700">
                       Symptômes
                     </label>
                     <input
                       type="text"
                       id="symptoms"
-                      className="input w-full"
+                      className="w-full input"
                       {...register('symptoms')}
                       placeholder="Symptômes séparés par des virgules..."
                     />
@@ -639,7 +592,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                           <AutoResizeTextarea
                             minRows={1}
                             maxRows={3}
-                            className="input flex-1"
+                            className="flex-1 input"
                             placeholder="Ex: Radiographie lombaire..."
                             {...register(`examinations.${index}.value`)}
                           />
@@ -655,7 +608,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                       ))}
                     </div>
                   ) : (
-                    <div className="text-sm text-gray-500 italic">
+                    <div className="text-sm italic text-gray-500">
                       Aucun examen demandé
                     </div>
                   )}
@@ -685,7 +638,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                           <AutoResizeTextarea
                             minRows={1}
                             maxRows={3}
-                            className="input flex-1"
+                            className="flex-1 input"
                             placeholder="Ex: Antalgiques, repos..."
                             {...register(`prescriptions.${index}.value`)}
                           />
@@ -701,17 +654,19 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                       ))}
                     </div>
                   ) : (
-                    <div className="text-sm text-gray-500 italic">
+                    <div className="text-sm italic text-gray-500">
                       Aucune prescription
                     </div>
                   )}
                 </div>
 
                 {/* Documents de consultation */}
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Documents de consultation</h3>
+                <div className="pt-6 border-t">
+                  <h3 className="mb-4 text-lg font-medium text-gray-900">Documents de consultation</h3>
                   <DocumentUploadManager
                     patientId="temp"
+                    entityType="consultation"
+                    customFolderPath={`users/${auth.currentUser?.uid}/consultations/temp/documents`}
                     onUploadSuccess={handleDocumentsUpdate}
                     onUploadError={handleDocumentError}
                     disabled={isSubmitting}
@@ -719,22 +674,22 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                 </div>
 
                 <div>
-                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="notes" className="block mb-1 text-sm font-medium text-gray-700">
                     Notes complémentaires
                   </label>
                   <AutoResizeTextarea
                     id="notes"
                     minRows={3}
                     maxRows={6}
-                    className="input w-full resize-none"
+                    className="w-full resize-none input"
                     {...register('notes')}
                     placeholder="Notes additionnelles..."
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div>
-                    <label htmlFor="duration" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="duration" className="block mb-1 text-sm font-medium text-gray-700">
                       Durée (minutes) *
                     </label>
                     <input
@@ -754,7 +709,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                   </div>
 
                   <div>
-                    <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="price" className="block mb-1 text-sm font-medium text-gray-700">
                       Tarif (€) *
                     </label>
                     <input
@@ -774,7 +729,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                   </div>
 
                   <div>
-                    <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="status" className="block mb-1 text-sm font-medium text-gray-700">
                       Statut *
                     </label>
                     <select

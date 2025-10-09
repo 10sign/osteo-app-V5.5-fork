@@ -1,0 +1,71 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Fonctions utilitaires
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        request.auth.token.email == 'grondin.stephane@gmail.com';
+    }
+    
+    function isSpecificUser(email) {
+      return isAuthenticated() && request.auth.token.email == email;
+    }
+    
+    // Validation des fichiers
+    function isValidFileType() {
+      return request.resource.contentType.matches('image/.*') ||
+             request.resource.contentType.matches('application/pdf') ||
+             request.resource.contentType.matches('application/msword') ||
+             request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.wordprocessingml.document') ||
+             request.resource.contentType.matches('text/plain');
+    }
+    
+    function isValidFileSize() {
+      return request.resource.size <= 10 * 1024 * 1024; // 10MB max
+    }
+    
+    function isValidFileName() {
+      return request.resource.name.size() > 0 &&
+             request.resource.name.size() <= 255 &&
+             !request.resource.name.matches('.*[<>:"/\\|?*].*');
+    }
+    
+    // RÈGLES PRINCIPALES - Documents de consultation
+    match /users/{userId}/consultations/{consultationId}/documents/{allPaths=**} {
+      allow read, write, delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr')) &&
+                                   isValidFileType() && 
+                                   isValidFileSize() && 
+                                   isValidFileName();
+    }
+    
+    // Documents patients
+    match /users/{userId}/patients/{patientId}/{allPaths=**} {
+      allow read, write, delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr')) &&
+                                   isValidFileType() && 
+                                   isValidFileSize() && 
+                                   isValidFileName();
+    }
+    
+    // Documents généraux utilisateur
+    match /users/{userId}/{allPaths=**} {
+      allow read, write, delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr')) &&
+                                   isValidFileType() && 
+                                   isValidFileSize() && 
+                                   isValidFileName();
+    }
+    
+    // Interdire tout autre accès
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

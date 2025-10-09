@@ -17,6 +17,10 @@ interface DocumentUploadManagerProps {
   initialDocuments?: DocumentMetadata[];
   className?: string;
   disabled?: boolean;
+  // Nouveaux props pour la flexibilité
+  entityType?: 'patient' | 'consultation';
+  entityId?: string;
+  customFolderPath?: string;
 }
 
 export const DOCUMENT_CATEGORIES = [
@@ -43,7 +47,10 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
   patientId,
   initialDocuments = [],
   className = "",
-  disabled = false
+  disabled = false,
+  entityType = 'patient',
+  entityId,
+  customFolderPath
 }) => {
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const [documents, setDocuments] = useState<DocumentMetadata[]>(initialDocuments);
@@ -72,13 +79,17 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
       displayName: finalDisplayName || file.name.replace(/\.[^/.]+$/, '') // Par défaut : nom sans extension
     }));
 
-    setUploadingFiles(prev => [...prev, ...newUploadingFiles]);
-
-    // Traiter chaque fichier
-    files.forEach((file, index) => {
-      const uploadIndex = newUploadingFiles.length - files.length + index;
-      const fileDisplayName = newUploadingFiles[uploadIndex].displayName;
-      processFile(file, selectedCategory, uploadIndex, fileDisplayName);
+    setUploadingFiles(prev => {
+      const updatedFiles = [...prev, ...newUploadingFiles];
+      
+      // Traiter chaque fichier avec les bons index
+      files.forEach((file, index) => {
+        const uploadIndex = prev.length + index; // Index correct dans le tableau global
+        const fileDisplayName = newUploadingFiles[index].displayName;
+        processFile(file, selectedCategory, uploadIndex, fileDisplayName);
+      });
+      
+      return updatedFiles;
     });
 
     // Réinitialiser le nom du document et l'input après upload
@@ -92,8 +103,16 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
     if (!auth.currentUser) return;
 
     try {
-      // Créer le chemin du dossier
-      const folderPath = `users/${auth.currentUser.uid}/patients/${patientId}/documents/${category}`;
+      // Créer le chemin du dossier selon le type d'entité
+      let folderPath: string;
+      
+      if (customFolderPath) {
+        folderPath = customFolderPath;
+      } else if (entityType === 'consultation' && entityId) {
+        folderPath = `users/${auth.currentUser.uid}/consultations/${entityId}/documents`;
+      } else {
+        folderPath = `users/${auth.currentUser.uid}/patients/${patientId}/documents/${category}`;
+      }
 
       // Mettre à jour le statut
       updateFileStatus(index, 'uploading', 10);
@@ -128,10 +147,12 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
       };
       
       // Mettre à jour la liste des documents
-      setDocuments(prev => [...prev, documentWithCategory]);
-      
-      // Notifier le parent
-      onUploadSuccess([...documents, documentWithCategory]);
+      setDocuments(prev => {
+        const updatedDocuments = [...prev, documentWithCategory];
+        // Notifier le parent avec la liste mise à jour
+        onUploadSuccess(updatedDocuments);
+        return updatedDocuments;
+      });
       
       // Marquer comme terminé
       updateFileStatus(index, 'complete', 100);
@@ -195,13 +216,17 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
       displayName: finalDisplayName || file.name.replace(/\.[^/.]+$/, '') // Par défaut : nom sans extension
     }));
 
-    setUploadingFiles(prev => [...prev, ...newUploadingFiles]);
-
-    // Traiter chaque fichier
-    files.forEach((file, index) => {
-      const uploadIndex = newUploadingFiles.length - files.length + index;
-      const fileDisplayName = newUploadingFiles[uploadIndex].displayName;
-      processFile(file, selectedCategory, uploadIndex, fileDisplayName);
+    setUploadingFiles(prev => {
+      const updatedFiles = [...prev, ...newUploadingFiles];
+      
+      // Traiter chaque fichier avec les bons index
+      files.forEach((file, index) => {
+        const uploadIndex = prev.length + index; // Index correct dans le tableau global
+        const fileDisplayName = newUploadingFiles[index].displayName;
+        processFile(file, selectedCategory, uploadIndex, fileDisplayName);
+      });
+      
+      return updatedFiles;
     });
 
     // Réinitialiser le nom du document après upload

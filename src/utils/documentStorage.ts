@@ -1,4 +1,4 @@
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
+import { ref, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import { storage, auth } from '../firebase/config';
 import imageCompression from 'browser-image-compression';
 
@@ -672,15 +672,32 @@ export async function moveFile(oldPath: string, newPath: string): Promise<string
     throw new Error('Utilisateur non authentifié');
   }
 
+  if (!storage) {
+    throw new Error('Firebase Storage non configuré');
+  }
+
   try {
     console.log('🔄 Déplacement du fichier:', { oldPath, newPath });
     
     const oldRef = ref(storage, oldPath);
     const newRef = ref(storage, newPath);
 
+    // Vérifier que l'ancien fichier existe
+    try {
+      await getDownloadURL(oldRef);
+    } catch (error) {
+      console.error('❌ Ancien fichier non trouvé:', oldPath);
+      throw new Error(`Fichier source non trouvé: ${oldPath}`);
+    }
+
     // Télécharger le contenu de l'ancien fichier
     const oldUrl = await getDownloadURL(oldRef);
     const response = await fetch(oldUrl);
+    
+    if (!response.ok) {
+      throw new Error(`Erreur HTTP ${response.status}: ${response.statusText}`);
+    }
+    
     const blob = await response.blob();
 
     // Récupérer les métadonnées de l'ancien fichier pour les conserver
@@ -690,10 +707,15 @@ export async function moveFile(oldPath: string, newPath: string): Promise<string
     // Uploader le contenu vers le nouveau chemin avec les métadonnées
     const snapshot = await uploadBytes(newRef, blob, {
       contentType: oldMetadata.contentType,
-      customMetadata: customMetadata
+      customMetadata: {
+        ...customMetadata,
+        movedFrom: oldPath,
+        movedAt: new Date().toISOString(),
+        movedBy: auth.currentUser.uid
+      }
     });
 
-    // Supprimer l'ancien fichier
+    // Supprimer l'ancien fichier seulement après avoir confirmé le succès du nouvel upload
     await deleteObject(oldRef);
 
     const newDownloadURL = await getDownloadURL(newRef);
@@ -701,6 +723,20 @@ export async function moveFile(oldPath: string, newPath: string): Promise<string
     return newDownloadURL;
   } catch (error) {
     console.error(`❌ Erreur lors du déplacement du fichier de ${oldPath} vers ${newPath}:`, error);
-    throw new Error('Erreur lors du déplacement du fichier');
+    
+    // Fournir des messages d'erreur plus spécifiques
+    if (error instanceof Error) {
+      if (error.message.includes('storage/object-not-found')) {
+        throw new Error(`Fichier source non trouvé: ${oldPath}`);
+      } else if (error.message.includes('storage/unauthorized')) {
+        throw new Error('Permissions insuffisantes pour déplacer le fichier');
+      } else if (error.message.includes('storage/quota-exceeded')) {
+        throw new Error('Quota de stockage dépassé');
+      } else {
+        throw new Error(`Erreur lors du déplacement du fichier: ${error.message}`);
+      }
+    }
+    
+    throw new Error('Erreur inconnue lors du déplacement du fichier');
   }
 }
