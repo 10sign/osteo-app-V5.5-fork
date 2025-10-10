@@ -20,7 +20,7 @@ const firebaseConfig = {
 
 // Configuration HDS
 const hdsConfig = {
-  enabled: true,
+  enabled: false, // Temporairement désactivé pour uniformiser le comportement
   encryptionLevel: 'AES-256-GCM',
   auditEnabled: true,
   auditRetentionDays: 1095, // 3 ans
