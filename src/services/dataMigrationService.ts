@@ -1079,9 +1079,9 @@ export class DataMigrationService {
         realInvoices: 0
       };
 
-      // 1. Récupérer tous les ostéopathes
+      // 1. Récupérer tous les ostéopathes (role = 'user' pour les ostéopathes titulaires)
       const usersRef = collection(db, 'users');
-      const usersQuery = query(usersRef, where('role', '==', 'Ostéopathe'));
+      const usersQuery = query(usersRef, where('role', '==', 'user'));
       const usersSnapshot = await getDocs(usersQuery);
 
       console.log(`👥 ${usersSnapshot.size} ostéopathes trouvés`);

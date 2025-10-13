@@ -348,8 +348,8 @@ const DataMigrationDashboard: React.FC = () => {
                 <AlertTriangle size={20} className="flex-shrink-0 mr-3 text-yellow-600 mt-0.5" />
                 <div className="text-sm text-yellow-900">
                   <p className="font-medium mb-1">Aucun ostéopathe trouvé</p>
-                  <p>La requête Firestore n'a trouvé aucun utilisateur avec le rôle "Ostéopathe".</p>
-                  <p className="mt-2">Vérifiez que les utilisateurs ont bien un champ <code className="bg-yellow-100 px-1 py-0.5 rounded">role = "Ostéopathe"</code> dans leur document.</p>
+                  <p>La requête Firestore n'a trouvé aucun utilisateur avec le rôle "user".</p>
+                  <p className="mt-2">Vérifiez que les utilisateurs ont bien un champ <code className="bg-yellow-100 px-1 py-0.5 rounded">role = "user"</code> dans leur document.</p>
                 </div>
               </div>
             </div>
