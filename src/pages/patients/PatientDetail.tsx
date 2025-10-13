@@ -300,7 +300,7 @@ const PatientDetail: React.FC = () => {
           documents: data.documents || []
         } as Consultation;
 
-        console.log(`📄 Consultation ${docSnapshot.id} has ${consultation.documents?.length || 0} document(s)`);
+        console.log(`🔵 ÉTAPE 5: Consultation ${docSnapshot.id} chargée avec ${consultation.documents?.length || 0} document(s)`);
 
         consultationsData.push(consultation);
       }

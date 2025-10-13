@@ -236,28 +236,11 @@ export class ConsultationService {
       const userId = auth.currentUser.uid;
       const now = new Date();
       
-      console.log('🔍 Consultation data before HDS processing:', {
-        hasDocuments: !!consultationData.documents,
-        documentsCount: consultationData.documents?.length || 0,
-        documents: consultationData.documents
-      });
-
-      // ✅ DEBUG: Log des champs cliniques dans le service
-      console.log('🔍 Champs cliniques reçus par le service:', {
-        consultationReason: consultationData.consultationReason,
-        currentTreatment: consultationData.currentTreatment,
-        medicalAntecedents: consultationData.medicalAntecedents,
-        medicalHistory: consultationData.medicalHistory,
-        osteopathicTreatment: consultationData.osteopathicTreatment,
-        symptoms: consultationData.symptoms
-      });
+      console.log('🔵 ÉTAPE 1: Documents reçus:', consultationData.documents?.length || 0, 'document(s)');
 
       // Extraire les documents avant le traitement HDS
       const documents = consultationData.documents || [];
-      console.log('📄 Documents extraits AVANT traitement HDS:', {
-        count: documents.length,
-        documents: documents
-      });
+      console.log('🔵 ÉTAPE 2: Documents extraits:', documents.length, 'document(s)');
       const { documents: _, ...dataWithoutDocuments } = consultationData;
 
       // ✅ CORRECTION: Préparation des données avec chiffrement HDS (mapping explicite des champs cliniques)
@@ -305,33 +288,14 @@ export class ConsultationService {
 
       // Ajouter les documents après le traitement HDS
       dataToStore.documents = documents;
-      console.log('📄 Documents ajoutés APRÈS traitement HDS:', {
-        count: dataToStore.documents?.length || 0,
-        documents: dataToStore.documents
-      });
+      console.log('🔵 ÉTAPE 3: Documents ajoutés:', dataToStore.documents?.length || 0, 'document(s)');
 
       // 🔧 NOUVEAU : Nettoyer les champs undefined pour éviter l'erreur addDoc
       const cleanedData = Object.fromEntries(
         Object.entries(dataToStore).filter(([_, value]) => value !== undefined)
       );
 
-      console.log('🔍 Consultation data after HDS processing and cleaning:', {
-        hasDocuments: !!cleanedData.documents,
-        documentsCount: cleanedData.documents?.length || 0,
-        documentsAreArray: Array.isArray(cleanedData.documents),
-        documents: cleanedData.documents,
-        allKeys: Object.keys(cleanedData)
-      });
-
-      // ✅ DEBUG: Log des champs cliniques après traitement HDS
-      console.log('🔍 Champs cliniques après HDS processing:', {
-        consultationReason: cleanedData.consultationReason,
-        currentTreatment: cleanedData.currentTreatment,
-        medicalAntecedents: cleanedData.medicalAntecedents,
-        medicalHistory: cleanedData.medicalHistory,
-        osteopathicTreatment: cleanedData.osteopathicTreatment,
-        symptoms: cleanedData.symptoms
-      });
+      console.log('🔵 ÉTAPE 4: Documents à sauvegarder dans Firestore:', cleanedData.documents?.length || 0, 'document(s)');
       
       const docRef = await addDoc(collection(db, 'consultations'), cleanedData);
       const consultationId = docRef.id;

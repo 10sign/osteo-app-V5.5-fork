@@ -301,21 +301,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         documents: consultationDocuments
       };
 
-      console.log('📄 Consultation data with documents:', {
-        documentsCount: consultationDocuments.length,
-        documents: consultationDocuments,
-        fullData: consultationDataWithDocuments
-      });
-
-      // ✅ DEBUG: Log des champs cliniques pour vérifier qu'ils sont bien présents
-      console.log('🔍 Champs cliniques dans les données:', {
-        consultationReason: data.consultationReason,
-        currentTreatment: data.currentTreatment,
-        medicalAntecedents: data.medicalAntecedents,
-        medicalHistory: data.medicalHistory,
-        osteopathicTreatment: data.osteopathicTreatment,
-        symptoms: data.symptoms
-      });
+      console.log('🔵 ÉTAPE 0: Documents depuis le modal:', consultationDocuments.length, 'document(s)');
 
       const consultationId = await ConsultationService.createConsultation(consultationDataWithDocuments);
 
