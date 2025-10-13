@@ -445,6 +445,10 @@ export class ConsultationService {
       if (consultationData.osteopathicTreatment !== undefined) updateData.osteopathicTreatment = consultationData.osteopathicTreatment;
       if (consultationData.symptoms !== undefined) updateData.symptoms = consultationData.symptoms;
       if (consultationData.treatmentHistory !== undefined) updateData.treatmentHistory = consultationData.treatmentHistory;
+
+      // Extraire les documents AVANT le traitement HDS (ils seront ajoutés après)
+      const documents = consultationData.documents !== undefined ? consultationData.documents : existingData.documents || [];
+      console.log('🔵 UPDATE: Documents extraits:', documents.length, 'document(s)');
       
       // Si la date est modifiée, la convertir en Timestamp
       if (consultationData.date) {
@@ -494,7 +498,7 @@ export class ConsultationService {
         osteopathicTreatment: cleanedUpdateData.osteopathicTreatment || existingData.osteopathicTreatment || '',
         symptoms: cleanedUpdateData.symptoms || existingData.symptoms || [],
         treatmentHistory: cleanedUpdateData.treatmentHistory || existingData.treatmentHistory || [],
-        
+
         // Métadonnées
         osteopathId: userId,
         date: cleanedUpdateData.date || existingData.date,
@@ -515,6 +519,10 @@ export class ConsultationService {
 
       const dataToStore = HDSCompliance.prepareDataForStorage(baseDataForStorage, 'consultations', userId);
       console.log('🔐 Data prepared for storage (before filtering):', dataToStore);
+
+      // Ajouter les documents APRÈS le traitement HDS
+      dataToStore.documents = documents;
+      console.log('🔵 UPDATE: Documents ajoutés après HDS:', dataToStore.documents?.length || 0, 'document(s)');
 
       // ✅ FIX CRITIQUE: Filtrer tous les champs undefined après le chiffrement HDS
       const finalDataToStore = Object.fromEntries(
