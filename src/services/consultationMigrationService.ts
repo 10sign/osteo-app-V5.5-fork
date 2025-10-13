@@ -12,13 +12,13 @@ import { Patient } from '../types';
 
 /**
  * Service de migration des consultations existantes
- * Ajoute les champs cliniques manquants aux consultations passées
+ * Remplit les champs cliniques manquants ou erronés (UUIDs) avec les vraies données du patient
  */
 export class ConsultationMigrationService {
 
   /**
    * Migre toutes les consultations d'un praticien
-   * Ajoute les champs cliniques manquants avec des valeurs vides
+   * Remplace les données manquantes ou les UUIDs par les vraies valeurs du patient
    */
   static async migrateAllConsultations(): Promise<{
     total: number;
@@ -56,16 +56,32 @@ export class ConsultationMigrationService {
           const consultationData = consultationDoc.data();
           const consultationId = consultationDoc.id;
 
-          // Vérifier si les champs cliniques sont déjà présents
-          const needsMigration = !consultationData.hasOwnProperty('currentTreatment') ||
-                                 !consultationData.hasOwnProperty('consultationReason') ||
-                                 !consultationData.hasOwnProperty('medicalAntecedents') ||
-                                 !consultationData.hasOwnProperty('medicalHistory') ||
-                                 !consultationData.hasOwnProperty('osteopathicTreatment') ||
-                                 !consultationData.hasOwnProperty('symptoms');
+          // ✅ NOUVELLE LOGIQUE : Vérifier si les champs contiennent des UUIDs ou sont manquants
+          const isUUID = (value: any) => {
+            if (!value || typeof value !== 'string') return false;
+            // Pattern UUID : 8-4-4-4-12 caractères hexadécimaux
+            return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+          };
+
+          const hasInvalidData = (field: any) => {
+            return !field || field === '' || isUUID(field) || field === 'undefined' || field === 'null';
+          };
+
+          const needsMigration = 
+            !consultationData.hasOwnProperty('currentTreatment') ||
+            !consultationData.hasOwnProperty('consultationReason') ||
+            !consultationData.hasOwnProperty('medicalAntecedents') ||
+            !consultationData.hasOwnProperty('medicalHistory') ||
+            !consultationData.hasOwnProperty('osteopathicTreatment') ||
+            !consultationData.hasOwnProperty('symptoms') ||
+            hasInvalidData(consultationData.currentTreatment) ||
+            hasInvalidData(consultationData.consultationReason) ||
+            hasInvalidData(consultationData.medicalAntecedents) ||
+            hasInvalidData(consultationData.medicalHistory) ||
+            hasInvalidData(consultationData.osteopathicTreatment);
 
           if (!needsMigration) {
-            console.log(`✅ Consultation ${consultationId} déjà migrée`);
+            console.log(`✅ Consultation ${consultationId} déjà migrée et valide`);
             continue;
           }
 
@@ -83,28 +99,50 @@ export class ConsultationMigrationService {
             }
           }
 
-          // Préparer les données de migration
-          const migrationData: any = {
-            // Champs cliniques (valeurs vides ou depuis le patient)
-            currentTreatment: consultationData.currentTreatment || patientData?.currentTreatment || '',
-            consultationReason: consultationData.consultationReason || patientData?.consultationReason || '',
-            medicalAntecedents: consultationData.medicalAntecedents || patientData?.medicalAntecedents || '',
-            medicalHistory: consultationData.medicalHistory || patientData?.medicalHistory || '',
-            osteopathicTreatment: consultationData.osteopathicTreatment || patientData?.osteopathicTreatment || '',
-            symptoms: consultationData.symptoms || patientData?.tags || [],
+          // ✅ NOUVELLE LOGIQUE : Préparer les données de migration en remplaçant les UUIDs et valeurs invalides
+          const migrationData: any = {};
 
-            // Champs d'identité patient (snapshot) si non présents
-            patientFirstName: consultationData.patientFirstName || patientData?.firstName || '',
-            patientLastName: consultationData.patientLastName || patientData?.lastName || '',
-            patientDateOfBirth: consultationData.patientDateOfBirth || patientData?.dateOfBirth || '',
-            patientGender: consultationData.patientGender || patientData?.gender || '',
-            patientPhone: consultationData.patientPhone || patientData?.phone || '',
-            patientEmail: consultationData.patientEmail || patientData?.email || '',
-            patientProfession: consultationData.patientProfession || patientData?.profession || '',
-            patientAddress: consultationData.patientAddress || patientData?.address?.street || '',
-            patientInsurance: consultationData.patientInsurance || patientData?.insurance?.provider || '',
-            patientInsuranceNumber: consultationData.patientInsuranceNumber || patientData?.insurance?.policyNumber || ''
+          // Fonction helper pour déterminer si on doit remplacer une valeur
+          const shouldReplace = (currentValue: any, patientValue: any) => {
+            if (hasInvalidData(currentValue) && patientValue) {
+              return patientValue;
+            }
+            return currentValue || '';
           };
+
+          // Champs cliniques - remplacer seulement si invalides/UUIDs
+          migrationData.currentTreatment = shouldReplace(consultationData.currentTreatment, patientData?.currentTreatment);
+          migrationData.consultationReason = shouldReplace(consultationData.consultationReason, patientData?.consultationReason);
+          migrationData.medicalAntecedents = shouldReplace(consultationData.medicalAntecedents, patientData?.medicalAntecedents);
+          migrationData.medicalHistory = shouldReplace(consultationData.medicalHistory, patientData?.medicalHistory);
+          migrationData.osteopathicTreatment = shouldReplace(consultationData.osteopathicTreatment, patientData?.osteopathicTreatment);
+          
+          // Symptoms - traitement spécial pour les tableaux
+          if (!consultationData.symptoms || consultationData.symptoms.length === 0) {
+            migrationData.symptoms = patientData?.tags || [];
+          } else {
+            migrationData.symptoms = consultationData.symptoms;
+          }
+
+          // Champs d'identité patient (snapshot) - remplir seulement si absents
+          migrationData.patientFirstName = consultationData.patientFirstName || patientData?.firstName || '';
+          migrationData.patientLastName = consultationData.patientLastName || patientData?.lastName || '';
+          migrationData.patientDateOfBirth = consultationData.patientDateOfBirth || patientData?.dateOfBirth || '';
+          migrationData.patientGender = consultationData.patientGender || patientData?.gender || '';
+          migrationData.patientPhone = consultationData.patientPhone || patientData?.phone || '';
+          migrationData.patientEmail = consultationData.patientEmail || patientData?.email || '';
+          migrationData.patientProfession = consultationData.patientProfession || patientData?.profession || '';
+          migrationData.patientAddress = consultationData.patientAddress || patientData?.address?.street || '';
+          migrationData.patientInsurance = consultationData.patientInsurance || patientData?.insurance?.provider || '';
+          migrationData.patientInsuranceNumber = consultationData.patientInsuranceNumber || patientData?.insurance?.policyNumber || '';
+          
+          // ✅ CORRECTION : Mettre à jour aussi reason et treatment si ce sont des UUIDs
+          if (hasInvalidData(consultationData.reason)) {
+            migrationData.reason = patientData?.consultationReason || 'Consultation ostéopathique';
+          }
+          if (hasInvalidData(consultationData.treatment)) {
+            migrationData.treatment = patientData?.osteopathicTreatment || 'Traitement ostéopathique';
+          }
 
           // Mettre à jour la consultation
           await updateDoc(doc(db, 'consultations', consultationId), migrationData);
@@ -166,26 +204,59 @@ export class ConsultationMigrationService {
         }
       }
 
-      // Préparer les données de migration
-      const migrationData: any = {
-        currentTreatment: consultationData.currentTreatment || patientData?.currentTreatment || '',
-        consultationReason: consultationData.consultationReason || patientData?.consultationReason || '',
-        medicalAntecedents: consultationData.medicalAntecedents || patientData?.medicalAntecedents || '',
-        medicalHistory: consultationData.medicalHistory || patientData?.medicalHistory || '',
-        osteopathicTreatment: consultationData.osteopathicTreatment || patientData?.osteopathicTreatment || '',
-        symptoms: consultationData.symptoms || patientData?.tags || [],
-
-        patientFirstName: consultationData.patientFirstName || patientData?.firstName || '',
-        patientLastName: consultationData.patientLastName || patientData?.lastName || '',
-        patientDateOfBirth: consultationData.patientDateOfBirth || patientData?.dateOfBirth || '',
-        patientGender: consultationData.patientGender || patientData?.gender || '',
-        patientPhone: consultationData.patientPhone || patientData?.phone || '',
-        patientEmail: consultationData.patientEmail || patientData?.email || '',
-        patientProfession: consultationData.patientProfession || patientData?.profession || '',
-        patientAddress: consultationData.patientAddress || patientData?.address?.street || '',
-        patientInsurance: consultationData.patientInsurance || patientData?.insurance?.provider || '',
-        patientInsuranceNumber: consultationData.patientInsuranceNumber || patientData?.insurance?.policyNumber || ''
+      // ✅ NOUVELLE LOGIQUE : Vérifier si les champs contiennent des UUIDs ou sont manquants
+      const isUUID = (value: any) => {
+        if (!value || typeof value !== 'string') return false;
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
       };
+
+      const hasInvalidData = (field: any) => {
+        return !field || field === '' || isUUID(field) || field === 'undefined' || field === 'null';
+      };
+
+      const shouldReplace = (currentValue: any, patientValue: any) => {
+        if (hasInvalidData(currentValue) && patientValue) {
+          return patientValue;
+        }
+        return currentValue || '';
+      };
+
+      // Préparer les données de migration
+      const migrationData: any = {};
+
+      // Champs cliniques - remplacer seulement si invalides/UUIDs
+      migrationData.currentTreatment = shouldReplace(consultationData.currentTreatment, patientData?.currentTreatment);
+      migrationData.consultationReason = shouldReplace(consultationData.consultationReason, patientData?.consultationReason);
+      migrationData.medicalAntecedents = shouldReplace(consultationData.medicalAntecedents, patientData?.medicalAntecedents);
+      migrationData.medicalHistory = shouldReplace(consultationData.medicalHistory, patientData?.medicalHistory);
+      migrationData.osteopathicTreatment = shouldReplace(consultationData.osteopathicTreatment, patientData?.osteopathicTreatment);
+      
+      // Symptoms - traitement spécial pour les tableaux
+      if (!consultationData.symptoms || consultationData.symptoms.length === 0) {
+        migrationData.symptoms = patientData?.tags || [];
+      } else {
+        migrationData.symptoms = consultationData.symptoms;
+      }
+
+      // Champs d'identité patient (snapshot) - remplir seulement si absents
+      migrationData.patientFirstName = consultationData.patientFirstName || patientData?.firstName || '';
+      migrationData.patientLastName = consultationData.patientLastName || patientData?.lastName || '';
+      migrationData.patientDateOfBirth = consultationData.patientDateOfBirth || patientData?.dateOfBirth || '';
+      migrationData.patientGender = consultationData.patientGender || patientData?.gender || '';
+      migrationData.patientPhone = consultationData.patientPhone || patientData?.phone || '';
+      migrationData.patientEmail = consultationData.patientEmail || patientData?.email || '';
+      migrationData.patientProfession = consultationData.patientProfession || patientData?.profession || '';
+      migrationData.patientAddress = consultationData.patientAddress || patientData?.address?.street || '';
+      migrationData.patientInsurance = consultationData.patientInsurance || patientData?.insurance?.provider || '';
+      migrationData.patientInsuranceNumber = consultationData.patientInsuranceNumber || patientData?.insurance?.policyNumber || '';
+      
+      // ✅ CORRECTION : Mettre à jour aussi reason et treatment si ce sont des UUIDs
+      if (hasInvalidData(consultationData.reason)) {
+        migrationData.reason = patientData?.consultationReason || 'Consultation ostéopathique';
+      }
+      if (hasInvalidData(consultationData.treatment)) {
+        migrationData.treatment = patientData?.osteopathicTreatment || 'Traitement ostéopathique';
+      }
 
       await updateDoc(consultationRef, migrationData);
 
