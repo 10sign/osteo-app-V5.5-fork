@@ -2,16 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, Clock, FileText, User, Plus, Trash2, CheckCircle } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import AutoResizeTextarea from '../ui/AutoResizeTextarea';
 import SuccessBanner from '../ui/SuccessBanner';
 import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { HDSCompliance } from '../../utils/hdsCompliance';
-import { AuditLogger, AuditEventType, SensitivityLevel } from '../../utils/auditLogger';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
+import { ConsultationService } from '../../services/consultationService';
 
 interface EditConsultationModalProps {
   isOpen: boolean;
@@ -277,9 +277,11 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         medicalHistory: data.medicalHistory || '',
         osteopathicTreatment: data.osteopathicTreatment || '',
         symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : [],
+        treatmentHistory: consultationData.treatmentHistory || [],
 
         // Inclure les documents
-        documents: consultationDocuments
+        documents: consultationDocuments,
+        appointmentId: consultationData.appointmentId
       };
 
       console.log('💾 Prepared update data (complete):', updateData);
@@ -304,78 +306,8 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         symptoms: data.symptoms
       });
 
-      // Extraire les documents avant le traitement HDS
-      const documents = updateData.documents || [];
-      const { documents: _, ...dataWithoutDocuments } = updateData;
-
-      // ✅ CORRECTION: Préparation des données avec chiffrement HDS (mapping explicite)
-      const dataToStore = HDSCompliance.prepareDataForStorage({
-        // Champs de base
-        patientId: updateData.patientId,
-        patientName: updateData.patientName,
-        reason: updateData.reason,
-        treatment: updateData.treatment,
-        notes: updateData.notes,
-        duration: updateData.duration,
-        price: updateData.price,
-        status: updateData.status,
-        examinations: updateData.examinations,
-        prescriptions: updateData.prescriptions,
-        appointmentId: updateData.appointmentId,
-        
-        // Champs d'identité patient (snapshot)
-        patientFirstName: updateData.patientFirstName,
-        patientLastName: updateData.patientLastName,
-        patientDateOfBirth: updateData.patientDateOfBirth,
-        patientGender: updateData.patientGender,
-        patientPhone: updateData.patientPhone,
-        patientEmail: updateData.patientEmail,
-        patientProfession: updateData.patientProfession,
-        patientAddress: updateData.patientAddress,
-        patientInsurance: updateData.patientInsurance,
-        patientInsuranceNumber: updateData.patientInsuranceNumber,
-        
-        // ✅ CORRECTION: Champs cliniques (mapping explicite)
-        currentTreatment: updateData.currentTreatment || '',
-        consultationReason: updateData.consultationReason || '',
-        medicalAntecedents: updateData.medicalAntecedents || '',
-        medicalHistory: updateData.medicalHistory || '',
-        osteopathicTreatment: updateData.osteopathicTreatment || '',
-        symptoms: updateData.symptoms || [],
-        treatmentHistory: updateData.treatmentHistory,
-        
-        // Métadonnées
-        date: Timestamp.fromDate(consultationDate),
-        updatedAt: Timestamp.now()
-      }, 'consultations', auth.currentUser.uid);
-
-      // Ajouter les documents après le traitement HDS
-      dataToStore.documents = documents;
-
-      // 🔧 NOUVEAU : Nettoyer les champs undefined pour éviter l'erreur updateDoc
-      const cleanedData = Object.fromEntries(
-        Object.entries(dataToStore).filter(([_, value]) => value !== undefined)
-      );
-
-      console.log('🔍 Edit consultation data after HDS processing:', {
-        hasDocuments: !!cleanedData.documents,
-        documentsCount: Array.isArray(cleanedData.documents) ? cleanedData.documents.length : 0,
-        documents: cleanedData.documents
-      });
-
-      // ✅ DEBUG: Log des champs cliniques après traitement HDS dans EditConsultationModal
-      console.log('🔍 Champs cliniques après HDS processing (EditConsultationModal):', {
-        consultationReason: cleanedData.consultationReason,
-        currentTreatment: cleanedData.currentTreatment,
-        medicalAntecedents: cleanedData.medicalAntecedents,
-        medicalHistory: cleanedData.medicalHistory,
-        osteopathicTreatment: cleanedData.osteopathicTreatment,
-        symptoms: cleanedData.symptoms
-      });
-
-      // Mettre à jour via le service
-      const consultationRef = doc(db, 'consultations', consultationId);
-      await updateDoc(consultationRef, cleanedData);
+      // ✅ CORRECTION: Utiliser le service ConsultationService au lieu de faire le chiffrement manuellement
+      await ConsultationService.updateConsultation(consultationId, updateData);
 
       console.log('✅ Consultation updated successfully in Firestore');
 

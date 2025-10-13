@@ -485,8 +485,55 @@ export class ConsultationService {
       
       console.log('💾 Prepared update data:', updateData);
       
-      // Préparation des données avec chiffrement HDS
-      const dataToStore = HDSCompliance.prepareDataForStorage(updateData, 'consultations', userId);
+      // ✅ CORRECTION: Nettoyer les champs undefined pour éviter l'erreur updateDoc
+      const cleanedUpdateData = Object.fromEntries(
+        Object.entries(updateData).filter(([_, value]) => value !== undefined)
+      );
+      
+      console.log('🧹 Cleaned update data:', cleanedUpdateData);
+      
+      // ✅ CORRECTION: Préparation des données avec chiffrement HDS (mapping explicite)
+      const dataToStore = HDSCompliance.prepareDataForStorage({
+        // Champs de base
+        patientId: cleanedUpdateData.patientId || existingData.patientId,
+        patientName: cleanedUpdateData.patientName || existingData.patientName,
+        reason: cleanedUpdateData.reason || existingData.reason,
+        treatment: cleanedUpdateData.treatment || existingData.treatment,
+        notes: cleanedUpdateData.notes || existingData.notes,
+        duration: cleanedUpdateData.duration || existingData.duration,
+        price: cleanedUpdateData.price || existingData.price,
+        status: cleanedUpdateData.status || existingData.status,
+        examinations: cleanedUpdateData.examinations || existingData.examinations,
+        prescriptions: cleanedUpdateData.prescriptions || existingData.prescriptions,
+        appointmentId: cleanedUpdateData.appointmentId || existingData.appointmentId,
+        
+        // Champs d'identité patient (snapshot)
+        patientFirstName: cleanedUpdateData.patientFirstName || existingData.patientFirstName,
+        patientLastName: cleanedUpdateData.patientLastName || existingData.patientLastName,
+        patientDateOfBirth: cleanedUpdateData.patientDateOfBirth || existingData.patientDateOfBirth,
+        patientGender: cleanedUpdateData.patientGender || existingData.patientGender,
+        patientPhone: cleanedUpdateData.patientPhone || existingData.patientPhone,
+        patientEmail: cleanedUpdateData.patientEmail || existingData.patientEmail,
+        patientProfession: cleanedUpdateData.patientProfession || existingData.patientProfession,
+        patientAddress: cleanedUpdateData.patientAddress || existingData.patientAddress,
+        patientInsurance: cleanedUpdateData.patientInsurance || existingData.patientInsurance,
+        patientInsuranceNumber: cleanedUpdateData.patientInsuranceNumber || existingData.patientInsuranceNumber,
+        
+        // ✅ CORRECTION: Champs cliniques (mapping explicite)
+        currentTreatment: cleanedUpdateData.currentTreatment || existingData.currentTreatment || '',
+        consultationReason: cleanedUpdateData.consultationReason || existingData.consultationReason || '',
+        medicalAntecedents: cleanedUpdateData.medicalAntecedents || existingData.medicalAntecedents || '',
+        medicalHistory: cleanedUpdateData.medicalHistory || existingData.medicalHistory || '',
+        osteopathicTreatment: cleanedUpdateData.osteopathicTreatment || existingData.osteopathicTreatment || '',
+        symptoms: cleanedUpdateData.symptoms || existingData.symptoms || [],
+        treatmentHistory: cleanedUpdateData.treatmentHistory || existingData.treatmentHistory || [],
+        
+        // Métadonnées
+        osteopathId: userId,
+        date: cleanedUpdateData.date || existingData.date,
+        createdAt: existingData.createdAt,
+        updatedAt: cleanedUpdateData.updatedAt
+      }, 'consultations', userId);
       console.log('🔐 Data prepared for storage:', dataToStore);
       
       await updateDoc(docRef, dataToStore);

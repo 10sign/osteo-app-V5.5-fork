@@ -291,7 +291,8 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         medicalAntecedents: data.medicalAntecedents || '',
         medicalHistory: data.medicalHistory || '',
         osteopathicTreatment: data.osteopathicTreatment || '',
-        symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : []
+        symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : [],
+        treatmentHistory: []
       };
 
       // Inclure les documents dans les données de consultation
