@@ -167,7 +167,25 @@ export function decryptData(encryptedData: string, userId: string): any {
           // Prendre la partie chiffrée (après le premier ':')
           const encryptedPart = parts.slice(1).join(':');
           console.log('🔓 Détection UUID chiffré, déchiffrement de la partie:', encryptedPart.substring(0, 50) + '...');
-          return decryptData(encryptedPart, userId);
+          
+          try {
+            const result = decryptData(encryptedPart, userId);
+            // Vérifier si le déchiffrement a réussi
+            if (typeof result === 'string' && 
+                !result.startsWith('[') && 
+                !result.includes('DECODING_FAILED') &&
+                !result.includes('DECRYPTION_ERROR') &&
+                result.length > 0) {
+              return result;
+            } else {
+              console.warn('⚠️ Déchiffrement UUID échoué, tentative de récupération...');
+              // Essayer de récupérer le texte original si possible
+              return encryptedData; // Retourner l'UUID chiffré pour traitement ultérieur
+            }
+          } catch (error) {
+            console.error('❌ Erreur lors du déchiffrement UUID:', error);
+            return encryptedData; // Retourner l'UUID chiffré pour traitement ultérieur
+          }
         }
       }
     }

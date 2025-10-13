@@ -248,12 +248,41 @@ export class HDSCompliance {
               if (typeof decryptedValue === 'string' && 
                   !decryptedValue.startsWith('[') && 
                   !decryptedValue.includes('DECODING_FAILED') &&
-                  !decryptedValue.includes('DECRYPTION_ERROR')) {
+                  !decryptedValue.includes('DECRYPTION_ERROR') &&
+                  decryptedValue.length > 0) {
                 processedData[field] = decryptedValue;
+                if (import.meta.env.DEV) {
+                  console.log(`✅ Déchiffrement réussi pour ${field}:`, decryptedValue.substring(0, 50) + '...');
+                }
               } else {
-                // Si le déchiffrement échoue, conserver la valeur originale pour debug
+                // Si le déchiffrement échoue, essayer de récupérer le texte original
                 console.warn(`⚠️ Échec du déchiffrement pour ${field}:`, decryptedValue);
-                // Garder la valeur chiffrée pour debug - pas de réassignation nécessaire
+                
+                // Essayer de récupérer le texte original si c'est un UUID chiffré
+                if (processedData[field].includes(':') && processedData[field].length > 50) {
+                  const parts = processedData[field].split(':');
+                  if (parts.length >= 2) {
+                    const uuidPattern = /^[0-9a-f]{32}$/i;
+                    if (uuidPattern.test(parts[0])) {
+                      // C'est un UUID chiffré, essayer de déchiffrer juste la partie après l'UUID
+                      try {
+                        const encryptedPart = parts.slice(1).join(':');
+                        const retryDecrypt = decryptData(encryptedPart, userId);
+                        if (typeof retryDecrypt === 'string' && 
+                            !retryDecrypt.startsWith('[') && 
+                            !retryDecrypt.includes('DECODING_FAILED') &&
+                            retryDecrypt.length > 0) {
+                          processedData[field] = retryDecrypt;
+                          if (import.meta.env.DEV) {
+                            console.log(`✅ Déchiffrement réussi au 2ème essai pour ${field}:`, retryDecrypt.substring(0, 50) + '...');
+                          }
+                        }
+                      } catch (retryError) {
+                        console.error(`❌ Échec du déchiffrement au 2ème essai pour ${field}:`, retryError);
+                      }
+                    }
+                  }
+                }
               }
             } catch (error) {
               console.error(`❌ Erreur de déchiffrement pour ${field}:`, error);

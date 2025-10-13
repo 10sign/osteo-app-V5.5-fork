@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { Patient } from '../types';
+import { DecryptionDiagnostic } from '../utils/decryptionDiagnostic';
 
 /**
  * Service de migration des consultations existantes
@@ -107,6 +108,10 @@ export class ConsultationMigrationService {
             }
           }
 
+          // ✅ DIAGNOSTIC : Analyser l'état de déchiffrement de la consultation
+          const diagnostic = DecryptionDiagnostic.diagnoseConsultation(consultationData, auth.currentUser?.uid || '');
+          console.log(`🔍 Diagnostic consultation ${consultationId}:`, diagnostic.summary);
+          
           // ✅ NOUVELLE LOGIQUE : Préparer les données de migration en remplaçant les UUIDs et valeurs invalides
           const migrationData: any = {};
 
@@ -119,12 +124,29 @@ export class ConsultationMigrationService {
             return currentValue || '';
           };
 
-          // Champs cliniques - remplacer seulement si invalides/UUIDs
-          migrationData.currentTreatment = shouldReplace(consultationData.currentTreatment, patientData?.currentTreatment);
-          migrationData.consultationReason = shouldReplace(consultationData.consultationReason, patientData?.consultationReason);
-          migrationData.medicalAntecedents = shouldReplace(consultationData.medicalAntecedents, patientData?.medicalAntecedents);
-          migrationData.medicalHistory = shouldReplace(consultationData.medicalHistory, patientData?.medicalHistory);
-          migrationData.osteopathicTreatment = shouldReplace(consultationData.osteopathicTreatment, patientData?.osteopathicTreatment);
+          // Fonction de récupération d'urgence pour les données chiffrées
+          const emergencyRecovery = (encryptedValue: any, patientValue: any, fieldName: string) => {
+            if (hasInvalidData(encryptedValue)) {
+              if (patientValue && patientValue.trim() !== '') {
+                console.log(`🚨 Récupération d'urgence pour ${fieldName}: utilisation des données patient`);
+                return patientValue;
+              } else {
+                console.log(`🚨 Récupération d'urgence pour ${fieldName}: champ vide`);
+                return '';
+              }
+            }
+            return encryptedValue;
+          };
+
+          // Champs cliniques - remplacer seulement si invalides/UUIDs avec récupération d'urgence
+          migrationData.currentTreatment = emergencyRecovery(consultationData.currentTreatment, patientData?.currentTreatment, 'currentTreatment');
+          migrationData.consultationReason = emergencyRecovery(consultationData.consultationReason, patientData?.consultationReason, 'consultationReason');
+          migrationData.medicalAntecedents = emergencyRecovery(consultationData.medicalAntecedents, patientData?.medicalAntecedents, 'medicalAntecedents');
+          migrationData.medicalHistory = emergencyRecovery(consultationData.medicalHistory, patientData?.medicalHistory, 'medicalHistory');
+          migrationData.osteopathicTreatment = emergencyRecovery(consultationData.osteopathicTreatment, patientData?.osteopathicTreatment, 'osteopathicTreatment');
+          
+          // Notes complémentaires - récupération d'urgence spéciale
+          migrationData.notes = emergencyRecovery(consultationData.notes, patientData?.notes, 'notes');
           
           // Symptoms - traitement spécial pour les tableaux
           if (!consultationData.symptoms || consultationData.symptoms.length === 0) {
