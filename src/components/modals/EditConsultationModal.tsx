@@ -243,7 +243,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
       const consultationDate = new Date(`${data.date}T${data.time}`);
 
       // Préparer les données de mise à jour COMPLETES
-      const updateData = {
+      const updateData: any = {
         date: consultationDate,
         reason: data.reason,
         treatment: data.treatment,
@@ -280,9 +280,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         treatmentHistory: consultationData.treatmentHistory || [],
 
         // Inclure les documents
-        documents: consultationDocuments,
-        appointmentId: consultationData.appointmentId
+        documents: consultationDocuments
       };
+
+      // ✅ FIX: Ajouter appointmentId seulement s'il existe
+      if (consultationData.appointmentId) {
+        updateData.appointmentId = consultationData.appointmentId;
+      }
 
       console.log('💾 Prepared update data (complete):', updateData);
       

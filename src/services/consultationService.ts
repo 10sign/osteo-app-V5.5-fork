@@ -453,7 +453,10 @@ export class ConsultationService {
       if (consultationData.status !== undefined) updateData.status = consultationData.status;
       if (consultationData.examinations !== undefined) updateData.examinations = consultationData.examinations;
       if (consultationData.prescriptions !== undefined) updateData.prescriptions = consultationData.prescriptions;
-      if (consultationData.appointmentId !== undefined) updateData.appointmentId = consultationData.appointmentId;
+      // ✅ FIX: Ne pas ajouter appointmentId s'il est undefined
+      if (consultationData.appointmentId !== undefined && consultationData.appointmentId !== null) {
+        updateData.appointmentId = consultationData.appointmentId;
+      }
       
       // Champs d'identité patient
       if (consultationData.patientFirstName !== undefined) updateData.patientFirstName = consultationData.patientFirstName;
@@ -493,7 +496,7 @@ export class ConsultationService {
       console.log('🧹 Cleaned update data:', cleanedUpdateData);
       
       // ✅ CORRECTION: Préparation des données avec chiffrement HDS (mapping explicite)
-      const dataToStore = HDSCompliance.prepareDataForStorage({
+      const baseDataForStorage: any = {
         // Champs de base
         patientId: cleanedUpdateData.patientId || existingData.patientId,
         patientName: cleanedUpdateData.patientName || existingData.patientName,
@@ -505,7 +508,6 @@ export class ConsultationService {
         status: cleanedUpdateData.status || existingData.status,
         examinations: cleanedUpdateData.examinations || existingData.examinations,
         prescriptions: cleanedUpdateData.prescriptions || existingData.prescriptions,
-        appointmentId: cleanedUpdateData.appointmentId || existingData.appointmentId,
         
         // Champs d'identité patient (snapshot)
         patientFirstName: cleanedUpdateData.patientFirstName || existingData.patientFirstName,
@@ -533,9 +535,16 @@ export class ConsultationService {
         date: cleanedUpdateData.date || existingData.date,
         createdAt: existingData.createdAt,
         updatedAt: cleanedUpdateData.updatedAt
-      }, 'consultations', userId);
+      };
+
+      // ✅ FIX: Ajouter appointmentId seulement s'il existe dans les données nettoyées ou existantes
+      if (cleanedUpdateData.appointmentId || existingData.appointmentId) {
+        baseDataForStorage.appointmentId = cleanedUpdateData.appointmentId || existingData.appointmentId;
+      }
+
+      const dataToStore = HDSCompliance.prepareDataForStorage(baseDataForStorage, 'consultations', userId);
       console.log('🔐 Data prepared for storage:', dataToStore);
-      
+
       await updateDoc(docRef, dataToStore);
       console.log('✅ Consultation updated successfully in Firestore');
       
