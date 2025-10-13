@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { RefreshCw, CheckCircle, AlertCircle, Info } from 'lucide-react';
+import { RefreshCw, CheckCircle, AlertCircle, Info, Users } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { auth } from '../../firebase/config';
-import { syncFirstConsultationData } from '../../scripts/syncFirstConsultationData';
+import { syncFirstConsultationData, syncAllOsteopaths } from '../../scripts/syncFirstConsultationData';
 
 interface SyncDetail {
   patientId: string;
@@ -11,15 +11,19 @@ interface SyncDetail {
   fieldsUpdated: string[];
 }
 
+interface SingleResult {
+  totalPatients: number;
+  patientsWithConsultations: number;
+  consultationsUpdated: number;
+  errors: string[];
+  details: SyncDetail[];
+}
+
 const FirstConsultationSyncPanel: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
-  const [result, setResult] = useState<{
-    totalPatients: number;
-    patientsWithConsultations: number;
-    consultationsUpdated: number;
-    errors: string[];
-    details: SyncDetail[];
-  } | null>(null);
+  const [isRunningAll, setIsRunningAll] = useState(false);
+  const [result, setResult] = useState<SingleResult | null>(null);
+  const [allResults, setAllResults] = useState<Record<string, SingleResult> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSync = async () => {
@@ -31,6 +35,7 @@ const FirstConsultationSyncPanel: React.FC = () => {
     setIsRunning(true);
     setError(null);
     setResult(null);
+    setAllResults(null);
 
     try {
       const migrationResult = await syncFirstConsultationData(auth.currentUser.uid);
@@ -39,6 +44,27 @@ const FirstConsultationSyncPanel: React.FC = () => {
       setError((err as Error).message);
     } finally {
       setIsRunning(false);
+    }
+  };
+
+  const handleSyncAll = async () => {
+    if (!auth.currentUser) {
+      setError('Vous devez être connecté pour lancer la synchronisation');
+      return;
+    }
+
+    setIsRunningAll(true);
+    setError(null);
+    setResult(null);
+    setAllResults(null);
+
+    try {
+      const results = await syncAllOsteopaths();
+      setAllResults(results);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIsRunningAll(false);
     }
   };
 
@@ -53,15 +79,27 @@ const FirstConsultationSyncPanel: React.FC = () => {
             Copie les données du dossier patient dans leur première consultation
           </p>
         </div>
-        <Button
-          onClick={handleSync}
-          disabled={isRunning}
-          isLoading={isRunning}
-          loadingText="Synchronisation..."
-          leftIcon={<RefreshCw size={16} />}
-        >
-          Lancer la synchronisation
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleSync}
+            disabled={isRunning || isRunningAll}
+            isLoading={isRunning}
+            loadingText="Synchronisation..."
+            leftIcon={<RefreshCw size={16} />}
+            variant="outline"
+          >
+            Mon compte uniquement
+          </Button>
+          <Button
+            onClick={handleSyncAll}
+            disabled={isRunning || isRunningAll}
+            isLoading={isRunningAll}
+            loadingText="Synchronisation globale..."
+            leftIcon={<Users size={16} />}
+          >
+            TOUS les ostéopathes
+          </Button>
+        </div>
       </div>
 
       <div className="p-4 mb-4 border border-blue-200 rounded-lg bg-blue-50">
@@ -87,6 +125,53 @@ const FirstConsultationSyncPanel: React.FC = () => {
               <p className="font-medium text-red-900">Erreur</p>
               <p className="text-sm text-red-800">{error}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {allResults && (
+        <div className="space-y-4">
+          <div className="p-4 border border-green-200 rounded-lg bg-green-50">
+            <div className="flex items-start">
+              <CheckCircle className="flex-shrink-0 mr-3 text-green-600" size={20} />
+              <div className="flex-1">
+                <p className="font-medium text-green-900">Synchronisation globale terminée</p>
+                <p className="mt-1 text-sm text-green-800">
+                  {Object.keys(allResults).length} ostéopathes traités
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {Object.entries(allResults).map(([osteopathId, osteopathResult]) => (
+              <div key={osteopathId} className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                <div className="flex items-start justify-between mb-2">
+                  <h4 className="font-medium text-gray-900">Ostéopathe: {osteopathId}</h4>
+                  {osteopathResult.errors.length > 0 ? (
+                    <AlertCircle className="text-red-600" size={20} />
+                  ) : (
+                    <CheckCircle className="text-green-600" size={20} />
+                  )}
+                </div>
+                <div className="space-y-1 text-sm text-gray-700">
+                  <p>• {osteopathResult.totalPatients} patients traités</p>
+                  <p>• {osteopathResult.patientsWithConsultations} patients avec consultations</p>
+                  <p>• {osteopathResult.consultationsUpdated} consultations mises à jour</p>
+                  {osteopathResult.errors.length > 0 && (
+                    <p className="text-red-700">• {osteopathResult.errors.length} erreurs</p>
+                  )}
+                </div>
+                {osteopathResult.errors.length > 0 && (
+                  <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
+                    <p className="text-xs font-medium text-red-900 mb-1">Erreurs:</p>
+                    {osteopathResult.errors.map((err, idx) => (
+                      <p key={idx} className="text-xs text-red-800">• {err}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}

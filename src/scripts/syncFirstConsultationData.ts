@@ -222,6 +222,55 @@ export async function syncFirstConsultationData(osteopathId: string): Promise<Mi
   }
 }
 
+/**
+ * Synchroniser TOUS les ostéopathes (fonction admin)
+ */
+export async function syncAllOsteopaths(): Promise<Record<string, MigrationResult>> {
+  console.log('🚀 Synchronisation de TOUS les ostéopathes...');
+
+  const results: Record<string, MigrationResult> = {};
+
+  try {
+    // 1. Récupérer tous les utilisateurs avec le rôle "Ostéopathe"
+    const usersRef = collection(db, 'users');
+    const usersQuery = query(usersRef, where('role', '==', 'Ostéopathe'));
+    const usersSnapshot = await getDocs(usersQuery);
+
+    console.log(`📊 ${usersSnapshot.size} ostéopathes trouvés`);
+
+    // 2. Pour chaque ostéopathe, lancer la synchronisation
+    for (const userDoc of usersSnapshot.docs) {
+      const userId = userDoc.id;
+      const userData = userDoc.data();
+      const osteopathName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userId;
+
+      console.log(`\n👤 Synchronisation pour: ${osteopathName} (${userId})`);
+
+      try {
+        const result = await syncFirstConsultationData(userId);
+        results[userId] = result;
+        console.log(`  ✅ Terminé pour ${osteopathName}`);
+      } catch (error) {
+        console.error(`  ❌ Erreur pour ${osteopathName}:`, error);
+        results[userId] = {
+          totalPatients: 0,
+          patientsWithConsultations: 0,
+          consultationsUpdated: 0,
+          errors: [`Erreur: ${(error as Error).message}`],
+          details: []
+        };
+      }
+    }
+
+    console.log('\n✅ Synchronisation globale terminée !');
+    return results;
+
+  } catch (error) {
+    console.error('❌ Erreur fatale lors de la synchronisation globale:', error);
+    throw error;
+  }
+}
+
 // Fonction utilitaire pour exécuter la migration depuis la console
 export async function runMigration(osteopathId: string) {
   console.log('🚀 Lancement de la migration...');
