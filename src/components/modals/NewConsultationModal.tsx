@@ -305,6 +305,54 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
 
       const consultationId = await ConsultationService.createConsultation(consultationDataWithDocuments);
 
+      // Move documents from temp folder to consultation's permanent folder
+      if (consultationDocuments.length > 0) {
+        console.log('🔄 Déplacement des documents du dossier temp vers le dossier permanent...');
+        const { moveFile, createFolderStructure } = await import('../../utils/documentStorage');
+        const updatedDocuments: DocumentMetadata[] = [];
+
+        for (const doc of consultationDocuments) {
+          try {
+            // Check if document is in temp folder
+            if (doc.folder.includes('/temp/')) {
+              const oldPath = `${doc.folder}/${doc.name}`;
+              const newFolder = createFolderStructure(auth.currentUser!.uid, 'consultation', consultationId);
+              const newPath = `${newFolder}/${doc.name}`;
+
+              console.log(`🔄 Déplacement: ${oldPath} → ${newPath}`);
+
+              // Move file in Firebase Storage
+              const newUrl = await moveFile(oldPath, newPath);
+
+              // Update document metadata
+              const updatedDoc: DocumentMetadata = {
+                ...doc,
+                url: newUrl,
+                folder: newFolder
+              };
+
+              updatedDocuments.push(updatedDoc);
+              console.log(`✅ Document déplacé: ${doc.name}`);
+            } else {
+              // Document is already in correct location
+              updatedDocuments.push(doc);
+            }
+          } catch (error) {
+            console.error(`❌ Erreur déplacement document ${doc.name}:`, error);
+            // Keep original document metadata if move fails
+            updatedDocuments.push(doc);
+          }
+        }
+
+        // Update consultation with corrected document paths
+        if (updatedDocuments.length > 0) {
+          await ConsultationService.updateConsultation(consultationId, {
+            documents: updatedDocuments
+          });
+          console.log('✅ Chemins des documents mis à jour dans Firestore');
+        }
+      }
+
       // 3. Lier la consultation au rendez-vous
       await AppointmentService.updateAppointment(appointmentId, {
         consultationId: consultationId
