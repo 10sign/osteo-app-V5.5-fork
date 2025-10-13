@@ -247,47 +247,62 @@ export class HDSCompliance {
           
           // Vérifier si le champ est chiffré
           if (isEncrypted(processedData[field])) {
-            // Vérifier si le format est valide
-            if (!isValidEncryptedFormat(processedData[field])) {
-              // Tenter de réparer les données
-              const repairedData = attemptDataRepair(processedData[field], userId);
-              if (repairedData) {
-                const decryptedValue = decryptData(repairedData, userId);
-                // Vérifier si le déchiffrement a réussi
-                if (typeof decryptedValue === 'string' && 
-                    (decryptedValue.startsWith('[') || decryptedValue.includes('DECODING_FAILED'))) {
-                  processedData[field] = '[DECODING_FAILED]';
-                } else {
-                  processedData[field] = decryptedValue;
-                }
-                if (import.meta.env.DEV) {
-                  console.log(`✅ Données réparées et déchiffrées pour ${field}`);
-                }
-              } else {
-                console.warn(`⚠️ Impossible de réparer ${field}, données corrompues`);
-                processedData[field] = '[DECODING_FAILED]';
-              }
-            } else {
-              // Format valide, déchiffrer normalement
+            try {
               const decryptedValue = decryptData(processedData[field], userId);
+              
               if (import.meta.env.DEV) {
                 console.log(`🔓 Déchiffrement de ${field}:`, {
-                  success: !decryptedValue.toString().startsWith('[DECRYPTION_ERROR:'),
+                  success: !decryptedValue.toString().startsWith('[') && !decryptedValue.toString().includes('DECODING_FAILED'),
                   value: decryptedValue.toString().substring(0, 50) + '...'
                 });
               }
-              // Vérifier si le déchiffrement a réussi
+              
+              // ✅ CORRECTION : Vérifier si le déchiffrement a réussi
               if (typeof decryptedValue === 'string' && 
-                  (decryptedValue.startsWith('[') || decryptedValue.includes('DECODING_FAILED'))) {
-                processedData[field] = '[DECODING_FAILED]';
-              } else {
+                  !decryptedValue.startsWith('[') && 
+                  !decryptedValue.includes('DECODING_FAILED') &&
+                  !decryptedValue.includes('DECRYPTION_ERROR') &&
+                  decryptedValue.length > 0) {
                 processedData[field] = decryptedValue;
+                if (import.meta.env.DEV) {
+                  console.log(`✅ Déchiffrement réussi pour ${field}:`, decryptedValue.substring(0, 50) + '...');
+                }
+              } else {
+                // Si le déchiffrement échoue, essayer de récupérer le texte original
+                console.warn(`⚠️ Échec du déchiffrement pour ${field}:`, decryptedValue);
+                
+                // Essayer de récupérer le texte original si c'est un UUID chiffré
+                if (processedData[field].includes(':') && processedData[field].length > 50) {
+                  const parts = processedData[field].split(':');
+                  if (parts.length >= 2) {
+                    const uuidPattern = /^[0-9a-f]{32}$/i;
+                    if (uuidPattern.test(parts[0])) {
+                      // C'est un UUID chiffré, essayer de déchiffrer juste la partie après l'UUID
+                      try {
+                        const encryptedPart = parts.slice(1).join(':');
+                        const retryDecrypt = decryptData(encryptedPart, userId);
+                        if (typeof retryDecrypt === 'string' && 
+                            !retryDecrypt.startsWith('[') && 
+                            !retryDecrypt.includes('DECODING_FAILED') &&
+                            retryDecrypt.length > 0) {
+                          processedData[field] = retryDecrypt;
+                          if (import.meta.env.DEV) {
+                            console.log(`✅ Déchiffrement réussi au 2ème essai pour ${field}:`, retryDecrypt.substring(0, 50) + '...');
+                          }
+                        }
+                      } catch (retryError) {
+                        console.error(`❌ Échec du déchiffrement au 2ème essai pour ${field}:`, retryError);
+                      }
+                    }
+                  }
+                }
               }
+            } catch (error) {
+              console.error(`❌ Erreur de déchiffrement pour ${field}:`, error);
+              // Garder la valeur chiffrée - pas de réassignation nécessaire
             }
-          } else {
-            // Données non chiffrées, les conserver telles quelles
-            processedData[field] = processedData[field];
           }
+          // Données non chiffrées sont déjà dans processedData[field]
         }
         
       } catch (error) {

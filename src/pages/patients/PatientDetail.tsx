@@ -183,14 +183,34 @@ const PatientDetail: React.FC = () => {
             patientName: `${decryptedData.firstName} ${decryptedData.lastName}`,
             osteopathId: auth.currentUser.uid,
             date: creationDate,
-            reason: 'Première consultation',
-            treatment: 'Évaluation initiale et anamnèse',
-            notes: 'Consultation générée rétroactivement lors de la mise à jour du système.',
+            reason: decryptedData.consultationReason || 'Première consultation',
+            treatment: decryptedData.osteopathicTreatment || 'Évaluation initiale et anamnèse',
+            notes: decryptedData.notes || 'Consultation générée rétroactivement lors de la mise à jour du système.',
             duration: 60,
             price: 55,
             status: 'completed',
             examinations: [],
-            prescriptions: []
+            prescriptions: [],
+            
+            // ✅ SNAPSHOT COMPLET - Champs d'identité du patient au moment T
+            patientFirstName: decryptedData.firstName || '',
+            patientLastName: decryptedData.lastName || '',
+            patientDateOfBirth: decryptedData.dateOfBirth || '',
+            patientGender: decryptedData.gender || '',
+            patientPhone: decryptedData.phone || '',
+            patientEmail: decryptedData.email || '',
+            patientProfession: decryptedData.profession || '',
+            patientAddress: decryptedData.address?.street || '',
+            patientInsurance: decryptedData.insurance?.provider || '',
+            patientInsuranceNumber: decryptedData.insurance?.policyNumber || '',
+            
+            // ✅ SNAPSHOT COMPLET - Champs cliniques du patient au moment T
+            currentTreatment: decryptedData.currentTreatment || '',
+            consultationReason: decryptedData.consultationReason || '',
+            medicalAntecedents: decryptedData.medicalAntecedents || '',
+            medicalHistory: decryptedData.medicalHistory || '',
+            osteopathicTreatment: decryptedData.osteopathicTreatment || '',
+            symptoms: decryptedData.tags || []
           };
           
           const consultationId = await ConsultationService.createConsultation(consultationData);
