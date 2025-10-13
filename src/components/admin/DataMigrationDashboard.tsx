@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Database, 
-  RefreshCw, 
-  CheckCircle, 
-  AlertTriangle, 
-  ArrowRight, 
+import {
+  Database,
+  RefreshCw,
+  CheckCircle,
+  AlertTriangle,
+  ArrowRight,
   Download,
   Users,
   Calendar,
@@ -20,6 +20,7 @@ import { DashboardService } from '../../services/dashboardService';
 import { trackEvent } from '../../lib/clarityClient';
 import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
 import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
+import FirstConsultationSyncPanel from './FirstConsultationSyncPanel';
 
 const DataMigrationDashboard: React.FC = () => {
   const [migrationStats, setMigrationStats] = useState<any>(null);
@@ -611,6 +612,9 @@ const DataMigrationDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Panneau de synchronisation des premières consultations */}
+      <FirstConsultationSyncPanel />
     </div>
   );
 };
