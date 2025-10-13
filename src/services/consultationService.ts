@@ -254,6 +254,10 @@ export class ConsultationService {
 
       // Extraire les documents avant le traitement HDS
       const documents = consultationData.documents || [];
+      console.log('📄 Documents extraits AVANT traitement HDS:', {
+        count: documents.length,
+        documents: documents
+      });
       const { documents: _, ...dataWithoutDocuments } = consultationData;
 
       // ✅ CORRECTION: Préparation des données avec chiffrement HDS (mapping explicite des champs cliniques)
@@ -301,16 +305,22 @@ export class ConsultationService {
 
       // Ajouter les documents après le traitement HDS
       dataToStore.documents = documents;
+      console.log('📄 Documents ajoutés APRÈS traitement HDS:', {
+        count: dataToStore.documents?.length || 0,
+        documents: dataToStore.documents
+      });
 
       // 🔧 NOUVEAU : Nettoyer les champs undefined pour éviter l'erreur addDoc
       const cleanedData = Object.fromEntries(
         Object.entries(dataToStore).filter(([_, value]) => value !== undefined)
       );
 
-      console.log('🔍 Consultation data after HDS processing:', {
+      console.log('🔍 Consultation data after HDS processing and cleaning:', {
         hasDocuments: !!cleanedData.documents,
         documentsCount: cleanedData.documents?.length || 0,
-        documents: cleanedData.documents
+        documentsAreArray: Array.isArray(cleanedData.documents),
+        documents: cleanedData.documents,
+        allKeys: Object.keys(cleanedData)
       });
 
       // ✅ DEBUG: Log des champs cliniques après traitement HDS
