@@ -2,14 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, Clock, FileText, User, Plus, Trash2, CheckCircle } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import AutoResizeTextarea from '../ui/AutoResizeTextarea';
 import SuccessBanner from '../ui/SuccessBanner';
 import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { HDSCompliance } from '../../utils/hdsCompliance';
-import { AuditLogger, AuditEventType, SensitivityLevel } from '../../utils/auditLogger';
 
 interface EditConsultationModalProps {
   isOpen: boolean;
@@ -221,7 +220,6 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         status: data.status,
         examinations: data.examinations.map(item => item.value),
         prescriptions: data.prescriptions.map(item => item.value),
-        updatedAt: new Date().toISOString(),
 
         // Champs d'identité patient (snapshot) - CONSERVER lors de la mise à jour
         patientId: consultationData.patientId,
@@ -248,15 +246,11 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
       console.log('💾 Prepared update data (complete):', updateData);
 
-      // Mettre à jour via le service
-      const consultationRef = doc(db, 'consultations', consultationId);
-      await updateDoc(consultationRef, {
-        ...updateData,
-        date: Timestamp.fromDate(consultationDate),
-        updatedAt: Timestamp.now()
-      });
+      // Utiliser le service de consultation pour la mise à jour avec chiffrement HDS
+      const { ConsultationService } = await import('../../services/consultationService');
+      await ConsultationService.updateConsultation(consultationId, updateData);
 
-      console.log('✅ Consultation updated successfully in Firestore');
+      console.log('✅ Consultation updated successfully via service with HDS encryption');
 
       // Afficher le message de succès après que tout soit enregistré
       setShowSuccessBanner(true);
