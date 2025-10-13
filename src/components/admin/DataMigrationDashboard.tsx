@@ -37,7 +37,7 @@ const DataMigrationDashboard: React.FC = () => {
   const [step, setStep] = useState<'report' | 'migrate' | 'verify' | 'repair' | 'complete'>('report');
   const [cleanupStats, setCleanupStats] = useState<any>(null);
   const [cleanupLoading, setCleanupLoading] = useState(false);
-  const [showGlobalReport, setShowGlobalReport] = useState(false);
+  const [showGlobalReport, setShowGlobalReport] = useState(true);
 
   // Charger le rapport initial
   useEffect(() => {
@@ -253,11 +253,19 @@ const DataMigrationDashboard: React.FC = () => {
         </div>
         <div className="flex space-x-2">
           <Button
-            variant={showGlobalReport ? "outline" : "primary"}
-            onClick={() => setShowGlobalReport(!showGlobalReport)}
+            variant={showGlobalReport ? "primary" : "outline"}
+            onClick={() => {
+              const newValue = !showGlobalReport;
+              setShowGlobalReport(newValue);
+              if (newValue) {
+                loadGlobalMigrationReport();
+              } else {
+                loadMigrationReport();
+              }
+            }}
             leftIcon={<Users size={16} />}
           >
-            {showGlobalReport ? "Mon compte" : "Tous les ostéopathes"}
+            {showGlobalReport ? "Tous les ostéopathes" : "Mon compte"}
           </Button>
           <Button
             variant="outline"
