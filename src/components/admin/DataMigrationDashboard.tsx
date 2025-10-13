@@ -12,7 +12,8 @@ import {
   ClipboardList,
   Trash2,
   Shield,
-  Loader
+  Loader,
+  Info
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { DataMigrationService } from '../../services/dataMigrationService';
