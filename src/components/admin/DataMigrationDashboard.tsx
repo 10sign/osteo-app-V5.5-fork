@@ -687,7 +687,7 @@ const DataMigrationDashboard: React.FC = () => {
             </div>
           </div>
         </div>
-      ) : (
+      ) : !showGlobalReport ? (
         <div className="bg-white rounded-lg shadow p-6 text-center">
           <Database size={48} className="mx-auto text-gray-300 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun rapport disponible</h3>
@@ -702,7 +702,7 @@ const DataMigrationDashboard: React.FC = () => {
             Générer le rapport
           </Button>
         </div>
-      )}
+      ) : null}
 
       {/* Résultats de migration */}
       {migrationStats && (
