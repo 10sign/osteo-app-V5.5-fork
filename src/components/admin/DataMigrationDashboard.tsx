@@ -253,21 +253,34 @@ const DataMigrationDashboard: React.FC = () => {
           <h2 className="text-xl font-semibold text-gray-900">Migration des données</h2>
         </div>
         <div className="flex space-x-2">
-          <Button
-            variant={showGlobalReport ? "primary" : "outline"}
-            onClick={() => {
-              const newValue = !showGlobalReport;
-              setShowGlobalReport(newValue);
-              if (newValue) {
-                loadGlobalMigrationReport();
-              } else {
-                loadMigrationReport();
-              }
-            }}
-            leftIcon={<Users size={16} />}
-          >
-            {showGlobalReport ? "Tous les ostéopathes" : "Mon compte"}
-          </Button>
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <Button
+              variant={showGlobalReport ? "primary" : "ghost"}
+              size="sm"
+              onClick={() => {
+                if (!showGlobalReport) {
+                  setShowGlobalReport(true);
+                  loadGlobalMigrationReport();
+                }
+              }}
+              leftIcon={<Users size={16} />}
+            >
+              Tous les ostéopathes
+            </Button>
+            <Button
+              variant={!showGlobalReport ? "primary" : "ghost"}
+              size="sm"
+              onClick={() => {
+                if (showGlobalReport) {
+                  setShowGlobalReport(false);
+                  loadMigrationReport();
+                }
+              }}
+              leftIcon={<Users size={16} />}
+            >
+              Mon compte
+            </Button>
+          </div>
           <Button
             variant="outline"
             onClick={showGlobalReport ? loadGlobalMigrationReport : loadMigrationReport}
