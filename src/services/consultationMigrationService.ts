@@ -64,7 +64,15 @@ export class ConsultationMigrationService {
           };
 
           const hasInvalidData = (field: any) => {
-            return !field || field === '' || isUUID(field) || field === 'undefined' || field === 'null';
+            if (!field || field === '' || field === 'undefined' || field === 'null') return true;
+            if (typeof field === 'string') {
+              // Détecter les UUIDs simples
+              if (isUUID(field)) return true;
+              // Détecter les UUIDs chiffrés (format: uuid:encryptedData)
+              const uuidChiffrePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i;
+              if (uuidChiffrePattern.test(field)) return true;
+            }
+            return false;
           };
 
           const needsMigration = 
@@ -105,6 +113,7 @@ export class ConsultationMigrationService {
           // Fonction helper pour déterminer si on doit remplacer une valeur
           const shouldReplace = (currentValue: any, patientValue: any) => {
             if (hasInvalidData(currentValue) && patientValue) {
+              console.log(`🔄 Remplacement de ${currentValue} par ${patientValue}`);
               return patientValue;
             }
             return currentValue || '';

@@ -157,6 +157,21 @@ export function decryptData(encryptedData: string, userId: string): any {
       return '[EMPTY_DATA]';
     }
     
+    // ✅ CORRECTION : Gestion des UUIDs chiffrés (format: uuid:encryptedData)
+    if (encryptedData.includes(':') && encryptedData.length > 50) {
+      const parts = encryptedData.split(':');
+      if (parts.length >= 2) {
+        // Vérifier si le premier élément est un UUID
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidPattern.test(parts[0])) {
+          // Prendre la partie chiffrée (après le premier ':')
+          const encryptedPart = parts.slice(1).join(':');
+          console.log('🔓 Détection UUID chiffré, déchiffrement de la partie:', encryptedPart.substring(0, 50) + '...');
+          return decryptData(encryptedPart, userId);
+        }
+      }
+    }
+    
     // Gestion des données marquées comme erreur d'encryption
     if (encryptedData.startsWith('[ENCRYPTION_ERROR]:')) {
       return '[ENCRYPTION_ERROR]';
@@ -256,8 +271,16 @@ export function decryptData(encryptedData: string, userId: string): any {
  * Vérifie si une donnée est chiffrée
  */
 export function isEncrypted(data: string): boolean {
+  if (!data || typeof data !== 'string') return false;
+  
+  // ✅ CORRECTION : Détecter les UUIDs chiffrés (format: uuid:encryptedData)
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i;
+  if (uuidPattern.test(data)) {
+    return true;
+  }
+  
   // Vérification basique du format IV:Ciphertext
-  return typeof data === 'string' && data.includes(':') && data.length > 40;
+  return data.includes(':') && data.length > 40;
 }
 
 /**
