@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
+import { listDocuments } from '../../utils/documentStorage';
 import { Button } from '../../components/ui/Button';
 import EditPatientModal from '../../components/modals/EditPatientModal';
 import DeletePatientModal from '../../components/modals/DeletePatientModal';
@@ -282,7 +283,7 @@ const PatientDetail: React.FC = () => {
 
       for (const docSnapshot of snapshot.docs) {
         const data = docSnapshot.data();
-        
+
         // Decrypt data for display
         const decryptedData = HDSCompliance.decryptDataForDisplay(
           data,
@@ -290,13 +291,26 @@ const PatientDetail: React.FC = () => {
           auth.currentUser.uid
         );
 
-        consultationsData.push({
+        const consultation = {
           id: docSnapshot.id,
           ...decryptedData,
           date: data.date?.toDate?.() || new Date(data.date),
           createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
           updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)
-        } as Consultation);
+        } as Consultation;
+
+        // Load documents for this consultation
+        try {
+          const documentsFolder = `users/${auth.currentUser.uid}/consultations/${docSnapshot.id}/documents`;
+          const documents = await listDocuments(documentsFolder);
+          consultation.documents = documents;
+          console.log(`📄 Loaded ${documents.length} document(s) for consultation ${docSnapshot.id}`);
+        } catch (docError) {
+          console.warn(`⚠️ Error loading documents for consultation ${docSnapshot.id}:`, docError);
+          consultation.documents = [];
+        }
+
+        consultationsData.push(consultation);
       }
 
       // Sort by date (most recent first) - ensure proper sorting
