@@ -442,9 +442,10 @@ export class ConsultationService {
         updatedAt: Timestamp.fromDate(new Date())
       };
       
-      // Mapper tous les champs possibles
+      // Mapper tous les champs possibles (uniquement ceux qui sont définis)
       if (consultationData.patientId !== undefined) updateData.patientId = consultationData.patientId;
       if (consultationData.patientName !== undefined) updateData.patientName = consultationData.patientName;
+      // ✅ FIX: reason et treatment sont optionnels, ne pas les ajouter s'ils sont undefined
       if (consultationData.reason !== undefined) updateData.reason = consultationData.reason;
       if (consultationData.treatment !== undefined) updateData.treatment = consultationData.treatment;
       if (consultationData.notes !== undefined) updateData.notes = consultationData.notes;
@@ -497,14 +498,12 @@ export class ConsultationService {
       
       // ✅ CORRECTION: Préparation des données avec chiffrement HDS (mapping explicite)
       const baseDataForStorage: any = {
-        // Champs de base
+        // Champs de base (ne prendre que les champs définis)
         patientId: cleanedUpdateData.patientId || existingData.patientId,
         patientName: cleanedUpdateData.patientName || existingData.patientName,
-        reason: cleanedUpdateData.reason || existingData.reason,
-        treatment: cleanedUpdateData.treatment || existingData.treatment,
-        notes: cleanedUpdateData.notes || existingData.notes,
-        duration: cleanedUpdateData.duration || existingData.duration,
-        price: cleanedUpdateData.price || existingData.price,
+        notes: cleanedUpdateData.notes !== undefined ? cleanedUpdateData.notes : existingData.notes,
+        duration: cleanedUpdateData.duration !== undefined ? cleanedUpdateData.duration : existingData.duration,
+        price: cleanedUpdateData.price !== undefined ? cleanedUpdateData.price : existingData.price,
         status: cleanedUpdateData.status || existingData.status,
         examinations: cleanedUpdateData.examinations || existingData.examinations,
         prescriptions: cleanedUpdateData.prescriptions || existingData.prescriptions,
@@ -537,15 +536,27 @@ export class ConsultationService {
         updatedAt: cleanedUpdateData.updatedAt
       };
 
-      // ✅ FIX: Ajouter appointmentId seulement s'il existe dans les données nettoyées ou existantes
+      // ✅ FIX: Ajouter les champs optionnels seulement s'ils existent
       if (cleanedUpdateData.appointmentId || existingData.appointmentId) {
         baseDataForStorage.appointmentId = cleanedUpdateData.appointmentId || existingData.appointmentId;
       }
+      if (cleanedUpdateData.reason || existingData.reason) {
+        baseDataForStorage.reason = cleanedUpdateData.reason || existingData.reason;
+      }
+      if (cleanedUpdateData.treatment || existingData.treatment) {
+        baseDataForStorage.treatment = cleanedUpdateData.treatment || existingData.treatment;
+      }
 
       const dataToStore = HDSCompliance.prepareDataForStorage(baseDataForStorage, 'consultations', userId);
-      console.log('🔐 Data prepared for storage:', dataToStore);
+      console.log('🔐 Data prepared for storage (before filtering):', dataToStore);
 
-      await updateDoc(docRef, dataToStore);
+      // ✅ FIX CRITIQUE: Filtrer tous les champs undefined après le chiffrement HDS
+      const finalDataToStore = Object.fromEntries(
+        Object.entries(dataToStore).filter(([_, value]) => value !== undefined)
+      );
+      console.log('🔐 Final data for storage (after filtering undefined):', finalDataToStore);
+
+      await updateDoc(docRef, finalDataToStore);
       console.log('✅ Consultation updated successfully in Firestore');
       
       // ✅ SUPPRIMÉ : Synchronisation automatique qui modifie les données du patient

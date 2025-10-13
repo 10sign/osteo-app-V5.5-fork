@@ -245,8 +245,6 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
       // Préparer les données de mise à jour COMPLETES
       const updateData: any = {
         date: consultationDate,
-        reason: data.reason,
-        treatment: data.treatment,
         notes: data.notes,
         duration: data.duration,
         price: data.price,
