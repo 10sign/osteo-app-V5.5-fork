@@ -15,7 +15,6 @@ import { db, auth } from '../firebase/config';
 import { Consultation, ConsultationFormData } from '../types';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import HDSCompliance from '../utils/hdsCompliance';
-import { listDocuments } from '../utils/documentStorage';
 
 export class ConsultationService {
   /**
@@ -189,19 +188,12 @@ export class ConsultationService {
         ...decryptedData,
         date: data.date?.toDate?.() || new Date(data.date),
         createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
-        updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)
+        updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt),
+        // Documents are stored in Firestore, not in Storage
+        documents: data.documents || []
       } as Consultation;
-      
-      // Charger les documents depuis Firebase Storage
-      try {
-        const documentsFolder = `users/${auth.currentUser.uid}/consultations/${id}/documents`;
-        const documents = await listDocuments(documentsFolder);
-        consultation.documents = documents;
-        console.log('📄 Documents chargés pour la consultation:', documents.length);
-      } catch (docError) {
-        console.warn('⚠️ Erreur lors du chargement des documents:', docError);
-        consultation.documents = [];
-      }
+
+      console.log('📄 Documents chargés pour la consultation depuis Firestore:', consultation.documents?.length || 0);
       
       // Journalisation de l'accès aux données
       await AuditLogger.log(
