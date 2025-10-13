@@ -25,9 +25,11 @@ import FirstConsultationSyncPanel from './FirstConsultationSyncPanel';
 const DataMigrationDashboard: React.FC = () => {
   const [migrationStats, setMigrationStats] = useState<any>(null);
   const [migrationReport, setMigrationReport] = useState<any>(null);
+  const [globalReport, setGlobalReport] = useState<any>(null);
   const [integrityReport, setIntegrityReport] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
+  const [globalReportLoading, setGlobalReportLoading] = useState(false);
   const [integrityLoading, setIntegrityLoading] = useState(false);
   const [repairLoading, setRepairLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,18 +37,49 @@ const DataMigrationDashboard: React.FC = () => {
   const [step, setStep] = useState<'report' | 'migrate' | 'verify' | 'repair' | 'complete'>('report');
   const [cleanupStats, setCleanupStats] = useState<any>(null);
   const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [showGlobalReport, setShowGlobalReport] = useState(false);
 
   // Charger le rapport initial
   useEffect(() => {
-    loadMigrationReport();
+    loadGlobalMigrationReport();
   }, []);
 
-  // Charger le rapport de migration
+  // Charger le rapport de migration global
+  const loadGlobalMigrationReport = async () => {
+    try {
+      setGlobalReportLoading(true);
+      setError(null);
+
+      const report = await DataMigrationService.generateGlobalMigrationReport();
+      setGlobalReport(report);
+
+      trackEvent("global_migration_report_generated", {
+        osteopaths_count: report.osteopaths.length,
+        total_patients: report.totals.totalPatients
+      });
+
+      trackMatomoEvent('Data Migration', 'Global Report Generated');
+      trackGAEvent('global_migration_report_generated');
+
+    } catch (error) {
+      console.error('Error generating global migration report:', error);
+      setError('Erreur lors de la génération du rapport global de migration');
+
+      trackEvent("global_migration_report_error", { error: (error as Error).message });
+      trackMatomoEvent('Error', 'Global Migration Report', (error as Error).message);
+      trackGAEvent('global_migration_report_error', { error_message: (error as Error).message });
+
+    } finally {
+      setGlobalReportLoading(false);
+    }
+  };
+
+  // Charger le rapport de migration personnel
   const loadMigrationReport = async () => {
     try {
       setReportLoading(true);
       setError(null);
-      
+
       const report = await DataMigrationService.generateMigrationReport();
       setMigrationReport(report);
       
@@ -220,10 +253,17 @@ const DataMigrationDashboard: React.FC = () => {
         </div>
         <div className="flex space-x-2">
           <Button
+            variant={showGlobalReport ? "outline" : "primary"}
+            onClick={() => setShowGlobalReport(!showGlobalReport)}
+            leftIcon={<Users size={16} />}
+          >
+            {showGlobalReport ? "Mon compte" : "Tous les ostéopathes"}
+          </Button>
+          <Button
             variant="outline"
-            onClick={loadMigrationReport}
-            leftIcon={<RefreshCw size={16} className={reportLoading ? "animate-spin" : ""} />}
-            disabled={reportLoading}
+            onClick={showGlobalReport ? loadGlobalMigrationReport : loadMigrationReport}
+            leftIcon={<RefreshCw size={16} className={(reportLoading || globalReportLoading) ? "animate-spin" : ""} />}
+            disabled={reportLoading || globalReportLoading}
           >
             Actualiser
           </Button>
@@ -231,7 +271,7 @@ const DataMigrationDashboard: React.FC = () => {
             variant="outline"
             onClick={exportMigrationReport}
             leftIcon={<Download size={16} />}
-            disabled={!migrationReport}
+            disabled={!migrationReport && !globalReport}
           >
             Exporter
           </Button>
@@ -260,13 +300,102 @@ const DataMigrationDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Rapport de migration */}
-      {reportLoading ? (
+      {/* Rapport global de migration */}
+      {showGlobalReport && globalReportLoading ? (
+        <div className="bg-white rounded-lg shadow p-8 text-center">
+          <Loader size={32} className="animate-spin mx-auto text-primary-500 mb-4" />
+          <p className="text-gray-600">Génération du rapport global en cours...</p>
+        </div>
+      ) : showGlobalReport && globalReport ? (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Rapport global - Tous les ostéopathes</h3>
+
+          <div className="p-4 mb-6 border border-blue-200 rounded-lg bg-blue-50">
+            <div className="flex items-start">
+              <Info size={20} className="flex-shrink-0 mr-3 text-blue-600 mt-0.5" />
+              <div className="text-sm text-blue-900">
+                <p className="font-medium mb-1">Vue d'ensemble globale</p>
+                <p>Ce rapport affiche les données de tous les ostéopathes utilisant la plateforme ({globalReport.osteopaths.length} ostéopathes au total)</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <div className="text-sm text-gray-500">Patients totaux</div>
+              <div className="text-2xl font-bold text-gray-900">{globalReport.totals.totalPatients}</div>
+            </div>
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <div className="text-sm text-gray-500">Consultations totales</div>
+              <div className="text-2xl font-bold text-gray-900">{globalReport.totals.totalConsultations}</div>
+            </div>
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <div className="text-sm text-gray-500">Rendez-vous totaux</div>
+              <div className="text-2xl font-bold text-gray-900">{globalReport.totals.totalAppointments}</div>
+            </div>
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <div className="text-sm text-gray-500">Factures totales</div>
+              <div className="text-2xl font-bold text-gray-900">{globalReport.totals.totalInvoices}</div>
+            </div>
+          </div>
+
+          <h4 className="font-medium text-gray-800 mb-3">Détails par ostéopathe</h4>
+          <div className="space-y-4">
+            {globalReport.osteopaths.map((osteopath: any) => (
+              <div key={osteopath.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h5 className="font-medium text-gray-900">{osteopath.name}</h5>
+                    <p className="text-sm text-gray-600">{osteopath.email}</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-500">ID</div>
+                    <div className="text-xs text-gray-400 font-mono">{osteopath.id.substring(0, 8)}...</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-white p-3 rounded border border-gray-200">
+                    <div className="text-xs text-gray-500">Patients</div>
+                    <div className="text-lg font-bold text-gray-900">{osteopath.totalPatients}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {osteopath.realPatients} réels / {osteopath.testPatients} test
+                    </div>
+                  </div>
+                  <div className="bg-white p-3 rounded border border-gray-200">
+                    <div className="text-xs text-gray-500">Consultations</div>
+                    <div className="text-lg font-bold text-gray-900">{osteopath.totalConsultations}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {osteopath.realConsultations} réelles / {osteopath.testConsultations} test
+                    </div>
+                  </div>
+                  <div className="bg-white p-3 rounded border border-gray-200">
+                    <div className="text-xs text-gray-500">Rendez-vous</div>
+                    <div className="text-lg font-bold text-gray-900">{osteopath.totalAppointments}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {osteopath.realAppointments} réels / {osteopath.testAppointments} test
+                    </div>
+                  </div>
+                  <div className="bg-white p-3 rounded border border-gray-200">
+                    <div className="text-xs text-gray-500">Factures</div>
+                    <div className="text-lg font-bold text-gray-900">{osteopath.totalInvoices}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {osteopath.realInvoices} réelles / {osteopath.testInvoices} test
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Rapport de migration personnel */}
+      {!showGlobalReport && reportLoading ? (
         <div className="bg-white rounded-lg shadow p-8 text-center">
           <Loader size={32} className="animate-spin mx-auto text-primary-500 mb-4" />
           <p className="text-gray-600">Génération du rapport de migration en cours...</p>
         </div>
-      ) : migrationReport ? (
+      ) : !showGlobalReport && migrationReport ? (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Rapport de migration</h3>
           

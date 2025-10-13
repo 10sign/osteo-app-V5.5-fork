@@ -1005,7 +1005,7 @@ export class DataMigrationService {
       return results;
     } catch (error) {
       console.error('❌ Failed to generate migration report:', error);
-      
+
       // Journaliser l'erreur
       await AuditLogger.log(
         AuditEventType.DATA_ACCESS,
@@ -1015,7 +1015,188 @@ export class DataMigrationService {
         'failure',
         { error: (error as Error).message }
       );
-      
+
+      throw error;
+    }
+  }
+
+  /**
+   * Génère un rapport de migration global pour TOUS les ostéopathes
+   */
+  static async generateGlobalMigrationReport(): Promise<{
+    osteopaths: Array<{
+      id: string;
+      name: string;
+      email: string;
+      totalPatients: number;
+      totalAppointments: number;
+      totalConsultations: number;
+      totalInvoices: number;
+      testPatients: number;
+      testAppointments: number;
+      testConsultations: number;
+      testInvoices: number;
+      realPatients: number;
+      realAppointments: number;
+      realConsultations: number;
+      realInvoices: number;
+    }>;
+    totals: {
+      totalPatients: number;
+      totalAppointments: number;
+      totalConsultations: number;
+      totalInvoices: number;
+      testPatients: number;
+      testAppointments: number;
+      testConsultations: number;
+      testInvoices: number;
+      realPatients: number;
+      realAppointments: number;
+      realConsultations: number;
+      realInvoices: number;
+    };
+  }> {
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    try {
+      console.log('📊 Génération du rapport global de migration...');
+
+      const osteopaths: Array<any> = [];
+      const totals = {
+        totalPatients: 0,
+        totalAppointments: 0,
+        totalConsultations: 0,
+        totalInvoices: 0,
+        testPatients: 0,
+        testAppointments: 0,
+        testConsultations: 0,
+        testInvoices: 0,
+        realPatients: 0,
+        realAppointments: 0,
+        realConsultations: 0,
+        realInvoices: 0
+      };
+
+      // 1. Récupérer tous les ostéopathes
+      const usersRef = collection(db, 'users');
+      const usersQuery = query(usersRef, where('role', '==', 'Ostéopathe'));
+      const usersSnapshot = await getDocs(usersQuery);
+
+      console.log(`👥 ${usersSnapshot.size} ostéopathes trouvés`);
+
+      // 2. Pour chaque ostéopathe, compter ses données
+      for (const userDoc of usersSnapshot.docs) {
+        const userId = userDoc.id;
+        const userData = userDoc.data();
+        const osteopathName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Inconnu';
+
+        console.log(`\n📋 Analyse de: ${osteopathName} (${userData.email})`);
+
+        const osteopathStats = {
+          id: userId,
+          name: osteopathName,
+          email: userData.email || '',
+          totalPatients: 0,
+          totalAppointments: 0,
+          totalConsultations: 0,
+          totalInvoices: 0,
+          testPatients: 0,
+          testAppointments: 0,
+          testConsultations: 0,
+          testInvoices: 0,
+          realPatients: 0,
+          realAppointments: 0,
+          realConsultations: 0,
+          realInvoices: 0
+        };
+
+        // Compter les patients
+        const patientsRef = collection(db, 'patients');
+        const patientsQuery = query(patientsRef, where('osteopathId', '==', userId));
+        const patientsSnapshot = await getDocs(patientsQuery);
+
+        osteopathStats.totalPatients = patientsSnapshot.size;
+        for (const docSnap of patientsSnapshot.docs) {
+          const patientData = docSnap.data();
+          if (patientData.isTestData) {
+            osteopathStats.testPatients++;
+          } else {
+            osteopathStats.realPatients++;
+          }
+        }
+
+        // Compter les rendez-vous
+        const appointmentsRef = collection(db, 'appointments');
+        const appointmentsQuery = query(appointmentsRef, where('osteopathId', '==', userId));
+        const appointmentsSnapshot = await getDocs(appointmentsQuery);
+
+        osteopathStats.totalAppointments = appointmentsSnapshot.size;
+        for (const docSnap of appointmentsSnapshot.docs) {
+          const appointmentData = docSnap.data();
+          if (appointmentData.isTestData) {
+            osteopathStats.testAppointments++;
+          } else {
+            osteopathStats.realAppointments++;
+          }
+        }
+
+        // Compter les consultations
+        const consultationsRef = collection(db, 'consultations');
+        const consultationsQuery = query(consultationsRef, where('osteopathId', '==', userId));
+        const consultationsSnapshot = await getDocs(consultationsQuery);
+
+        osteopathStats.totalConsultations = consultationsSnapshot.size;
+        for (const docSnap of consultationsSnapshot.docs) {
+          const consultationData = docSnap.data();
+          if (consultationData.isTestData) {
+            osteopathStats.testConsultations++;
+          } else {
+            osteopathStats.realConsultations++;
+          }
+        }
+
+        // Compter les factures
+        const invoicesRef = collection(db, 'invoices');
+        const invoicesQuery = query(invoicesRef, where('osteopathId', '==', userId));
+        const invoicesSnapshot = await getDocs(invoicesQuery);
+
+        osteopathStats.totalInvoices = invoicesSnapshot.size;
+        for (const docSnap of invoicesSnapshot.docs) {
+          const invoiceData = docSnap.data();
+          if (invoiceData.isTestData) {
+            osteopathStats.testInvoices++;
+          } else {
+            osteopathStats.realInvoices++;
+          }
+        }
+
+        console.log(`  ✓ ${osteopathStats.totalPatients} patients, ${osteopathStats.totalConsultations} consultations`);
+
+        // Ajouter aux totaux
+        totals.totalPatients += osteopathStats.totalPatients;
+        totals.totalAppointments += osteopathStats.totalAppointments;
+        totals.totalConsultations += osteopathStats.totalConsultations;
+        totals.totalInvoices += osteopathStats.totalInvoices;
+        totals.testPatients += osteopathStats.testPatients;
+        totals.testAppointments += osteopathStats.testAppointments;
+        totals.testConsultations += osteopathStats.testConsultations;
+        totals.testInvoices += osteopathStats.testInvoices;
+        totals.realPatients += osteopathStats.realPatients;
+        totals.realAppointments += osteopathStats.realAppointments;
+        totals.realConsultations += osteopathStats.realConsultations;
+        totals.realInvoices += osteopathStats.realInvoices;
+
+        osteopaths.push(osteopathStats);
+      }
+
+      console.log('\n✅ Rapport global généré avec succès');
+
+      return { osteopaths, totals };
+
+    } catch (error) {
+      console.error('❌ Erreur lors de la génération du rapport global:', error);
       throw error;
     }
   }
