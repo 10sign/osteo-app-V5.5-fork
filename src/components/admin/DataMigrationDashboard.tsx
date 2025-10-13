@@ -337,10 +337,23 @@ const DataMigrationDashboard: React.FC = () => {
               <Info size={20} className="flex-shrink-0 mr-3 text-blue-600 mt-0.5" />
               <div className="text-sm text-blue-900">
                 <p className="font-medium mb-1">Vue d'ensemble globale</p>
-                <p>Ce rapport affiche les données de tous les ostéopathes utilisant la plateforme ({globalReport.osteopaths.length} ostéopathes au total)</p>
+                <p>Ce rapport affiche les données de tous les ostéopathes utilisant la plateforme ({globalReport.osteopaths?.length || 0} ostéopathes au total)</p>
               </div>
             </div>
           </div>
+
+          {globalReport.osteopaths && globalReport.osteopaths.length === 0 && (
+            <div className="p-4 mb-6 border border-yellow-200 rounded-lg bg-yellow-50">
+              <div className="flex items-start">
+                <AlertTriangle size={20} className="flex-shrink-0 mr-3 text-yellow-600 mt-0.5" />
+                <div className="text-sm text-yellow-900">
+                  <p className="font-medium mb-1">Aucun ostéopathe trouvé</p>
+                  <p>La requête Firestore n'a trouvé aucun utilisateur avec le rôle "Ostéopathe".</p>
+                  <p className="mt-2">Vérifiez que les utilisateurs ont bien un champ <code className="bg-yellow-100 px-1 py-0.5 rounded">role = "Ostéopathe"</code> dans leur document.</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
