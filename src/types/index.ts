@@ -1,4 +1,4 @@
-import { Timestamp } from 'firebase/firestore';
+import { DocumentMetadata } from '../utils/documentStorage';
 
 // User related types
 export interface User {
@@ -101,8 +101,9 @@ export interface Patient {
   osteopathId: string;
   tags?: string[];
   documentUrl?: string | null;
+  isTestData?: boolean;
   nextAppointment?: string; // format: "YYYY-MM-DDThh:mm:ss"
-  documents?: DocumentMetadata[];
+  documents?: PatientDocument[];
   pastAppointments?: PastAppointment[]; // Nouveau champ pour les rendez-vous passés
   
   // Champs pour le tri
@@ -110,11 +111,10 @@ export interface Patient {
   updatedAtDate?: Date; // Champ calculé pour le tri
   
   // Nouveaux champs
-  currentTreatment?: string; // Traitement actuel
+  currentTreatment?: string; // Traitement effectué
   consultationReason?: string; // Motif de consultation
   medicalAntecedents?: string; // Antécédents médicaux
   treatmentHistory?: TreatmentHistoryEntry[]; // Historique des traitements
-  documents?: PatientDocument[]; // Documents médicaux
   osteopathicTreatment?: string; // Traitement ostéopathique
 }
 
@@ -132,7 +132,6 @@ export interface TreatmentHistoryEntry {
   provider?: string;
   notes?: string;
 }
-  documents?: PatientDocument[];
 
 // Form data types
 export interface PatientFormData {
@@ -245,8 +244,8 @@ export interface Consultation {
   patientName: string;
   osteopathId: string;
   date: Date;
-  reason: string;
-  treatment: string;
+  reason?: string;
+  treatment?: string;
   notes?: string;
   duration: number;
   price: number;
@@ -269,22 +268,25 @@ export interface Consultation {
   patientInsurance?: string;
   patientInsuranceNumber?: string;
 
-  // Champs cliniques spécifiques
-  currentTreatment?: string;
-  consultationReason?: string;
-  medicalAntecedents?: string;
-  medicalHistory?: string;
-  osteopathicTreatment?: string;
-  symptoms?: string[];
+  // Champs cliniques spécifiques (obligatoires pour la sauvegarde)
+  currentTreatment: string;
+  consultationReason: string;
+  medicalAntecedents: string;
+  medicalHistory: string;
+  osteopathicTreatment: string;
+  symptoms: string[];
   treatmentHistory?: TreatmentHistoryEntry[];
+  
+  // Documents de la consultation
+  documents?: DocumentMetadata[];
 }
 
 export interface ConsultationFormData {
   patientId: string;
   patientName: string;
   date: Date | string;
-  reason: string;
-  treatment: string;
+  reason?: string;
+  treatment?: string;
   notes?: string;
   duration: number;
   price: number;
@@ -304,12 +306,15 @@ export interface ConsultationFormData {
   patientInsurance?: string;
   patientInsuranceNumber?: string;
 
-  // Champs cliniques spécifiques
-  currentTreatment?: string;
-  consultationReason?: string;
-  medicalAntecedents?: string;
-  medicalHistory?: string;
-  osteopathicTreatment?: string;
-  symptoms?: string[];
+  // Champs cliniques spécifiques (obligatoires pour la sauvegarde)
+  currentTreatment: string;
+  consultationReason: string;
+  medicalAntecedents: string;
+  medicalHistory: string;
+  osteopathicTreatment: string;
+  symptoms: string[];
   treatmentHistory?: TreatmentHistoryEntry[];
+  
+  // Documents de consultation
+  documents?: DocumentMetadata[];
 }

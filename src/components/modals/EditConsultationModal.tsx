@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, Clock, FileText, User, Plus, Trash2, CheckCircle } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import AutoResizeTextarea from '../ui/AutoResizeTextarea';
 import SuccessBanner from '../ui/SuccessBanner';
 import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { HDSCompliance } from '../../utils/hdsCompliance';
+import DocumentUploadManager from '../ui/DocumentUploadManager';
+import { DocumentMetadata } from '../../utils/documentStorage';
+import { ConsultationService } from '../../services/consultationService';
 
 interface EditConsultationModalProps {
   isOpen: boolean;
@@ -31,13 +34,13 @@ interface ConsultationFormData {
   examinations: { value: string }[];
   prescriptions: { value: string }[];
 
-  // Champs cliniques
-  currentTreatment?: string;
-  consultationReason?: string;
-  medicalAntecedents?: string;
-  medicalHistory?: string;
-  osteopathicTreatment?: string;
-  symptoms?: string;
+  // ✅ CORRECTION: Champs cliniques (obligatoires pour la sauvegarde)
+  currentTreatment: string;
+  consultationReason: string;
+  medicalAntecedents: string;
+  medicalHistory: string;
+  osteopathicTreatment: string;
+  symptoms: string;
 }
 
 const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
@@ -54,6 +57,9 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
   const [consultationData, setConsultationData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  
+  // Gestion des documents
+  const [consultationDocuments, setConsultationDocuments] = useState<DocumentMetadata[]>([]);
 
   const { register, handleSubmit, formState: { errors, isValid }, reset, control } = useForm<ConsultationFormData>({
     mode: 'onChange',
@@ -103,12 +109,19 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
           throw new Error('Accès non autorisé à cette consultation');
         }
         
-        // Déchiffrer les données pour l'affichage
-        const decryptedData = HDSCompliance.decryptDataForDisplay(
-          rawData,
-          'consultations',
-          auth.currentUser.uid
-        );
+        // Déchiffrer les données pour l'affichage avec gestion d'erreur robuste
+        let decryptedData;
+        try {
+          decryptedData = HDSCompliance.decryptDataForDisplay(
+            rawData,
+            'consultations',
+            auth.currentUser.uid
+          );
+        } catch (decryptError) {
+          console.error('❌ Erreur lors du déchiffrement des données consultation:', decryptError);
+          // En cas d'erreur de déchiffrement, utiliser les données brutes
+          decryptedData = rawData;
+        }
         
         console.log('🔓 Decrypted consultation data:', decryptedData);
         
@@ -138,6 +151,12 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
         setConsultationData(consultation);
 
+        // 🔧 NOUVEAU : Initialiser les documents existants
+        if (consultation.documents && consultation.documents.length > 0) {
+          setConsultationDocuments(consultation.documents);
+          console.log('📄 Documents existants chargés:', consultation.documents.length);
+        }
+
         console.log('✅ Final consultation data for form (with defaults):', consultation);
 
         // Pre-fill form with consultation data
@@ -145,22 +164,27 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         const dateString = consultationDate.toISOString().split('T')[0];
         const timeString = consultationDate.toTimeString().slice(0, 5);
         
-        // Nettoyer les champs pour l'édition
-        const cleanReason = cleanDecryptedField(consultation.reason, true, '');
-        const cleanTreatment = cleanDecryptedField(consultation.treatment, true, '');
+        // Nettoyer les champs pour l'édition avec protection contre les erreurs
         const cleanNotes = cleanDecryptedField(consultation.notes, true, '');
         
+        // Protection contre les erreurs de déchiffrement pour tous les champs cliniques
+        const cleanClinicalFields = (field: any) => {
+          if (typeof field === 'string' && 
+              (field.includes('[DECODING_FAILED]') || 
+               field.includes('[DECRYPTION_ERROR') ||
+               field.includes('[ENCRYPTION_ERROR'))) {
+            return '';
+          }
+          return field || '';
+        };
+        
         console.log('🧹 Cleaned fields for editing:', {
-          reason: { original: consultation.reason, cleaned: cleanReason },
-          treatment: { original: consultation.treatment, cleaned: cleanTreatment },
           notes: { original: consultation.notes, cleaned: cleanNotes }
         });
         
         reset({
           date: dateString,
           time: timeString,
-          reason: cleanReason,
-          treatment: cleanTreatment,
           notes: cleanNotes,
           duration: consultation.duration || 60,
           price: consultation.price || 60,
@@ -168,13 +192,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
           examinations: consultation.examinations?.map((exam: string) => ({ value: exam })) || [],
           prescriptions: consultation.prescriptions?.map((presc: string) => ({ value: presc })) || [],
 
-          // Champs cliniques
-          currentTreatment: cleanDecryptedField(consultation.currentTreatment, true, ''),
-          consultationReason: cleanDecryptedField(consultation.consultationReason, true, ''),
-          medicalAntecedents: cleanDecryptedField(consultation.medicalAntecedents, true, ''),
-          medicalHistory: cleanDecryptedField(consultation.medicalHistory, true, ''),
-          osteopathicTreatment: cleanDecryptedField(consultation.osteopathicTreatment, true, ''),
-          symptoms: (consultation.symptoms || []).join(', ')
+          // Champs cliniques avec protection contre les erreurs de déchiffrement
+          currentTreatment: cleanClinicalFields(cleanDecryptedField(consultation.currentTreatment, true, '')),
+          consultationReason: cleanClinicalFields(cleanDecryptedField(consultation.consultationReason, true, '')),
+          medicalAntecedents: cleanClinicalFields(cleanDecryptedField(consultation.medicalAntecedents, true, '')),
+          medicalHistory: cleanClinicalFields(cleanDecryptedField(consultation.medicalHistory, true, '')),
+          osteopathicTreatment: cleanClinicalFields(cleanDecryptedField(consultation.osteopathicTreatment, true, '')),
+          symptoms: cleanClinicalFields(Array.isArray(consultation.symptoms) ? consultation.symptoms.join(', ') : (consultation.symptoms || ''))
         });
         
         console.log('📝 Form initialized with cleaned data');
@@ -190,6 +214,15 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
       loadData();
     }
   }, [isOpen, consultationId, reset]);
+
+  // Gestionnaires pour les documents
+  const handleDocumentsUpdate = (documents: DocumentMetadata[]) => {
+    setConsultationDocuments(documents);
+  };
+
+  const handleDocumentError = (errorMessage: string) => {
+    setError(errorMessage);
+  };
 
   const onSubmit = async (data: ConsultationFormData) => {
     if (!auth.currentUser) {
@@ -220,6 +253,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         status: data.status,
         examinations: data.examinations.map(item => item.value),
         prescriptions: data.prescriptions.map(item => item.value),
+        updatedAt: new Date().toISOString(),
 
         // Champs d'identité patient (snapshot) - CONSERVER lors de la mise à jour
         patientId: consultationData.patientId,
@@ -236,21 +270,46 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         patientInsuranceNumber: consultationData.patientInsuranceNumber || '',
 
         // Champs cliniques (modifiables)
-        currentTreatment: data.currentTreatment || '',
+        // ✅ CORRECTION: Champs cliniques - FORCER la sauvegarde
         consultationReason: data.consultationReason || '',
+        currentTreatment: data.currentTreatment || '',
         medicalAntecedents: data.medicalAntecedents || '',
         medicalHistory: data.medicalHistory || '',
         osteopathicTreatment: data.osteopathicTreatment || '',
-        symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : []
+        symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : [],
+        treatmentHistory: consultationData.treatmentHistory || [],
+
+        // Inclure les documents
+        documents: consultationDocuments,
+        appointmentId: consultationData.appointmentId
       };
 
       console.log('💾 Prepared update data (complete):', updateData);
+      
+      // ✅ DEBUG: Vérifier que tous les champs cliniques sont présents
+      console.log('🔍 Vérification des champs cliniques dans updateData:', {
+        consultationReason: updateData.consultationReason,
+        currentTreatment: updateData.currentTreatment,
+        medicalAntecedents: updateData.medicalAntecedents,
+        medicalHistory: updateData.medicalHistory,
+        osteopathicTreatment: updateData.osteopathicTreatment,
+        symptoms: updateData.symptoms
+      });
 
-      // Utiliser le service de consultation pour la mise à jour avec chiffrement HDS
-      const { ConsultationService } = await import('../../services/consultationService');
+      // ✅ DEBUG: Log des champs cliniques dans EditConsultationModal
+      console.log('🔍 Champs cliniques dans EditConsultationModal:', {
+        consultationReason: data.consultationReason,
+        currentTreatment: data.currentTreatment,
+        medicalAntecedents: data.medicalAntecedents,
+        medicalHistory: data.medicalHistory,
+        osteopathicTreatment: data.osteopathicTreatment,
+        symptoms: data.symptoms
+      });
+
+      // ✅ CORRECTION: Utiliser le service ConsultationService au lieu de faire le chiffrement manuellement
       await ConsultationService.updateConsultation(consultationId, updateData);
 
-      console.log('✅ Consultation updated successfully via service with HDS encryption');
+      console.log('✅ Consultation updated successfully in Firestore');
 
       // Afficher le message de succès après que tout soit enregistré
       setShowSuccessBanner(true);
@@ -293,40 +352,40 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
               <h2 className="text-xl font-semibold text-gray-900">Modifier la consultation</h2>
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-500 transition-colors"
+                className="text-gray-400 transition-colors hover:text-gray-500"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="flex-1 px-6 py-4 overflow-y-auto">
               <SuccessBanner
                 message="Consultation modifiée avec succès. Toutes les informations saisies ont été sauvegardées."
                 isVisible={showSuccessBanner}
               />
               
               {error && (
-                <div className="mb-4 p-3 bg-error/5 border border-error/20 rounded-lg text-error text-sm">
+                <div className="p-3 mb-4 text-sm border rounded-lg bg-error/5 border-error/20 text-error">
                   {error}
                 </div>
               )}
 
               {success && (
-                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center">
-                  <CheckCircle size={20} className="text-green-500 mr-2" />
+                <div className="flex items-center p-3 mb-4 border border-green-200 rounded-lg bg-green-50">
+                  <CheckCircle size={20} className="mr-2 text-green-500" />
                   <span className="text-green-700">{success}</span>
                 </div>
               )}
 
               {loading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                  <div className="w-8 h-8 border-b-2 rounded-full animate-spin border-primary-600"></div>
                 </div>
               ) : consultationData ? (
                 <>
-                  <div className="mb-4 p-4 bg-primary-50 rounded-lg">
+                  <div className="p-4 mb-4 rounded-lg bg-primary-50">
                     <div className="flex items-center">
-                      <User size={20} className="text-primary-600 mr-2" />
+                      <User size={20} className="mr-2 text-primary-600" />
                       <span className="font-medium text-primary-900">
                         Patient: {consultationData?.patientName || preselectedPatientName || 'Patient inconnu'}
                       </span>
@@ -340,9 +399,9 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                   
                   {/* Debug info in development */}
                   <form id="editConsultationForm" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div>
-                        <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="date" className="block mb-1 text-sm font-medium text-gray-700">
                           Date *
                         </label>
                         <input
@@ -357,7 +416,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       </div>
 
                       <div>
-                        <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="time" className="block mb-1 text-sm font-medium text-gray-700">
                           Heure *
                         </label>
                         <input
@@ -372,41 +431,9 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       </div>
                     </div>
 
-                    <div>
-                      <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">
-                        Motif de consultation *
-                      </label>
-                      <input
-                        type="text"
-                        id="reason"
-                        className={`input w-full ${errors.reason ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                        {...register('reason', { required: 'Ce champ est requis' })}
-                        placeholder="Ex: Lombalgie, Cervicalgie..."
-                      />
-                      {errors.reason && (
-                        <p className="mt-1 text-sm text-error">{errors.reason.message}</p>
-                      )}
-                    </div>
 
                     <div>
-                      <label htmlFor="treatment" className="block text-sm font-medium text-gray-700 mb-1">
-                        Traitement effectué *
-                      </label>
-                      <AutoResizeTextarea
-                        id="treatment"
-                        minRows={4}
-                        maxRows={8}
-                        className={`input w-full resize-none ${errors.treatment ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                        {...register('treatment', { required: 'Ce champ est requis' })}
-                        placeholder="Décrivez le traitement effectué..."
-                      />
-                      {errors.treatment && (
-                        <p className="mt-1 text-sm text-error">{errors.treatment.message}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="status" className="block mb-1 text-sm font-medium text-gray-700">
                         Statut *
                       </label>
                       <select
@@ -424,49 +451,55 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                     </div>
 
                     {/* Section Données Cliniques */}
-                    <div className="border-t pt-6 mt-6 col-span-full">
-                      <h3 className="text-lg font-medium text-gray-900 mb-4">Données cliniques de la consultation</h3>
+                    <div className="pt-6 mt-6 border-t col-span-full">
+                      <h3 className="mb-4 text-lg font-medium text-gray-900">Données cliniques de la consultation</h3>
 
                       {/* Motif de consultation détaillé */}
                       <div className="mb-4">
-                        <label htmlFor="consultationReason" className="block text-sm font-medium text-gray-700 mb-1">
-                          Motif de consultation détaillé
+                        <label htmlFor="consultationReason" className="block mb-1 text-sm font-medium text-gray-700">
+                          Motif de consultation détaillé *
                         </label>
                         <AutoResizeTextarea
                           id="consultationReason"
                           minRows={2}
                           maxRows={4}
-                          className="input w-full resize-none"
+                          className="w-full resize-none input"
                           {...register('consultationReason')}
                           placeholder="Détaillez le motif de consultation..."
                         />
+                        {errors.consultationReason && (
+                          <p className="mt-1 text-sm text-error">{errors.consultationReason.message}</p>
+                        )}
                       </div>
 
-                      {/* Traitement actuel */}
+                      {/* Traitement effectué */}
                       <div className="mb-4">
-                        <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
-                          Traitement actuel du patient
+                        <label htmlFor="currentTreatment" className="block mb-1 text-sm font-medium text-gray-700">
+                          Traitement effectué du patient *
                         </label>
                         <AutoResizeTextarea
                           id="currentTreatment"
                           minRows={2}
                           maxRows={4}
-                          className="input w-full resize-none"
+                          className="w-full resize-none input"
                           {...register('currentTreatment')}
                           placeholder="Traitements médicamenteux ou thérapies en cours..."
                         />
+                        {errors.currentTreatment && (
+                          <p className="mt-1 text-sm text-error">{errors.currentTreatment.message}</p>
+                        )}
                       </div>
 
                       {/* Antécédents médicaux */}
                       <div className="mb-4">
-                        <label htmlFor="medicalAntecedents" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="medicalAntecedents" className="block mb-1 text-sm font-medium text-gray-700">
                           Antécédents médicaux
                         </label>
                         <AutoResizeTextarea
                           id="medicalAntecedents"
                           minRows={3}
                           maxRows={6}
-                          className="input w-full resize-none"
+                          className="w-full resize-none input"
                           {...register('medicalAntecedents')}
                           placeholder="Antécédents médicaux significatifs..."
                         />
@@ -474,14 +507,14 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                       {/* Historique médical */}
                       <div className="mb-4">
-                        <label htmlFor="medicalHistory" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="medicalHistory" className="block mb-1 text-sm font-medium text-gray-700">
                           Historique médical
                         </label>
                         <AutoResizeTextarea
                           id="medicalHistory"
                           minRows={3}
                           maxRows={6}
-                          className="input w-full resize-none"
+                          className="w-full resize-none input"
                           {...register('medicalHistory')}
                           placeholder="Historique médical général..."
                         />
@@ -489,14 +522,14 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                       {/* Traitement ostéopathique */}
                       <div className="mb-4">
-                        <label htmlFor="osteopathicTreatment" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
                           Traitement ostéopathique
                         </label>
                         <AutoResizeTextarea
                           id="osteopathicTreatment"
                           minRows={3}
                           maxRows={6}
-                          className="input w-full resize-none"
+                          className="w-full resize-none input"
                           {...register('osteopathicTreatment')}
                           placeholder="Décrivez le traitement ostéopathique..."
                         />
@@ -504,13 +537,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                       {/* Symptômes */}
                       <div className="mb-4">
-                        <label htmlFor="symptoms" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="symptoms" className="block mb-1 text-sm font-medium text-gray-700">
                           Symptômes
                         </label>
                         <input
                           type="text"
                           id="symptoms"
-                          className="input w-full"
+                          className="w-full input"
                           {...register('symptoms')}
                           placeholder="Symptômes séparés par des virgules..."
                         />
@@ -544,7 +577,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                               <AutoResizeTextarea
                                 minRows={1}
                                 maxRows={3}
-                                className="input flex-1"
+                                className="flex-1 input"
                                 placeholder="Ex: Radiographie lombaire..."
                                 {...register(`examinations.${index}.value`)}
                               />
@@ -560,7 +593,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                           ))}
                         </div>
                       ) : (
-                        <div className="text-sm text-gray-500 italic">
+                        <div className="text-sm italic text-gray-500">
                           Aucun examen demandé
                         </div>
                       )}
@@ -590,7 +623,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                               <AutoResizeTextarea
                                 minRows={1}
                                 maxRows={3}
-                                className="input flex-1"
+                                className="flex-1 input"
                                 placeholder="Ex: Antalgiques, repos..."
                                 {...register(`prescriptions.${index}.value`)}
                               />
@@ -606,29 +639,43 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                           ))}
                         </div>
                       ) : (
-                        <div className="text-sm text-gray-500 italic">
+                        <div className="text-sm italic text-gray-500">
                           Aucune prescription
                         </div>
                       )}
                     </div>
 
                     <div>
-                      <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="notes" className="block mb-1 text-sm font-medium text-gray-700">
                         Notes complémentaires
                       </label>
                       <AutoResizeTextarea
                         id="notes"
                         minRows={3}
                         maxRows={6}
-                        className="input w-full resize-none"
+                        className="w-full resize-none input"
                         {...register('notes')}
                         placeholder="Notes additionnelles..."
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Documents de consultation */}
+                    <div className="pt-6 border-t">
+                      <h3 className="mb-4 text-lg font-medium text-gray-900">Documents de consultation</h3>
+                      <DocumentUploadManager
+                        patientId="temp"
+                        entityType="consultation"
+                        entityId={consultationId}
+                        customFolderPath={`users/${auth.currentUser?.uid}/consultations/${consultationId}/documents`}
+                        onUploadSuccess={handleDocumentsUpdate}
+                        onUploadError={handleDocumentError}
+                        disabled={isSubmitting}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                       <div>
-                        <label htmlFor="duration" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="duration" className="block mb-1 text-sm font-medium text-gray-700">
                           Durée (minutes) *
                         </label>
                         <input
@@ -648,7 +695,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       </div>
 
                       <div>
-                        <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="price" className="block mb-1 text-sm font-medium text-gray-700">
                           Tarif (€) *
                         </label>
                         <input
@@ -668,7 +715,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       </div>
 
                       <div>
-                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="status" className="block mb-1 text-sm font-medium text-gray-700">
                           Statut *
                         </label>
                         <select
@@ -688,7 +735,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                   </form>
                 </>
               ) : (
-                <div className="text-center py-12">
+                <div className="py-12 text-center">
                   <p className="text-gray-500">Consultation non trouvée</p>
                 </div>
               )}

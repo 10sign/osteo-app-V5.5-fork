@@ -37,7 +37,7 @@ const HDSComplianceBadge: React.FC<HDSComplianceBadgeProps> = ({
         title="Mode HDS non activé"
       >
         <AlertTriangle size={iconSizes[size]} className="mr-1" />
-        <span>HDS Inactif</span>
+        <span>HDS</span>
       </div>
     );
   }

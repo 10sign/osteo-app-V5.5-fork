@@ -40,10 +40,8 @@ service firebase.storage {
     }
     
     function isValidFileName() {
-      return resource == null || (
-        resource.name.size() <= 255 &&
-        !resource.name.matches('.*[<>:"/\\|?*].*') // Caractères interdits
-      );
+      return request.resource.name.size() <= 255 &&
+             !request.resource.name.matches('.*[<>:"/\\|?*].*'); // Caractères interdits
     }
     
     function hasHDSMetadata() {
@@ -150,6 +148,15 @@ service firebase.storage {
       
       // Suppression: autorisée pour le propriétaire, l'admin, ou Julie
       allow delete: if isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr');
+    }
+    
+    // Règles optimisées pour les documents de consultation
+    match /users/{userId}/consultations/{consultationId}/documents/{allPaths=**} {
+      // Lecture, écriture et suppression autorisées pour le propriétaire, l'admin, ou Julie
+      allow read, write, delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr')) &&
+                                   isValidFileType() && 
+                                   isValidFileSize() && 
+                                   isValidFileName();
     }
     
     // Règles pour les patients (dossier spécifique)

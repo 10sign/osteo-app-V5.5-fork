@@ -56,7 +56,25 @@ const SENSITIVE_FIELDS: Record<string, string[]> = {
   consultations: [
     'reason',
     'treatment',
-    'notes'
+    'notes',
+    // ✅ AJOUT: Champs cliniques manquants
+    'consultationReason',
+    'currentTreatment',
+    'medicalAntecedents',
+    'medicalHistory',
+    'osteopathicTreatment',
+    'symptoms',
+    // Champs d'identité patient (snapshot)
+    'patientFirstName',
+    'patientLastName',
+    'patientDateOfBirth',
+    'patientGender',
+    'patientPhone',
+    'patientEmail',
+    'patientProfession',
+    'patientAddress',
+    'patientInsurance',
+    'patientInsuranceNumber'
   ],
   invoices: [
     'patientName',
@@ -106,9 +124,10 @@ export class HDSCompliance {
     // Chiffrement des champs sensibles
     fieldsToEncrypt.forEach(field => {
       try {
-        // Vérifier que la valeur n'est pas vide ou null
-        if (processedData[field] === null || processedData[field] === undefined || processedData[field] === '') {
-          return; // Skip empty values
+        // ✅ CORRECTION: Ne pas skip les valeurs vides pour les champs cliniques
+        // Les champs cliniques doivent être sauvegardés même s'ils sont vides
+        if (processedData[field] === null || processedData[field] === undefined) {
+          return; // Skip only null/undefined values
         }
         
         // Gestion spéciale pour les objets complexes comme address
@@ -116,11 +135,10 @@ export class HDSCompliance {
           // Chiffrer l'objet address complet
           processedData[field] = encryptData(processedData[field], userId);
         } else {
-          // S'assurer que la valeur est une chaîne non vide
-          const valueToEncrypt = String(processedData[field]).trim();
-          if (valueToEncrypt.length > 0) {
-            processedData[field] = encryptData(valueToEncrypt, userId);
-          }
+          // ✅ CORRECTION: Sauvegarder même les valeurs vides pour les champs cliniques
+          const valueToEncrypt = String(processedData[field] || '').trim();
+          // Toujours chiffrer, même si vide (pour les champs cliniques)
+          processedData[field] = encryptData(valueToEncrypt, userId);
         }
       } catch (error) {
         console.error(`❌ Failed to encrypt field ${field}:`, error);
@@ -175,7 +193,10 @@ export class HDSCompliance {
       console.log('🔍 Déchiffrement des données pour:', collectionName, {
         userId: userId.substring(0, 8) + '...',
         hasHdsMetadata: !!data._hds,
-        encryptedFields: data._hds?.encryptedFields || []
+        encryptedFields: data._hds?.encryptedFields || [],
+        // ✅ DEBUG: Vérifier la date de création
+        createdAt: data.createdAt,
+        isToday: data.createdAt && new Date(data.createdAt).toDateString() === new Date().toDateString()
       });
     }
     
@@ -189,6 +210,16 @@ export class HDSCompliance {
     sensitiveFields.forEach(field => {
       try {
         if (processedData[field] && typeof processedData[field] === 'string') {
+          // ✅ DEBUG: Log spécifique pour les champs cliniques
+          if (['consultationReason', 'currentTreatment', 'medicalAntecedents', 'medicalHistory', 'osteopathicTreatment', 'symptoms'].includes(field)) {
+            console.log(`🔍 Déchiffrement du champ clinique ${field}:`, {
+              value: processedData[field].substring(0, 100) + '...',
+              isEncrypted: isEncrypted(processedData[field]),
+              isValidFormat: isValidEncryptedFormat(processedData[field]),
+              // ✅ DEBUG: Vérifier si c'est une consultation d'aujourd'hui
+              isToday: processedData.createdAt && new Date(processedData.createdAt).toDateString() === new Date().toDateString()
+            });
+          }
           // Gestion spéciale pour les champs vides ou null
           if (processedData[field] === '' || processedData[field] === 'null' || processedData[field] === 'undefined') {
             processedData[field] = '';
@@ -216,47 +247,62 @@ export class HDSCompliance {
           
           // Vérifier si le champ est chiffré
           if (isEncrypted(processedData[field])) {
-            // Vérifier si le format est valide
-            if (!isValidEncryptedFormat(processedData[field])) {
-              // Tenter de réparer les données
-              const repairedData = attemptDataRepair(processedData[field], userId);
-              if (repairedData) {
-                const decryptedValue = decryptData(repairedData, userId);
-                // Vérifier si le déchiffrement a réussi
-                if (typeof decryptedValue === 'string' && 
-                    (decryptedValue.startsWith('[') || decryptedValue.includes('DECODING_FAILED'))) {
-                  processedData[field] = '[DECODING_FAILED]';
-                } else {
-                  processedData[field] = decryptedValue;
-                }
-                if (import.meta.env.DEV) {
-                  console.log(`✅ Données réparées et déchiffrées pour ${field}`);
-                }
-              } else {
-                console.warn(`⚠️ Impossible de réparer ${field}, données corrompues`);
-                processedData[field] = '[DECODING_FAILED]';
-              }
-            } else {
-              // Format valide, déchiffrer normalement
+            try {
               const decryptedValue = decryptData(processedData[field], userId);
+              
               if (import.meta.env.DEV) {
                 console.log(`🔓 Déchiffrement de ${field}:`, {
-                  success: !decryptedValue.toString().startsWith('[DECRYPTION_ERROR:'),
+                  success: !decryptedValue.toString().startsWith('[') && !decryptedValue.toString().includes('DECODING_FAILED'),
                   value: decryptedValue.toString().substring(0, 50) + '...'
                 });
               }
-              // Vérifier si le déchiffrement a réussi
+              
+              // ✅ CORRECTION : Vérifier si le déchiffrement a réussi
               if (typeof decryptedValue === 'string' && 
-                  (decryptedValue.startsWith('[') || decryptedValue.includes('DECODING_FAILED'))) {
-                processedData[field] = '[DECODING_FAILED]';
-              } else {
+                  !decryptedValue.startsWith('[') && 
+                  !decryptedValue.includes('DECODING_FAILED') &&
+                  !decryptedValue.includes('DECRYPTION_ERROR') &&
+                  decryptedValue.length > 0) {
                 processedData[field] = decryptedValue;
+                if (import.meta.env.DEV) {
+                  console.log(`✅ Déchiffrement réussi pour ${field}:`, decryptedValue.substring(0, 50) + '...');
+                }
+              } else {
+                // Si le déchiffrement échoue, essayer de récupérer le texte original
+                console.warn(`⚠️ Échec du déchiffrement pour ${field}:`, decryptedValue);
+                
+                // Essayer de récupérer le texte original si c'est un UUID chiffré
+                if (processedData[field].includes(':') && processedData[field].length > 50) {
+                  const parts = processedData[field].split(':');
+                  if (parts.length >= 2) {
+                    const uuidPattern = /^[0-9a-f]{32}$/i;
+                    if (uuidPattern.test(parts[0])) {
+                      // C'est un UUID chiffré, essayer de déchiffrer juste la partie après l'UUID
+                      try {
+                        const encryptedPart = parts.slice(1).join(':');
+                        const retryDecrypt = decryptData(encryptedPart, userId);
+                        if (typeof retryDecrypt === 'string' && 
+                            !retryDecrypt.startsWith('[') && 
+                            !retryDecrypt.includes('DECODING_FAILED') &&
+                            retryDecrypt.length > 0) {
+                          processedData[field] = retryDecrypt;
+                          if (import.meta.env.DEV) {
+                            console.log(`✅ Déchiffrement réussi au 2ème essai pour ${field}:`, retryDecrypt.substring(0, 50) + '...');
+                          }
+                        }
+                      } catch (retryError) {
+                        console.error(`❌ Échec du déchiffrement au 2ème essai pour ${field}:`, retryError);
+                      }
+                    }
+                  }
+                }
               }
+            } catch (error) {
+              console.error(`❌ Erreur de déchiffrement pour ${field}:`, error);
+              // Garder la valeur chiffrée - pas de réassignation nécessaire
             }
-          } else {
-            // Données non chiffrées, les conserver telles quelles
-            processedData[field] = processedData[field];
           }
+          // Données non chiffrées sont déjà dans processedData[field]
         }
         
       } catch (error) {

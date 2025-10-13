@@ -429,12 +429,13 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         patientName: `${data.firstName.trim()} ${data.lastName.trim()}`,
         osteopathId: auth.currentUser.uid,
         date: new Date(),
+        // ✅ CORRECTION: Mapping correct des champs principaux
         reason: data.consultationReason || 'Première consultation',
         treatment: data.osteopathicTreatment || 'Évaluation initiale et anamnèse',
         notes: data.notes || 'Consultation générée automatiquement lors de la création du patient.',
         duration: 60,
         price: 60,
-        status: 'completed',
+        status: 'completed' as 'draft' | 'completed' | 'cancelled',
         examinations: [],
         prescriptions: [],
 
@@ -450,13 +451,14 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         patientInsurance: data.insurance || '',
         patientInsuranceNumber: data.insuranceNumber || '',
 
-        // ✅ SNAPSHOT COMPLET - Champs cliniques au moment T
+        // ✅ SNAPSHOT COMPLET - Champs cliniques au moment T (mapping correct)
         currentTreatment: data.currentTreatment || '',
         consultationReason: data.consultationReason || '',
         medicalAntecedents: data.medicalAntecedents || '',
         medicalHistory: data.medicalHistory || '',
         osteopathicTreatment: data.osteopathicTreatment || '',
-        symptoms: selectedTags || []
+        symptoms: selectedTags || [],
+        treatmentHistory: []
       };
 
       const initialConsultationId = await ConsultationService.createConsultation(initialConsultationData);
@@ -654,22 +656,22 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
               <h2 className="text-xl font-semibold text-gray-900">Nouveau dossier patient</h2>
               <button
                 onClick={handleModalClose}
-                className="text-gray-400 hover:text-gray-500 transition-colors"
+                className="text-gray-400 transition-colors hover:text-gray-500"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="flex-1 px-6 py-4 overflow-y-auto">
               {error && (
-                <div className="mb-4 p-3 bg-error/5 border border-error/20 rounded-lg text-error text-sm">
+                <div className="p-3 mb-4 text-sm border rounded-lg bg-error/5 border-error/20 text-error">
                   {error}
                 </div>
               )}
 
               {success && (
-                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center">
-                  <CheckCircle size={20} className="text-green-500 mr-2" />
+                <div className="flex items-center p-3 mb-4 border border-green-200 rounded-lg bg-green-50">
+                  <CheckCircle size={20} className="mr-2 text-green-500" />
                   <span className="text-green-700">{success}</span>
                 </div>
               )}
@@ -679,20 +681,20 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                 <div className="mb-4">
                   <div className="h-2 bg-gray-200 rounded-full">
                     <div
-                      className="h-2 bg-primary-500 rounded-full transition-all duration-300"
+                      className="h-2 transition-all duration-300 rounded-full bg-primary-500"
                       style={{ width: `${progress}%` }}
                     />
                   </div>
-                  <p className="text-sm text-gray-500 mt-2">
+                  <p className="mt-2 text-sm text-gray-500">
                     {progress === 100 ? 'Terminé' : 'Création en cours...'}
                   </p>
                 </div>
               )}
 
               <form id="newPatientForm" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="firstName" className="block mb-1 text-sm font-medium text-gray-700">
                       Prénom *
                     </label>
                     <AutoCapitalizeInput
@@ -711,7 +713,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                   </div>
 
                   <div>
-                    <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="lastName" className="block mb-1 text-sm font-medium text-gray-700">
                       Nom *
                     </label>
                     <AutoCapitalizeInput
@@ -730,7 +732,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                   </div>
 
                   <div>
-                    <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="dateOfBirth" className="block mb-1 text-sm font-medium text-gray-700">
                       Date de naissance *
                     </label>
                     <input
@@ -754,7 +756,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                   </div>
 
                   <div>
-                    <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="gender" className="block mb-1 text-sm font-medium text-gray-700">
                       Sexe
                     </label>
                     <select
@@ -774,20 +776,20 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                   </div>
 
                   <div>
-                    <label htmlFor="profession" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="profession" className="block mb-1 text-sm font-medium text-gray-700">
                       Profession
                     </label>
                     <AutoCapitalizeInput
                       type="text"
                       id="profession"
-                      className="input w-full"
+                      className="w-full input"
                       {...register('profession')}
                       placeholder="Ex: Enseignant, Ingénieur, Retraité..."
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="phone" className="block mb-1 text-sm font-medium text-gray-700">
                       Téléphone
                     </label>
                     <input
@@ -809,7 +811,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                 </div>
 
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="email" className="block mb-1 text-sm font-medium text-gray-700">
                     Adresse email
                   </label>
                   <input
@@ -830,7 +832,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                 </div>
 
                 <div>
-                  <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="address" className="block mb-1 text-sm font-medium text-gray-700">
                     Adresse postale complète
                   </label>
                   <AutoResizeTextarea
@@ -849,27 +851,27 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <label htmlFor="insurance" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="insurance" className="block mb-1 text-sm font-medium text-gray-700">
                       Mutuelle
                     </label>
                     <input
                       type="text"
                       id="insurance"
-                      className="input w-full"
+                      className="w-full input"
                       {...register('insurance')}
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="insuranceNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="insuranceNumber" className="block mb-1 text-sm font-medium text-gray-700">
                       Numéro d'assuré
                     </label>
                     <input
                       type="text"
                       id="insuranceNumber"
-                      className="input w-full"
+                      className="w-full input"
                       {...register('insuranceNumber')}
                     />
                   </div>
@@ -877,63 +879,63 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
 
                 {/* Nouveaux champs */}
                 <div>
-                  <label htmlFor="consultationReason" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="consultationReason" className="block mb-1 text-sm font-medium text-gray-700">
                     Motif de consultation
                   </label>
                   <AutoResizeTextarea
                     id="consultationReason"
                     minRows={3}
                     maxRows={6}
-                    className="input w-full resize-none"
+                    className="w-full resize-none input"
                     {...register('consultationReason')}
                     placeholder="Raison principale de la consultation"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
-                    Traitement actuel
+                  <label htmlFor="currentTreatment" className="block mb-1 text-sm font-medium text-gray-700">
+                    Traitement effectué
                   </label>
                   <AutoResizeTextarea
                     id="currentTreatment"
                     minRows={3}
                     maxRows={6}
-                    className="input w-full resize-none"
+                    className="w-full resize-none input"
                     {...register('currentTreatment')}
                     placeholder="Traitements médicamenteux ou autres thérapies en cours"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="medicalAntecedents" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="medicalAntecedents" className="block mb-1 text-sm font-medium text-gray-700">
                     Antécédents médicaux
                   </label>
                   <AutoResizeTextarea
                     id="medicalAntecedents"
                     minRows={4}
                     maxRows={8}
-                    className="input w-full resize-none"
+                    className="w-full resize-none input"
                     {...register('medicalAntecedents')}
                     placeholder="Antécédents médicaux significatifs, chirurgies, etc."
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="medicalHistory" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="medicalHistory" className="block mb-1 text-sm font-medium text-gray-700">
                     Historique médical général
                   </label>
                   <AutoResizeTextarea
                     id="medicalHistory"
                     minRows={4}
                     maxRows={8}
-                    className="input w-full resize-none"
+                    className="w-full resize-none input"
                     {...register('medicalHistory')}
                   />
                 </div>
 
                 {/* Documents médicaux */}
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Documents médicaux</h3>
+                <div className="pt-6 border-t">
+                  <h3 className="mb-4 text-lg font-medium text-gray-900">Documents médicaux</h3>
                   <DocumentUploadManager
                     patientId="temp"
                     onUploadSuccess={handleDocumentsUpdate}
@@ -943,7 +945,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                 </div>
 
                 {/* Historique des traitements */}
-                <div className="border-t pt-6">
+                <div className="pt-6 border-t">
                   <div className="flex items-center justify-between mb-4">
                     <label className="block text-sm font-medium text-gray-700">
                       Historique des traitements
@@ -962,43 +964,43 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                   {treatmentHistory.length > 0 ? (
                     <div className="space-y-4">
                       {treatmentHistory.map((entry, index) => (
-                        <div key={index} className="border border-gray-200 rounded-lg p-4 relative">
+                        <div key={index} className="relative p-4 border border-gray-200 rounded-lg">
                           <button
                             type="button"
                             onClick={() => removeTreatmentHistoryEntry(index)}
-                            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+                            className="absolute text-gray-400 top-2 right-2 hover:text-gray-600"
                           >
                             <Trash2 size={16} />
                           </button>
                           
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                          <div className="grid grid-cols-1 gap-4 mb-4 md:grid-cols-2">
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                              <label className="block mb-1 text-sm font-medium text-gray-700">
                                 Date
                               </label>
                               <input
                                 type="date"
                                 value={entry.date}
                                 onChange={(e) => updateTreatmentHistoryEntry(index, 'date', e.target.value)}
-                                className="input w-full"
+                                className="w-full input"
                                 max={new Date().toISOString().split('T')[0]}
                               />
                             </div>
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                              <label className="block mb-1 text-sm font-medium text-gray-700">
                                 Prestataire
                               </label>
                               <input
                                 type="text"
                                 value={entry.provider || ''}
                                 onChange={(e) => updateTreatmentHistoryEntry(index, 'provider', e.target.value)}
-                                className="input w-full"
+                                className="w-full input"
                                 placeholder="Nom du praticien ou établissement"
                               />
                             </div>
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block mb-1 text-sm font-medium text-gray-700">
                               Traitement
                             </label>
                             <AutoResizeTextarea
@@ -1006,12 +1008,12 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                               onChange={(e) => updateTreatmentHistoryEntry(index, 'treatment', e.target.value)}
                               minRows={2}
                               maxRows={4}
-                              className="input w-full resize-none"
+                              className="w-full resize-none input"
                               placeholder="Description du traitement"
                             />
                           </div>
                           <div className="mt-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block mb-1 text-sm font-medium text-gray-700">
                               Notes
                             </label>
                             <AutoResizeTextarea
@@ -1019,7 +1021,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                               onChange={(e) => updateTreatmentHistoryEntry(index, 'notes', e.target.value)}
                               minRows={2}
                               maxRows={4}
-                              className="input w-full resize-none"
+                              className="w-full resize-none input"
                               placeholder="Notes complémentaires"
                             />
                           </div>
@@ -1027,14 +1029,14 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-500 italic">
+                    <p className="text-sm italic text-gray-500">
                       Aucun historique de traitement enregistré
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block mb-1 text-sm font-medium text-gray-700">
                     Symptômes / Syndromes
                   </label>
                   <div className="space-y-3">
@@ -1042,7 +1044,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                       {selectedTags.map((tag) => (
                         <span
                           key={tag}
-                          className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-primary-50 text-primary-700"
+                          className="inline-flex items-center px-3 py-1 text-sm rounded-full bg-primary-50 text-primary-700"
                         >
                           {tag}
                           <button
@@ -1062,7 +1064,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                         onChange={(e) => setCustomTag(e.target.value)}
                         onKeyDown={handleAddCustomTag}
                         placeholder="Ajouter des symptômes / syndromes personnalisés"
-                        className="input flex-1"
+                        className="flex-1 input"
                       />
                       <Button
                         type="button"
@@ -1100,41 +1102,41 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                 </div>
 
                 <div>
-                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="notes" className="block mb-1 text-sm font-medium text-gray-700">
                     Notes complémentaires
                   </label>
                   <AutoResizeTextarea
                     id="notes"
                     minRows={4}
                     maxRows={8}
-                    className="input w-full resize-none"
+                    className="w-full resize-none input"
                     {...register('notes')}
                     placeholder="Notes générales sur le patient"
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <label htmlFor="nextAppointment" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="nextAppointment" className="block mb-1 text-sm font-medium text-gray-700">
                       Prochain rendez-vous
                     </label>
                     <input
                       type="date"
                       id="nextAppointment"
-                      className="input w-full"
+                      className="w-full input"
                       {...register('nextAppointment')}
                       min={new Date().toISOString().split('T')[0]}
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="nextAppointmentTime" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="nextAppointmentTime" className="block mb-1 text-sm font-medium text-gray-700">
                       Heure du rendez-vous
                     </label>
                     <input
                       type="time"
                       id="nextAppointmentTime"
-                      className="input w-full"
+                      className="w-full input"
                       {...register('nextAppointmentTime')}
                     />
                   </div>
@@ -1178,18 +1180,18 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-10"
+                className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 backdrop-blur-sm"
               >
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-white rounded-xl shadow-2xl p-6 max-w-md mx-4"
+                  className="max-w-md p-6 mx-4 bg-white shadow-2xl rounded-xl"
                 >
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  <h3 className="mb-4 text-lg font-semibold text-gray-900">
                     Données non sauvegardées
                   </h3>
-                  <p className="text-gray-600 mb-6">
+                  <p className="mb-6 text-gray-600">
                     Vous avez des modifications non sauvegardées. Êtes-vous sûr de
                     vouloir fermer sans sauvegarder ?
                   </p>
