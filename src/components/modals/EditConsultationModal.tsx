@@ -34,13 +34,13 @@ interface ConsultationFormData {
   examinations: { value: string }[];
   prescriptions: { value: string }[];
 
-  // Champs cliniques
-  currentTreatment?: string;
-  consultationReason?: string;
-  medicalAntecedents?: string;
-  medicalHistory?: string;
-  osteopathicTreatment?: string;
-  symptoms?: string;
+  // ✅ CORRECTION: Champs cliniques (obligatoires pour la sauvegarde)
+  currentTreatment: string;
+  consultationReason: string;
+  medicalAntecedents: string;
+  medicalHistory: string;
+  osteopathicTreatment: string;
+  symptoms: string;
 }
 
 const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
@@ -270,6 +270,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         patientInsuranceNumber: consultationData.patientInsuranceNumber || '',
 
         // Champs cliniques (modifiables)
+        // ✅ CORRECTION: Champs cliniques - FORCER la sauvegarde
         consultationReason: data.consultationReason || '',
         currentTreatment: data.currentTreatment || '',
         medicalAntecedents: data.medicalAntecedents || '',
@@ -282,14 +283,68 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
       };
 
       console.log('💾 Prepared update data (complete):', updateData);
+      
+      // ✅ DEBUG: Vérifier que tous les champs cliniques sont présents
+      console.log('🔍 Vérification des champs cliniques dans updateData:', {
+        consultationReason: updateData.consultationReason,
+        currentTreatment: updateData.currentTreatment,
+        medicalAntecedents: updateData.medicalAntecedents,
+        medicalHistory: updateData.medicalHistory,
+        osteopathicTreatment: updateData.osteopathicTreatment,
+        symptoms: updateData.symptoms
+      });
+
+      // ✅ DEBUG: Log des champs cliniques dans EditConsultationModal
+      console.log('🔍 Champs cliniques dans EditConsultationModal:', {
+        consultationReason: data.consultationReason,
+        currentTreatment: data.currentTreatment,
+        medicalAntecedents: data.medicalAntecedents,
+        medicalHistory: data.medicalHistory,
+        osteopathicTreatment: data.osteopathicTreatment,
+        symptoms: data.symptoms
+      });
 
       // Extraire les documents avant le traitement HDS
       const documents = updateData.documents || [];
       const { documents: _, ...dataWithoutDocuments } = updateData;
 
-      // Préparation des données avec chiffrement HDS (sans les documents)
+      // ✅ CORRECTION: Préparation des données avec chiffrement HDS (mapping explicite)
       const dataToStore = HDSCompliance.prepareDataForStorage({
-        ...dataWithoutDocuments,
+        // Champs de base
+        patientId: updateData.patientId,
+        patientName: updateData.patientName,
+        reason: updateData.reason,
+        treatment: updateData.treatment,
+        notes: updateData.notes,
+        duration: updateData.duration,
+        price: updateData.price,
+        status: updateData.status,
+        examinations: updateData.examinations,
+        prescriptions: updateData.prescriptions,
+        appointmentId: updateData.appointmentId,
+        
+        // Champs d'identité patient (snapshot)
+        patientFirstName: updateData.patientFirstName,
+        patientLastName: updateData.patientLastName,
+        patientDateOfBirth: updateData.patientDateOfBirth,
+        patientGender: updateData.patientGender,
+        patientPhone: updateData.patientPhone,
+        patientEmail: updateData.patientEmail,
+        patientProfession: updateData.patientProfession,
+        patientAddress: updateData.patientAddress,
+        patientInsurance: updateData.patientInsurance,
+        patientInsuranceNumber: updateData.patientInsuranceNumber,
+        
+        // ✅ CORRECTION: Champs cliniques (mapping explicite)
+        currentTreatment: updateData.currentTreatment || '',
+        consultationReason: updateData.consultationReason || '',
+        medicalAntecedents: updateData.medicalAntecedents || '',
+        medicalHistory: updateData.medicalHistory || '',
+        osteopathicTreatment: updateData.osteopathicTreatment || '',
+        symptoms: updateData.symptoms || [],
+        treatmentHistory: updateData.treatmentHistory,
+        
+        // Métadonnées
         date: Timestamp.fromDate(consultationDate),
         updatedAt: Timestamp.now()
       }, 'consultations', auth.currentUser.uid);
@@ -306,6 +361,16 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         hasDocuments: !!cleanedData.documents,
         documentsCount: Array.isArray(cleanedData.documents) ? cleanedData.documents.length : 0,
         documents: cleanedData.documents
+      });
+
+      // ✅ DEBUG: Log des champs cliniques après traitement HDS dans EditConsultationModal
+      console.log('🔍 Champs cliniques après HDS processing (EditConsultationModal):', {
+        consultationReason: cleanedData.consultationReason,
+        currentTreatment: cleanedData.currentTreatment,
+        medicalAntecedents: cleanedData.medicalAntecedents,
+        medicalHistory: cleanedData.medicalHistory,
+        osteopathicTreatment: cleanedData.osteopathicTreatment,
+        symptoms: cleanedData.symptoms
       });
 
       // Mettre à jour via le service
@@ -467,7 +532,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                           minRows={2}
                           maxRows={4}
                           className="w-full resize-none input"
-                          {...register('consultationReason', { required: 'Ce champ est requis' })}
+                          {...register('consultationReason')}
                           placeholder="Détaillez le motif de consultation..."
                         />
                         {errors.consultationReason && (
@@ -485,7 +550,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                           minRows={2}
                           maxRows={4}
                           className="w-full resize-none input"
-                          {...register('currentTreatment', { required: 'Ce champ est requis' })}
+                          {...register('currentTreatment')}
                           placeholder="Traitements médicamenteux ou thérapies en cours..."
                         />
                         {errors.currentTreatment && (

@@ -250,13 +250,57 @@ export class ConsultationService {
         documents: consultationData.documents
       });
 
+      // ✅ DEBUG: Log des champs cliniques dans le service
+      console.log('🔍 Champs cliniques reçus par le service:', {
+        consultationReason: consultationData.consultationReason,
+        currentTreatment: consultationData.currentTreatment,
+        medicalAntecedents: consultationData.medicalAntecedents,
+        medicalHistory: consultationData.medicalHistory,
+        osteopathicTreatment: consultationData.osteopathicTreatment,
+        symptoms: consultationData.symptoms
+      });
+
       // Extraire les documents avant le traitement HDS
       const documents = consultationData.documents || [];
       const { documents: _, ...dataWithoutDocuments } = consultationData;
 
-      // Préparation des données avec chiffrement HDS (sans les documents)
+      // ✅ CORRECTION: Préparation des données avec chiffrement HDS (mapping explicite des champs cliniques)
       const dataToStore = HDSCompliance.prepareDataForStorage({
-        ...dataWithoutDocuments,
+        // Champs de base
+        patientId: consultationData.patientId,
+        patientName: consultationData.patientName,
+        reason: consultationData.reason,
+        treatment: consultationData.treatment,
+        notes: consultationData.notes,
+        duration: consultationData.duration,
+        price: consultationData.price,
+        status: consultationData.status,
+        examinations: consultationData.examinations,
+        prescriptions: consultationData.prescriptions,
+        appointmentId: consultationData.appointmentId,
+        
+        // Champs d'identité patient (snapshot)
+        patientFirstName: consultationData.patientFirstName,
+        patientLastName: consultationData.patientLastName,
+        patientDateOfBirth: consultationData.patientDateOfBirth,
+        patientGender: consultationData.patientGender,
+        patientPhone: consultationData.patientPhone,
+        patientEmail: consultationData.patientEmail,
+        patientProfession: consultationData.patientProfession,
+        patientAddress: consultationData.patientAddress,
+        patientInsurance: consultationData.patientInsurance,
+        patientInsuranceNumber: consultationData.patientInsuranceNumber,
+        
+        // ✅ CORRECTION: Champs cliniques (mapping explicite)
+        currentTreatment: consultationData.currentTreatment || '',
+        consultationReason: consultationData.consultationReason || '',
+        medicalAntecedents: consultationData.medicalAntecedents || '',
+        medicalHistory: consultationData.medicalHistory || '',
+        osteopathicTreatment: consultationData.osteopathicTreatment || '',
+        symptoms: consultationData.symptoms || [],
+        treatmentHistory: consultationData.treatmentHistory,
+        
+        // Métadonnées
         osteopathId: userId,
         date: Timestamp.fromDate(new Date(consultationData.date)),
         createdAt: Timestamp.fromDate(now),
@@ -275,6 +319,16 @@ export class ConsultationService {
         hasDocuments: !!cleanedData.documents,
         documentsCount: cleanedData.documents?.length || 0,
         documents: cleanedData.documents
+      });
+
+      // ✅ DEBUG: Log des champs cliniques après traitement HDS
+      console.log('🔍 Champs cliniques après HDS processing:', {
+        consultationReason: cleanedData.consultationReason,
+        currentTreatment: cleanedData.currentTreatment,
+        medicalAntecedents: cleanedData.medicalAntecedents,
+        medicalHistory: cleanedData.medicalHistory,
+        osteopathicTreatment: cleanedData.osteopathicTreatment,
+        symptoms: cleanedData.symptoms
       });
       
       const docRef = await addDoc(collection(db, 'consultations'), cleanedData);
@@ -383,10 +437,44 @@ export class ConsultationService {
       }
       
       const userId = auth.currentUser.uid;
-      const updateData = {
-        ...consultationData,
+      // ✅ CORRECTION: Mapping explicite des champs pour la mise à jour
+      const updateData: any = {
         updatedAt: Timestamp.fromDate(new Date())
       };
+      
+      // Mapper tous les champs possibles
+      if (consultationData.patientId !== undefined) updateData.patientId = consultationData.patientId;
+      if (consultationData.patientName !== undefined) updateData.patientName = consultationData.patientName;
+      if (consultationData.reason !== undefined) updateData.reason = consultationData.reason;
+      if (consultationData.treatment !== undefined) updateData.treatment = consultationData.treatment;
+      if (consultationData.notes !== undefined) updateData.notes = consultationData.notes;
+      if (consultationData.duration !== undefined) updateData.duration = consultationData.duration;
+      if (consultationData.price !== undefined) updateData.price = consultationData.price;
+      if (consultationData.status !== undefined) updateData.status = consultationData.status;
+      if (consultationData.examinations !== undefined) updateData.examinations = consultationData.examinations;
+      if (consultationData.prescriptions !== undefined) updateData.prescriptions = consultationData.prescriptions;
+      if (consultationData.appointmentId !== undefined) updateData.appointmentId = consultationData.appointmentId;
+      
+      // Champs d'identité patient
+      if (consultationData.patientFirstName !== undefined) updateData.patientFirstName = consultationData.patientFirstName;
+      if (consultationData.patientLastName !== undefined) updateData.patientLastName = consultationData.patientLastName;
+      if (consultationData.patientDateOfBirth !== undefined) updateData.patientDateOfBirth = consultationData.patientDateOfBirth;
+      if (consultationData.patientGender !== undefined) updateData.patientGender = consultationData.patientGender;
+      if (consultationData.patientPhone !== undefined) updateData.patientPhone = consultationData.patientPhone;
+      if (consultationData.patientEmail !== undefined) updateData.patientEmail = consultationData.patientEmail;
+      if (consultationData.patientProfession !== undefined) updateData.patientProfession = consultationData.patientProfession;
+      if (consultationData.patientAddress !== undefined) updateData.patientAddress = consultationData.patientAddress;
+      if (consultationData.patientInsurance !== undefined) updateData.patientInsurance = consultationData.patientInsurance;
+      if (consultationData.patientInsuranceNumber !== undefined) updateData.patientInsuranceNumber = consultationData.patientInsuranceNumber;
+      
+      // ✅ CORRECTION: Champs cliniques (mapping explicite)
+      if (consultationData.currentTreatment !== undefined) updateData.currentTreatment = consultationData.currentTreatment;
+      if (consultationData.consultationReason !== undefined) updateData.consultationReason = consultationData.consultationReason;
+      if (consultationData.medicalAntecedents !== undefined) updateData.medicalAntecedents = consultationData.medicalAntecedents;
+      if (consultationData.medicalHistory !== undefined) updateData.medicalHistory = consultationData.medicalHistory;
+      if (consultationData.osteopathicTreatment !== undefined) updateData.osteopathicTreatment = consultationData.osteopathicTreatment;
+      if (consultationData.symptoms !== undefined) updateData.symptoms = consultationData.symptoms;
+      if (consultationData.treatmentHistory !== undefined) updateData.treatmentHistory = consultationData.treatmentHistory;
       
       // Si la date est modifiée, la convertir en Timestamp
       if (consultationData.date) {

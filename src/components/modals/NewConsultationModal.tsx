@@ -48,13 +48,13 @@ interface ConsultationFormData {
   patientInsurance: string;
   patientInsuranceNumber: string;
 
-  // Champs cliniques (modifiables pour cette consultation)
-  currentTreatment?: string;
-  consultationReason?: string;
-  medicalAntecedents?: string;
-  medicalHistory?: string;
-  osteopathicTreatment?: string;
-  symptoms?: string;
+  // ✅ CORRECTION: Champs cliniques (obligatoires pour la sauvegarde)
+  currentTreatment: string;
+  consultationReason: string;
+  medicalAntecedents: string;
+  medicalHistory: string;
+  osteopathicTreatment: string;
+  symptoms: string;
 }
 
 
@@ -101,9 +101,10 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
   const watchedPatientId = watch('patientId');
 
   // Fill patient fields function with useCallback
-  const fillPatientFields = useCallback((patient: Patient) => {
-    console.log('Filling patient fields for:', patient.firstName, patient.lastName);
-    // Champs d'identité (lecture seule)
+  const fillPatientFields = useCallback((patient: Patient, preserveExistingData = false) => {
+    console.log('Filling patient fields for:', patient.firstName, patient.lastName, 'preserveExistingData:', preserveExistingData);
+    
+    // Champs d'identité (lecture seule) - toujours remplis
     setValue('patientFirstName', patient.firstName || '');
     setValue('patientLastName', patient.lastName || '');
     setValue('patientDateOfBirth', patient.dateOfBirth || '');
@@ -115,13 +116,19 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
     setValue('patientInsurance', patient.insurance?.provider || '');
     setValue('patientInsuranceNumber', patient.insurance?.policyNumber || '');
 
-    // Champs cliniques (pré-remplis avec les données du patient, modifiables)
-    setValue('currentTreatment', patient.currentTreatment || '');
-    setValue('consultationReason', patient.consultationReason || '');
-    setValue('medicalAntecedents', patient.medicalAntecedents || '');
-    setValue('medicalHistory', patient.medicalHistory || '');
-    setValue('osteopathicTreatment', patient.osteopathicTreatment || '');
-    setValue('symptoms', (patient.tags || []).join(', ') || '');
+    // ✅ CORRECTION: Champs cliniques - pré-remplir avec les données du patient
+    // Ne remplir que si preserveExistingData est false (nouvelle consultation)
+    if (!preserveExistingData) {
+      console.log('Pre-filling clinical fields with patient data');
+      setValue('currentTreatment', patient.currentTreatment || '');
+      setValue('consultationReason', patient.consultationReason || '');
+      setValue('medicalAntecedents', patient.medicalAntecedents || '');
+      setValue('medicalHistory', patient.medicalHistory || '');
+      setValue('osteopathicTreatment', patient.osteopathicTreatment || '');
+      setValue('symptoms', Array.isArray(patient.tags) ? patient.tags.join(', ') : (patient.tags || ''));
+    } else {
+      console.log('Preserving existing clinical data');
+    }
   }, [setValue]);
 
   // Gestionnaires pour les documents
@@ -195,7 +202,8 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
       setSelectedPatient(patient || null);
       if (patient) {
         console.log('Patient selected from dropdown:', patient.firstName, patient.lastName);
-        fillPatientFields(patient);
+        // ✅ CORRECTION: Pré-remplir TOUS les champs avec les données du patient
+        fillPatientFields(patient, false);
       }
     }
   }, [watchedPatientId, patients, isPatientPreselected, fillPatientFields]);
@@ -277,7 +285,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         patientInsurance: data.patientInsurance,
         patientInsuranceNumber: data.patientInsuranceNumber,
 
-        // Champs cliniques (snapshot au moment de la consultation)
+        // ✅ CORRECTION: Champs cliniques (snapshot au moment de la consultation) - FORCER la sauvegarde
         consultationReason: data.consultationReason || '',
         currentTreatment: data.currentTreatment || '',
         medicalAntecedents: data.medicalAntecedents || '',
@@ -296,6 +304,16 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         documentsCount: consultationDocuments.length,
         documents: consultationDocuments,
         fullData: consultationDataWithDocuments
+      });
+
+      // ✅ DEBUG: Log des champs cliniques pour vérifier qu'ils sont bien présents
+      console.log('🔍 Champs cliniques dans les données:', {
+        consultationReason: data.consultationReason,
+        currentTreatment: data.currentTreatment,
+        medicalAntecedents: data.medicalAntecedents,
+        medicalHistory: data.medicalHistory,
+        osteopathicTreatment: data.osteopathicTreatment,
+        symptoms: data.symptoms
       });
 
       const consultationId = await ConsultationService.createConsultation(consultationDataWithDocuments);
@@ -479,7 +497,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                       minRows={2}
                       maxRows={4}
                       className="w-full resize-none input"
-                      {...register('consultationReason', { required: 'Ce champ est requis' })}
+                      {...register('consultationReason')}
                       placeholder="Détaillez le motif de consultation..."
                     />
                     {errors.consultationReason && (
@@ -497,7 +515,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                       minRows={2}
                       maxRows={4}
                       className="w-full resize-none input"
-                      {...register('currentTreatment', { required: 'Ce champ est requis' })}
+                      {...register('currentTreatment')}
                       placeholder="Traitements médicamenteux ou thérapies en cours..."
                     />
                     {errors.currentTreatment && (

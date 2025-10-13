@@ -268,13 +268,13 @@ export interface Consultation {
   patientInsurance?: string;
   patientInsuranceNumber?: string;
 
-  // Champs cliniques spécifiques
-  currentTreatment?: string;
-  consultationReason?: string;
-  medicalAntecedents?: string;
-  medicalHistory?: string;
-  osteopathicTreatment?: string;
-  symptoms?: string[];
+  // Champs cliniques spécifiques (obligatoires pour la sauvegarde)
+  currentTreatment: string;
+  consultationReason: string;
+  medicalAntecedents: string;
+  medicalHistory: string;
+  osteopathicTreatment: string;
+  symptoms: string[];
   treatmentHistory?: TreatmentHistoryEntry[];
   
   // Documents de la consultation
@@ -306,13 +306,13 @@ export interface ConsultationFormData {
   patientInsurance?: string;
   patientInsuranceNumber?: string;
 
-  // Champs cliniques spécifiques
-  currentTreatment?: string;
-  consultationReason?: string;
-  medicalAntecedents?: string;
-  medicalHistory?: string;
-  osteopathicTreatment?: string;
-  symptoms?: string[];
+  // Champs cliniques spécifiques (obligatoires pour la sauvegarde)
+  currentTreatment: string;
+  consultationReason: string;
+  medicalAntecedents: string;
+  medicalHistory: string;
+  osteopathicTreatment: string;
+  symptoms: string[];
   treatmentHistory?: TreatmentHistoryEntry[];
   
   // Documents de consultation

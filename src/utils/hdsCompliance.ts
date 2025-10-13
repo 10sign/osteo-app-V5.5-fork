@@ -124,9 +124,10 @@ export class HDSCompliance {
     // Chiffrement des champs sensibles
     fieldsToEncrypt.forEach(field => {
       try {
-        // Vérifier que la valeur n'est pas vide ou null
-        if (processedData[field] === null || processedData[field] === undefined || processedData[field] === '') {
-          return; // Skip empty values
+        // ✅ CORRECTION: Ne pas skip les valeurs vides pour les champs cliniques
+        // Les champs cliniques doivent être sauvegardés même s'ils sont vides
+        if (processedData[field] === null || processedData[field] === undefined) {
+          return; // Skip only null/undefined values
         }
         
         // Gestion spéciale pour les objets complexes comme address
@@ -134,11 +135,10 @@ export class HDSCompliance {
           // Chiffrer l'objet address complet
           processedData[field] = encryptData(processedData[field], userId);
         } else {
-          // S'assurer que la valeur est une chaîne non vide
-          const valueToEncrypt = String(processedData[field]).trim();
-          if (valueToEncrypt.length > 0) {
-            processedData[field] = encryptData(valueToEncrypt, userId);
-          }
+          // ✅ CORRECTION: Sauvegarder même les valeurs vides pour les champs cliniques
+          const valueToEncrypt = String(processedData[field] || '').trim();
+          // Toujours chiffrer, même si vide (pour les champs cliniques)
+          processedData[field] = encryptData(valueToEncrypt, userId);
         }
       } catch (error) {
         console.error(`❌ Failed to encrypt field ${field}:`, error);
@@ -193,7 +193,10 @@ export class HDSCompliance {
       console.log('🔍 Déchiffrement des données pour:', collectionName, {
         userId: userId.substring(0, 8) + '...',
         hasHdsMetadata: !!data._hds,
-        encryptedFields: data._hds?.encryptedFields || []
+        encryptedFields: data._hds?.encryptedFields || [],
+        // ✅ DEBUG: Vérifier la date de création
+        createdAt: data.createdAt,
+        isToday: data.createdAt && new Date(data.createdAt).toDateString() === new Date().toDateString()
       });
     }
     
@@ -207,6 +210,16 @@ export class HDSCompliance {
     sensitiveFields.forEach(field => {
       try {
         if (processedData[field] && typeof processedData[field] === 'string') {
+          // ✅ DEBUG: Log spécifique pour les champs cliniques
+          if (['consultationReason', 'currentTreatment', 'medicalAntecedents', 'medicalHistory', 'osteopathicTreatment', 'symptoms'].includes(field)) {
+            console.log(`🔍 Déchiffrement du champ clinique ${field}:`, {
+              value: processedData[field].substring(0, 100) + '...',
+              isEncrypted: isEncrypted(processedData[field]),
+              isValidFormat: isValidEncryptedFormat(processedData[field]),
+              // ✅ DEBUG: Vérifier si c'est une consultation d'aujourd'hui
+              isToday: processedData.createdAt && new Date(processedData.createdAt).toDateString() === new Date().toDateString()
+            });
+          }
           // Gestion spéciale pour les champs vides ou null
           if (processedData[field] === '' || processedData[field] === 'null' || processedData[field] === 'undefined') {
             processedData[field] = '';
