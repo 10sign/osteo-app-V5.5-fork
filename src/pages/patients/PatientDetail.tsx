@@ -82,6 +82,7 @@ const PatientDetail: React.FC = () => {
   const [isDeletingPatient, setIsDeletingPatient] = useState(false);
   const [isDeletingInvoice, setIsDeletingInvoice] = useState(false);
   const [isDeletingConsultation, setIsDeletingConsultation] = useState(false);
+  const [imagePreview, setImagePreview] = useState<{ url: string; name: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
@@ -1637,7 +1638,7 @@ const PatientDetail: React.FC = () => {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => window.open(document.url, '_blank')}
+                                    onClick={() => setImagePreview({ url: document.url, name: document.originalName || document.name })}
                                     leftIcon={<Eye size={12} />}
                                     className="text-xs"
                                   >
@@ -1868,6 +1869,77 @@ const PatientDetail: React.FC = () => {
           time: ''
         }}
       />
+
+      {/* Image Preview Modal */}
+      <AnimatePresence>
+        {imagePreview && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={() => setImagePreview(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative bg-white rounded-2xl shadow-2xl max-w-5xl max-h-[90vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">{imagePreview.name}</h3>
+                <button
+                  onClick={() => setImagePreview(null)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-gray-500" />
+                </button>
+              </div>
+
+              {/* Image */}
+              <div className="p-4 overflow-auto max-h-[calc(90vh-120px)]">
+                <img
+                  src={imagePreview.url}
+                  alt={imagePreview.name}
+                  className="max-w-full h-auto mx-auto rounded-lg"
+                />
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-2 p-4 border-t border-gray-200 bg-gray-50">
+                <Button
+                  variant="outline"
+                  onClick={() => window.open(imagePreview.url, '_blank')}
+                  leftIcon={<Eye size={16} />}
+                >
+                  Ouvrir dans un nouvel onglet
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = imagePreview.url;
+                    link.download = imagePreview.name;
+                    link.click();
+                  }}
+                  leftIcon={<Download size={16} />}
+                >
+                  Télécharger
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => setImagePreview(null)}
+                >
+                  Fermer
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
