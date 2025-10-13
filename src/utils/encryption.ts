@@ -157,12 +157,12 @@ export function decryptData(encryptedData: string, userId: string): any {
       return '[EMPTY_DATA]';
     }
     
-    // ✅ CORRECTION : Gestion des UUIDs chiffrés (format: uuid:encryptedData)
+    // ✅ CORRECTION : Gestion des UUIDs chiffrés (format: 32 caractères hexadécimaux:encryptedData)
     if (encryptedData.includes(':') && encryptedData.length > 50) {
       const parts = encryptedData.split(':');
       if (parts.length >= 2) {
-        // Vérifier si le premier élément est un UUID
-        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        // Vérifier si le premier élément est un UUID (32 caractères hexadécimaux)
+        const uuidPattern = /^[0-9a-f]{32}$/i;
         if (uuidPattern.test(parts[0])) {
           // Prendre la partie chiffrée (après le premier ':')
           const encryptedPart = parts.slice(1).join(':');
@@ -273,8 +273,8 @@ export function decryptData(encryptedData: string, userId: string): any {
 export function isEncrypted(data: string): boolean {
   if (!data || typeof data !== 'string') return false;
   
-  // ✅ CORRECTION : Détecter les UUIDs chiffrés (format: uuid:encryptedData)
-  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i;
+  // ✅ CORRECTION : Détecter les UUIDs chiffrés (format: 32 caractères hexadécimaux:encryptedData)
+  const uuidPattern = /^[0-9a-f]{32}:/i;
   if (uuidPattern.test(data)) {
     return true;
   }

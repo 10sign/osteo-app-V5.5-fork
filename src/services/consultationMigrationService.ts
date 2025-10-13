@@ -68,8 +68,8 @@ export class ConsultationMigrationService {
             if (typeof field === 'string') {
               // Détecter les UUIDs simples
               if (isUUID(field)) return true;
-              // Détecter les UUIDs chiffrés (format: uuid:encryptedData)
-              const uuidChiffrePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i;
+              // Détecter les UUIDs chiffrés (format: 32 caractères hexadécimaux:encryptedData)
+              const uuidChiffrePattern = /^[0-9a-f]{32}:/i;
               if (uuidChiffrePattern.test(field)) return true;
             }
             return false;
