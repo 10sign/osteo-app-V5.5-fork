@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, Clock, FileText, User, Stethoscope, Eye, AlertCircle } from 'lucide-react';
+import { X, Calendar, Clock, FileText, User, Stethoscope, Eye, AlertCircle, Download, Image as ImageIcon } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ConsultationService } from '../../services/consultationService';
 import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { DocumentMetadata, formatFileSize, isImageFile } from '../../utils/documentStorage';
 
 interface ViewConsultationModalProps {
   isOpen: boolean;
@@ -36,6 +37,7 @@ interface Consultation {
   medicalHistory?: string;
   osteopathicTreatment?: string;
   symptoms?: string[];
+  documents?: DocumentMetadata[];
 
   // Champs d'identité patient (snapshot)
   patientFirstName?: string;
@@ -98,7 +100,8 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
           osteopathicTreatment: consultationData.osteopathicTreatment || '',
           symptoms: consultationData.symptoms || [],
           examinations: consultationData.examinations || [],
-          prescriptions: consultationData.prescriptions || []
+          prescriptions: consultationData.prescriptions || [],
+          documents: consultationData.documents || []
         };
 
         setConsultation(completeConsultation);
@@ -362,6 +365,57 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Documents de consultation */}
+                  {consultation.documents && consultation.documents.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <FileText size={16} className="mr-2 text-gray-600" />
+                        Documents de consultation
+                      </h4>
+                      <div className="bg-white border border-gray-200 rounded-lg p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {consultation.documents.map((document) => (
+                            <div
+                              key={document.id}
+                              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                            >
+                              <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                <div className="flex-shrink-0">
+                                  {isImageFile(document.type) ? (
+                                    <ImageIcon size={20} className="text-blue-500" />
+                                  ) : (
+                                    <FileText size={20} className="text-gray-500" />
+                                  )}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">
+                                    {document.displayName || document.originalName || document.name}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {formatFileSize(document.size)}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <a
+                                href={document.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-shrink-0 text-primary-600 hover:text-primary-700"
+                                title="Voir le document"
+                              >
+                                <Button variant="ghost" size="sm" leftIcon={<Download size={14} />}>
+                                  Voir
+                                </Button>
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
 

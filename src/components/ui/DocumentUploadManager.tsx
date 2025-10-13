@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Upload, X, FileText, Image as ImageIcon, AlertCircle, CheckCircle, Loader2, Plus, Trash2 } from 'lucide-react';
 import { Button } from './Button';
 import { 
@@ -60,6 +60,14 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
   const [documentName, setDocumentName] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+
+  // Synchronize documents state with initialDocuments prop
+  useEffect(() => {
+    if (initialDocuments && initialDocuments.length > 0) {
+      console.log('📄 Synchronizing documents from initialDocuments:', initialDocuments.length);
+      setDocuments(initialDocuments);
+    }
+  }, [initialDocuments]);
 
   const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || !auth.currentUser) return;

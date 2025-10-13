@@ -672,6 +672,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                         onUploadSuccess={handleDocumentsUpdate}
                         onUploadError={handleDocumentError}
                         disabled={isSubmitting}
+                        initialDocuments={consultationDocuments}
                       />
                     </div>
 
