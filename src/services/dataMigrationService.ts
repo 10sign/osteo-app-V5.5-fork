@@ -1079,12 +1079,39 @@ export class DataMigrationService {
         realInvoices: 0
       };
 
-      // 1. Récupérer tous les ostéopathes (role = 'user' pour les ostéopathes titulaires)
+      // 1. Récupérer tous les utilisateurs pour diagnostiquer les rôles
       const usersRef = collection(db, 'users');
-      const usersQuery = query(usersRef, where('role', '==', 'user'));
-      const usersSnapshot = await getDocs(usersQuery);
 
-      console.log(`👥 ${usersSnapshot.size} ostéopathes trouvés`);
+      // D'abord, lister TOUS les utilisateurs pour voir leurs rôles
+      const allUsersSnapshot = await getDocs(usersRef);
+      console.log(`🔍 DIAGNOSTIC: ${allUsersSnapshot.size} utilisateurs au total`);
+
+      const roleCount: Record<string, number> = {};
+      allUsersSnapshot.docs.forEach(doc => {
+        const role = doc.data().role || 'undefined';
+        roleCount[role] = (roleCount[role] || 0) + 1;
+        console.log(`  - ${doc.data().email}: role = "${role}"`);
+      });
+
+      console.log('\n📊 Répartition des rôles:');
+      Object.entries(roleCount).forEach(([role, count]) => {
+        console.log(`  - "${role}": ${count} utilisateur(s)`);
+      });
+
+      // Maintenant, essayer de récupérer les ostéopathes avec différents rôles
+      console.log('\n🔎 Tentative avec role = "osteopath"...');
+      const usersQuery1 = query(usersRef, where('role', '==', 'osteopath'));
+      const usersSnapshot1 = await getDocs(usersQuery1);
+      console.log(`  → ${usersSnapshot1.size} utilisateur(s) trouvé(s)`);
+
+      console.log('\n🔎 Tentative avec role = "user"...');
+      const usersQuery2 = query(usersRef, where('role', '==', 'user'));
+      const usersSnapshot2 = await getDocs(usersQuery2);
+      console.log(`  → ${usersSnapshot2.size} utilisateur(s) trouvé(s)`);
+
+      // Utiliser le résultat qui contient des données
+      const usersSnapshot = usersSnapshot1.size > 0 ? usersSnapshot1 : usersSnapshot2;
+      console.log(`\n👥 ${usersSnapshot.size} ostéopathes sélectionnés pour le rapport`);
 
       // 2. Pour chaque ostéopathe, compter ses données
       for (const userDoc of usersSnapshot.docs) {
