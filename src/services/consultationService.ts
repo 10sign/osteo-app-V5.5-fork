@@ -466,13 +466,27 @@ export class ConsultationService {
       }
       
       console.log('💾 Prepared update data:', updateData);
-      
+      console.log('🔍 Champs cliniques dans updateData AVANT nettoyage:', {
+        currentTreatment: updateData.currentTreatment,
+        consultationReason: updateData.consultationReason,
+        medicalAntecedents: updateData.medicalAntecedents,
+        medicalHistory: updateData.medicalHistory,
+        osteopathicTreatment: updateData.osteopathicTreatment
+      });
+
       // ✅ CORRECTION: Nettoyer les champs undefined pour éviter l'erreur updateDoc
       const cleanedUpdateData = Object.fromEntries(
         Object.entries(updateData).filter(([_, value]) => value !== undefined)
       );
-      
+
       console.log('🧹 Cleaned update data:', cleanedUpdateData);
+      console.log('🔍 Champs cliniques dans cleanedUpdateData APRÈS nettoyage:', {
+        currentTreatment: cleanedUpdateData.currentTreatment,
+        consultationReason: cleanedUpdateData.consultationReason,
+        medicalAntecedents: cleanedUpdateData.medicalAntecedents,
+        medicalHistory: cleanedUpdateData.medicalHistory,
+        osteopathicTreatment: cleanedUpdateData.osteopathicTreatment
+      });
       
       // ✅ CORRECTION: Préparation des données avec chiffrement HDS (mapping explicite)
       const baseDataForStorage: any = {
@@ -498,14 +512,15 @@ export class ConsultationService {
         patientInsurance: cleanedUpdateData.patientInsurance || existingData.patientInsurance,
         patientInsuranceNumber: cleanedUpdateData.patientInsuranceNumber || existingData.patientInsuranceNumber,
         
-        // ✅ CORRECTION: Champs cliniques (mapping explicite)
-        currentTreatment: cleanedUpdateData.currentTreatment || existingData.currentTreatment || '',
-        consultationReason: cleanedUpdateData.consultationReason || existingData.consultationReason || '',
-        medicalAntecedents: cleanedUpdateData.medicalAntecedents || existingData.medicalAntecedents || '',
-        medicalHistory: cleanedUpdateData.medicalHistory || existingData.medicalHistory || '',
-        osteopathicTreatment: cleanedUpdateData.osteopathicTreatment || existingData.osteopathicTreatment || '',
-        symptoms: cleanedUpdateData.symptoms || existingData.symptoms || [],
-        treatmentHistory: cleanedUpdateData.treatmentHistory || existingData.treatmentHistory || [],
+        // ✅ CORRECTION: Champs cliniques (mapping explicite avec vérification stricte)
+        // Utiliser !== undefined pour permettre les valeurs vides (chaînes vides) lors de la modification
+        currentTreatment: cleanedUpdateData.currentTreatment !== undefined ? cleanedUpdateData.currentTreatment : (existingData.currentTreatment || ''),
+        consultationReason: cleanedUpdateData.consultationReason !== undefined ? cleanedUpdateData.consultationReason : (existingData.consultationReason || ''),
+        medicalAntecedents: cleanedUpdateData.medicalAntecedents !== undefined ? cleanedUpdateData.medicalAntecedents : (existingData.medicalAntecedents || ''),
+        medicalHistory: cleanedUpdateData.medicalHistory !== undefined ? cleanedUpdateData.medicalHistory : (existingData.medicalHistory || ''),
+        osteopathicTreatment: cleanedUpdateData.osteopathicTreatment !== undefined ? cleanedUpdateData.osteopathicTreatment : (existingData.osteopathicTreatment || ''),
+        symptoms: cleanedUpdateData.symptoms !== undefined ? cleanedUpdateData.symptoms : (existingData.symptoms || []),
+        treatmentHistory: cleanedUpdateData.treatmentHistory !== undefined ? cleanedUpdateData.treatmentHistory : (existingData.treatmentHistory || []),
 
         // Métadonnées
         osteopathId: userId,
@@ -527,6 +542,13 @@ export class ConsultationService {
 
       const dataToStore = HDSCompliance.prepareDataForStorage(baseDataForStorage, 'consultations', userId);
       console.log('🔐 Data prepared for storage (before filtering):', dataToStore);
+      console.log('🔍 Champs cliniques APRÈS chiffrement HDS:', {
+        currentTreatment: dataToStore.currentTreatment,
+        consultationReason: dataToStore.consultationReason,
+        medicalAntecedents: dataToStore.medicalAntecedents,
+        medicalHistory: dataToStore.medicalHistory,
+        osteopathicTreatment: dataToStore.osteopathicTreatment
+      });
 
       // Ajouter les documents APRÈS le traitement HDS
       dataToStore.documents = documents;
@@ -545,6 +567,13 @@ export class ConsultationService {
         })
       );
       console.log('🔐 Final data for storage (after filtering undefined/null):', finalDataToStore);
+      console.log('🔍 Champs cliniques dans FINAL data:', {
+        currentTreatment: finalDataToStore.currentTreatment,
+        consultationReason: finalDataToStore.consultationReason,
+        medicalAntecedents: finalDataToStore.medicalAntecedents,
+        medicalHistory: finalDataToStore.medicalHistory,
+        osteopathicTreatment: finalDataToStore.osteopathicTreatment
+      });
 
       await updateDoc(docRef, finalDataToStore);
       console.log('✅ Consultation updated successfully in Firestore');
