@@ -40,6 +40,18 @@ import LoadingScreen from './components/ui/LoadingScreen';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { useAuth } from './context/AuthContext';
 
+// Exposer le script de synchronisation dans la console pour debug
+if (typeof window !== 'undefined') {
+  (window as any).syncJulieConsultations = async () => {
+    const { syncForOsteopathByEmail } = await import('./scripts/syncFirstConsultationWithPatient');
+    console.log('🚀 Lancement de la synchronisation pour Julie Boddaert...');
+    const result = await syncForOsteopathByEmail('julie.boddaert@hotmail.fr');
+    console.log('📊 Résultats:', result);
+    return result;
+  };
+  console.log('✅ Script disponible: tapez syncJulieConsultations() dans la console pour synchroniser');
+}
+
 // Route change tracker component
 const RouteChangeTracker = () => {
   const location = useLocation();
