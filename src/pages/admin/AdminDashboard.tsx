@@ -307,11 +307,13 @@ const AdminDashboard: React.FC = () => {
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
                   <RefreshCw size={20} className="mr-2 text-primary-600" />
-                  Synchronisation des premières consultations
+                  Synchronisation des premières consultations (Julie Boddaert)
                 </h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Complète automatiquement les premières consultations avec les données cliniques du dossier patient.
-                  Seules les consultations vides ou incomplètes seront mises à jour.
+                <p className="text-sm text-gray-600 mb-2">
+                  ÉCRASE les premières consultations de Julie Boddaert avec les données cliniques complètes du dossier patient.
+                </p>
+                <p className="text-sm text-red-600 font-medium mb-4">
+                  ⚠️ Les données existantes seront remplacées.
                 </p>
                 <Button
                   variant="outline"
@@ -688,12 +690,11 @@ const FirstConsultationSyncModal: React.FC<{ onClose: () => void; onSuccess: () 
       {!result && !running && (
         <>
           <p className="text-gray-600 mb-4">
-            Cette opération va compléter les premières consultations de <strong>Julie Boddaert (julie.boddaert@hotmail.fr)</strong> avec les données cliniques
+            Cette opération va <strong>ÉCRASER</strong> les premières consultations de <strong>Julie Boddaert (julie.boddaert@hotmail.fr)</strong> avec les données cliniques
             de ses dossiers patients (motif de consultation, antécédents, traitement, etc.).
           </p>
-          <p className="text-sm text-gray-500 mb-6">
-            ⚠️ Seules les consultations vides ou incomplètes seront mises à jour.
-            Les données déjà saisies ne seront jamais écrasées.
+          <p className="text-sm text-red-600 font-medium mb-6">
+            ⚠️ ATTENTION: Les données existantes dans les premières consultations seront REMPLACÉES par celles du dossier patient.
           </p>
           <div className="flex justify-end space-x-3">
             <Button variant="outline" onClick={onClose} disabled={running}>

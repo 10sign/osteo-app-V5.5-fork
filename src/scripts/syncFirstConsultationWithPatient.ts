@@ -1,13 +1,12 @@
 /**
  * Script de migration rétroactive : Synchroniser les premières consultations avec les données du patient
  *
- * Ce script corrige les premières consultations qui n'ont pas été correctement pré-remplies
- * avec les données cliniques du dossier patient.
+ * Ce script écrase les premières consultations avec les données cliniques du dossier patient.
  *
  * Objectif:
  * - Pour chaque patient, identifier sa première consultation (par date)
- * - Compléter cette consultation avec les données cliniques du patient si elles sont manquantes
- * - Ne JAMAIS écraser les données déjà saisies manuellement
+ * - ÉCRASER cette consultation avec les données cliniques complètes du patient
+ * - Les données existantes seront remplacées par celles du dossier patient
  */
 
 import { collection, getDocs, query, where, doc, updateDoc, orderBy, limit, Timestamp } from 'firebase/firestore';
@@ -146,51 +145,45 @@ export async function syncFirstConsultationsWithPatients(osteopathId?: string): 
         console.log(`  📅 Première consultation trouvée: ${consultationId}`);
         console.log(`     Date: ${decryptedConsultationData.date?.toDate?.() || decryptedConsultationData.date}`);
 
-        // 4. Vérifier quels champs cliniques sont manquants ou vides
+        // 4. ÉCRASER tous les champs cliniques avec les données du patient (pas seulement les vides)
         const fieldsToUpdate: Record<string, any> = {};
         let hasUpdates = false;
 
-        // Vérifier chaque champ clinique
-        if ((!decryptedConsultationData.currentTreatment || decryptedConsultationData.currentTreatment.trim() === '') &&
-            decryptedPatientData.currentTreatment) {
+        // Écraser systématiquement chaque champ si la donnée patient existe
+        if (decryptedPatientData.currentTreatment) {
           fieldsToUpdate.currentTreatment = decryptedPatientData.currentTreatment;
           hasUpdates = true;
-          console.log('  ✅ Ajout du traitement effectué');
+          console.log('  ✅ Écrasement du traitement effectué');
         }
 
-        if ((!decryptedConsultationData.consultationReason || decryptedConsultationData.consultationReason.trim() === '') &&
-            decryptedPatientData.consultationReason) {
+        if (decryptedPatientData.consultationReason) {
           fieldsToUpdate.consultationReason = decryptedPatientData.consultationReason;
           hasUpdates = true;
-          console.log('  ✅ Ajout du motif de consultation');
+          console.log('  ✅ Écrasement du motif de consultation');
         }
 
-        if ((!decryptedConsultationData.medicalAntecedents || decryptedConsultationData.medicalAntecedents.trim() === '') &&
-            decryptedPatientData.medicalAntecedents) {
+        if (decryptedPatientData.medicalAntecedents) {
           fieldsToUpdate.medicalAntecedents = decryptedPatientData.medicalAntecedents;
           hasUpdates = true;
-          console.log('  ✅ Ajout des antécédents médicaux');
+          console.log('  ✅ Écrasement des antécédents médicaux');
         }
 
-        if ((!decryptedConsultationData.medicalHistory || decryptedConsultationData.medicalHistory.trim() === '') &&
-            decryptedPatientData.medicalHistory) {
+        if (decryptedPatientData.medicalHistory) {
           fieldsToUpdate.medicalHistory = decryptedPatientData.medicalHistory;
           hasUpdates = true;
-          console.log('  ✅ Ajout de l\'historique médical');
+          console.log('  ✅ Écrasement de l\'historique médical');
         }
 
-        if ((!decryptedConsultationData.osteopathicTreatment || decryptedConsultationData.osteopathicTreatment.trim() === '') &&
-            decryptedPatientData.osteopathicTreatment) {
+        if (decryptedPatientData.osteopathicTreatment) {
           fieldsToUpdate.osteopathicTreatment = decryptedPatientData.osteopathicTreatment;
           hasUpdates = true;
-          console.log('  ✅ Ajout du traitement ostéopathique');
+          console.log('  ✅ Écrasement du traitement ostéopathique');
         }
 
-        if ((!decryptedConsultationData.symptoms || decryptedConsultationData.symptoms.length === 0) &&
-            decryptedPatientData.tags && decryptedPatientData.tags.length > 0) {
+        if (decryptedPatientData.tags && decryptedPatientData.tags.length > 0) {
           fieldsToUpdate.symptoms = decryptedPatientData.tags;
           hasUpdates = true;
-          console.log('  ✅ Ajout des symptômes');
+          console.log('  ✅ Écrasement des symptômes');
         }
 
         // 5. Si des champs doivent être mis à jour

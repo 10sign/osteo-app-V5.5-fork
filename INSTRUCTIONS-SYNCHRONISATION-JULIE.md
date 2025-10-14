@@ -1,11 +1,11 @@
 # 🚀 Instructions pour synchroniser les premières consultations de Julie Boddaert
 
-## ⚠️ IMPORTANT
-Cette synchronisation va compléter **TOUTES les premières consultations vides** de Julie Boddaert avec les données cliniques de ses dossiers patients.
+## ⚠️ ATTENTION - ÉCRASEMENT DES DONNÉES
+Cette synchronisation va **ÉCRASER TOUTES les premières consultations** de Julie Boddaert avec les données cliniques de ses dossiers patients.
 
 ## 📋 Ce qui sera synchronisé
 
-Pour chaque patient de Julie, sa première consultation sera complétée avec:
+Pour chaque patient de Julie, sa première consultation sera **REMPLACÉE** avec:
 - ✅ Motif de consultation détaillé
 - ✅ Traitement effectué
 - ✅ Antécédents médicaux
@@ -13,7 +13,7 @@ Pour chaque patient de Julie, sa première consultation sera complétée avec:
 - ✅ Traitement ostéopathique
 - ✅ Symptômes
 
-**GARANTIE:** Les données déjà saisies ne seront JAMAIS écrasées. Seuls les champs vides seront complétés.
+**⚠️ ATTENTION:** Les données déjà saisies dans les premières consultations seront **ÉCRASÉES** et remplacées par celles du dossier patient.
 
 ---
 
@@ -125,8 +125,8 @@ C'est normal si:
 ## 🔒 Sécurité
 
 - ✅ Toutes les données sont chiffrées selon les normes HDS
-- ✅ Aucune donnée n'est supprimée ou écrasée
-- ✅ Le script ne modifie que les champs vides
+- ⚠️ Les données des premières consultations sont ÉCRASÉES par celles du dossier patient
+- ✅ Le script ne supprime aucune consultation
 - ✅ Chaque opération est tracée dans les logs
 
 ---
