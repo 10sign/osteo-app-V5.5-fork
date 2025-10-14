@@ -112,16 +112,7 @@ export class HDSCompliance {
     
     // Clone des données
     const processedData = { ...data };
-    
-    // Récupération des champs sensibles pour cette collection
-    const sensitiveFields = SENSITIVE_FIELDS[collectionName] || [];
-    const fieldsToEncrypt = sensitiveFields.filter(field => 
-      processedData[field] !== undefined && 
-      processedData[field] !== null &&
-      !isEncrypted(processedData[field])
-    );
-    
-    // Chiffrement des champs sensibles
+
     // ✅ AJOUT: Liste des champs cliniques qui doivent TOUJOURS être sauvegardés même s'ils sont vides
     const clinicalFields = [
       'currentTreatment',
@@ -134,27 +125,42 @@ export class HDSCompliance {
       'treatment'
     ];
 
+    // ✅ CORRECTION: Initialiser les champs cliniques vides AVANT le filtrage
+    // Ceci garantit qu'ils seront inclus dans fieldsToEncrypt
+    if (collectionName === 'consultations') {
+      clinicalFields.forEach(field => {
+        if (processedData[field] === undefined || processedData[field] === null || processedData[field] === '') {
+          processedData[field] = ''; // Initialiser avec chaîne vide
+        }
+      });
+    }
+
+    // Récupération des champs sensibles pour cette collection
+    const sensitiveFields = SENSITIVE_FIELDS[collectionName] || [];
+    const fieldsToEncrypt = sensitiveFields.filter(field =>
+      processedData[field] !== undefined &&
+      processedData[field] !== null &&
+      !isEncrypted(processedData[field])
+    );
+
+    // Chiffrement des champs sensibles
     fieldsToEncrypt.forEach(field => {
       try {
-        // Skip null/undefined SAUF pour les champs cliniques
-        if (processedData[field] === null || processedData[field] === undefined) {
-          // Pour les champs cliniques, initialiser avec chaîne vide chiffrée
-          if (clinicalFields.includes(field)) {
-            processedData[field] = encryptData('', userId);
-            console.log(`✅ Champ clinique vide initialisé et chiffré: ${field}`);
-          }
-          return;
-        }
+        // Chiffrer toutes les valeurs (y compris les chaînes vides initialisées)
+        const value = processedData[field];
 
         // Gestion spéciale pour les objets complexes comme address
-        if (field === 'address' && typeof processedData[field] === 'object') {
-          // Chiffrer l'objet address complet
-          processedData[field] = encryptData(processedData[field], userId);
+        if (field === 'address' && typeof value === 'object') {
+          processedData[field] = encryptData(value, userId);
         } else {
-          // Chiffrer la valeur (même si vide pour les champs cliniques)
-          const valueToEncrypt = String(processedData[field] || '').trim();
-          // Toujours chiffrer
+          // Chiffrer la valeur (convertir en string, même vide)
+          const valueToEncrypt = String(value || '');
           processedData[field] = encryptData(valueToEncrypt, userId);
+
+          // Log pour les champs cliniques
+          if (clinicalFields.includes(field) && valueToEncrypt === '') {
+            console.log(`✅ Champ clinique vide chiffré: ${field}`);
+          }
         }
       } catch (error) {
         console.error(`❌ Failed to encrypt field ${field}:`, error);
