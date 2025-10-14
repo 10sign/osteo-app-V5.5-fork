@@ -182,7 +182,15 @@ export class ConsultationService {
       
       // Déchiffrement des données sensibles pour l'affichage
       const decryptedData = HDSCompliance.decryptDataForDisplay(data, 'consultations', auth.currentUser.uid);
-      
+
+      // ✅ DEBUG: Log du champ notes après déchiffrement
+      console.log('🔍 GET CONSULTATION BY ID - notes field:', {
+        rawNotes: data.notes,
+        decryptedNotes: decryptedData.notes,
+        notesType: typeof decryptedData.notes,
+        notesLength: decryptedData.notes?.length
+      });
+
       const consultation: Consultation = {
         id: docSnap.id,
         ...decryptedData,
@@ -242,6 +250,13 @@ export class ConsultationService {
       const documents = consultationData.documents || [];
       console.log('🔵 ÉTAPE 2: Documents extraits:', documents.length, 'document(s)');
       const { documents: _, ...dataWithoutDocuments } = consultationData;
+
+      // ✅ DEBUG: Log du champ notes avant chiffrement
+      console.log('🔍 CREATE CONSULTATION - notes field:', {
+        notes: consultationData.notes,
+        notesType: typeof consultationData.notes,
+        notesLength: consultationData.notes?.length
+      });
 
       // ✅ CORRECTION: Préparation des données avec chiffrement HDS (mapping explicite des champs cliniques)
       const dataToStore = HDSCompliance.prepareDataForStorage({
@@ -441,11 +456,20 @@ export class ConsultationService {
       }
       
       const userId = auth.currentUser.uid;
+
+      // ✅ DEBUG: Log du champ notes avant mise à jour
+      console.log('🔍 UPDATE CONSULTATION - notes field:', {
+        notes: consultationData.notes,
+        notesType: typeof consultationData.notes,
+        notesLength: consultationData.notes?.length,
+        notesIsDefined: consultationData.notes !== undefined
+      });
+
       // ✅ CORRECTION: Mapping explicite des champs pour la mise à jour
       const updateData: any = {
         updatedAt: Timestamp.fromDate(new Date())
       };
-      
+
       // Mapper tous les champs possibles (uniquement ceux qui sont définis)
       if (consultationData.patientId !== undefined) updateData.patientId = consultationData.patientId;
       if (consultationData.patientName !== undefined) updateData.patientName = consultationData.patientName;

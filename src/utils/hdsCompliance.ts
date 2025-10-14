@@ -157,7 +157,16 @@ export class HDSCompliance {
           const valueToEncrypt = String(value || '');
           processedData[field] = encryptData(valueToEncrypt, userId);
 
-          // Log pour les champs cliniques
+          // Log pour le champ notes spécifiquement
+          if (field === 'notes') {
+            console.log(`🔍 HDS - Chiffrement du champ notes:`, {
+              originalValue: value,
+              valueToEncrypt: valueToEncrypt,
+              encrypted: processedData[field]
+            });
+          }
+
+          // Log pour les champs cliniques vides
           if (clinicalFields.includes(field) && valueToEncrypt === '') {
             console.log(`✅ Champ clinique vide chiffré: ${field}`);
           }
