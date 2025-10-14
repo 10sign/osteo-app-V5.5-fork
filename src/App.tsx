@@ -40,8 +40,9 @@ import LoadingScreen from './components/ui/LoadingScreen';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { useAuth } from './context/AuthContext';
 
-// Exposer le script de synchronisation dans la console pour debug
+// Exposer des scripts utiles dans la console pour debug
 if (typeof window !== 'undefined') {
+  // Script de synchronisation
   (window as any).syncJulieConsultations = async () => {
     const { syncForOsteopathByEmail } = await import('./scripts/syncFirstConsultationWithPatient');
     console.log('🚀 Lancement de la synchronisation pour Julie Boddaert...');
@@ -49,7 +50,65 @@ if (typeof window !== 'undefined') {
     console.log('📊 Résultats:', result);
     return result;
   };
-  console.log('✅ Script disponible: tapez syncJulieConsultations() dans la console pour synchroniser');
+
+  // Script de diagnostic pour débugger les consultations
+  (window as any).diagnosticConsultation = async (patientId: string) => {
+    const { collection, query, where, getDocs, orderBy, doc, getDoc } = await import('firebase/firestore');
+    const { db } = await import('./firebase/config');
+
+    console.log('='.repeat(60));
+    console.log('🔍 DIAGNOSTIC CONSULTATION - Patient ID:', patientId);
+    console.log('='.repeat(60));
+
+    // 1. Charger le patient
+    const patientDoc = await getDoc(doc(db, 'patients', patientId));
+
+    if (!patientDoc.exists()) {
+      console.error('❌ Patient non trouvé!');
+      return;
+    }
+
+    const patientData = patientDoc.data();
+    console.log('\n📋 DONNÉES DU PATIENT (brutes - chiffrées):');
+    console.log('- consultationReason:', patientData.consultationReason);
+    console.log('- currentTreatment:', patientData.currentTreatment);
+    console.log('- medicalAntecedents:', patientData.medicalAntecedents);
+    console.log('- medicalHistory:', patientData.medicalHistory);
+    console.log('- osteopathicTreatment:', patientData.osteopathicTreatment);
+
+    // 2. Charger les consultations
+    const consultationsRef = collection(db, 'consultations');
+    const q = query(
+      consultationsRef,
+      where('patientId', '==', patientId),
+      orderBy('date', 'asc')
+    );
+
+    const consultationsSnapshot = await getDocs(q);
+    console.log('\n📅 CONSULTATIONS TROUVÉES:', consultationsSnapshot.docs.length);
+
+    consultationsSnapshot.docs.forEach((consultationDoc, index) => {
+      const data = consultationDoc.data();
+      console.log(`\n--- Consultation #${index + 1} (${consultationDoc.id}) ---`);
+      console.log('Date:', data.date?.toDate?.() || data.date);
+      console.log('DONNÉES CLINIQUES (brutes - chiffrées):');
+      console.log('- consultationReason:', data.consultationReason);
+      console.log('- currentTreatment:', data.currentTreatment);
+      console.log('- medicalAntecedents:', data.medicalAntecedents);
+      console.log('- medicalHistory:', data.medicalHistory);
+      console.log('- osteopathicTreatment:', data.osteopathicTreatment);
+      console.log('- symptoms:', data.symptoms);
+      console.log('- notes:', data.notes);
+    });
+
+    console.log('\n' + '='.repeat(60));
+    console.log('✅ Diagnostic terminé');
+    console.log('='.repeat(60));
+  };
+
+  console.log('✅ Scripts disponibles:');
+  console.log('  - syncJulieConsultations() : Synchroniser les consultations de Julie');
+  console.log('  - diagnosticConsultation("PATIENT_ID") : Diagnostiquer un patient spécifique');
 }
 
 // Route change tracker component
