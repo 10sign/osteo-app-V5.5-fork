@@ -290,18 +290,35 @@ export class ConsultationService {
       dataToStore.documents = documents;
       console.log('🔵 ÉTAPE 3: Documents ajoutés:', dataToStore.documents?.length || 0, 'document(s)');
 
-      // ✅ FIX CRITIQUE: Nettoyer TOUS les champs undefined et null pour éviter l'erreur addDoc
+      // ✅ FIX CRITIQUE: Nettoyer TOUS les champs undefined/null pour éviter l'erreur addDoc
       // Firestore rejette les documents contenant des valeurs undefined ou null
       const cleanedData = Object.fromEntries(
         Object.entries(dataToStore).filter(([key, value]) => {
           // Exclure complètement les valeurs undefined et null
-          if (value === undefined || value === null) {
-            console.log(`🚫 CREATE: Removing ${key} (value: ${value})`);
+          if (value === undefined) {
+            console.log(`🚫 CREATE: BLOCKING undefined field: ${key}`);
+            return false;
+          }
+          if (value === null) {
+            console.log(`🚫 CREATE: BLOCKING null field: ${key}`);
             return false;
           }
           return true;
         })
       );
+
+      // ✅ VALIDATION FINALE: Double vérification pour garantir qu'aucun champ undefined n'existe
+      const hasUndefinedFields = Object.entries(cleanedData).some(([key, value]) => {
+        if (value === undefined) {
+          console.error(`❌ ERREUR CRITIQUE (CREATE): Le champ ${key} contient undefined après filtrage!`);
+          return true;
+        }
+        return false;
+      });
+
+      if (hasUndefinedFields) {
+        throw new Error('Impossible de créer la consultation : des champs contiennent des valeurs undefined');
+      }
 
       console.log('🔵 ÉTAPE 4: Documents à sauvegarder dans Firestore:', cleanedData.documents?.length || 0, 'document(s)');
 
@@ -529,15 +546,21 @@ export class ConsultationService {
         updatedAt: cleanedUpdateData.updatedAt
       };
 
-      // ✅ FIX: Ajouter les champs optionnels seulement s'ils existent
-      if (cleanedUpdateData.appointmentId || existingData.appointmentId) {
-        baseDataForStorage.appointmentId = cleanedUpdateData.appointmentId || existingData.appointmentId;
+      // ✅ FIX CRITIQUE: Ajouter les champs optionnels seulement s'ils ont une valeur valide (non undefined/null)
+      // Utiliser une vérification stricte pour éviter d'ajouter des valeurs undefined à Firestore
+      const appointmentIdValue = cleanedUpdateData.appointmentId !== undefined ? cleanedUpdateData.appointmentId : existingData.appointmentId;
+      if (appointmentIdValue !== undefined && appointmentIdValue !== null) {
+        baseDataForStorage.appointmentId = appointmentIdValue;
       }
-      if (cleanedUpdateData.reason || existingData.reason) {
-        baseDataForStorage.reason = cleanedUpdateData.reason || existingData.reason;
+
+      const reasonValue = cleanedUpdateData.reason !== undefined ? cleanedUpdateData.reason : existingData.reason;
+      if (reasonValue !== undefined && reasonValue !== null) {
+        baseDataForStorage.reason = reasonValue;
       }
-      if (cleanedUpdateData.treatment || existingData.treatment) {
-        baseDataForStorage.treatment = cleanedUpdateData.treatment || existingData.treatment;
+
+      const treatmentValue = cleanedUpdateData.treatment !== undefined ? cleanedUpdateData.treatment : existingData.treatment;
+      if (treatmentValue !== undefined && treatmentValue !== null) {
+        baseDataForStorage.treatment = treatmentValue;
       }
 
       const dataToStore = HDSCompliance.prepareDataForStorage(baseDataForStorage, 'consultations', userId);
@@ -554,18 +577,35 @@ export class ConsultationService {
       dataToStore.documents = documents;
       console.log('🔵 UPDATE: Documents ajoutés après HDS:', dataToStore.documents?.length || 0, 'document(s)');
 
-      // ✅ FIX CRITIQUE: Filtrer TOUS les champs undefined après le chiffrement HDS
-      // Ceci est essentiel car Firestore rejette les documents contenant des valeurs undefined
+      // ✅ FIX CRITIQUE: Filtrer TOUS les champs undefined/null après le chiffrement HDS
+      // Ceci est ESSENTIEL car Firestore rejette les documents contenant des valeurs undefined
       const finalDataToStore = Object.fromEntries(
         Object.entries(dataToStore).filter(([key, value]) => {
           // Exclure complètement les valeurs undefined et null
-          if (value === undefined || value === null) {
-            console.log(`🚫 Removing ${key} (value: ${value})`);
+          if (value === undefined) {
+            console.log(`🚫 BLOCKING undefined field: ${key}`);
+            return false;
+          }
+          if (value === null) {
+            console.log(`🚫 BLOCKING null field: ${key}`);
             return false;
           }
           return true;
         })
       );
+
+      // ✅ VALIDATION FINALE: Double vérification pour garantir qu'aucun champ undefined n'existe
+      const hasUndefinedFields = Object.entries(finalDataToStore).some(([key, value]) => {
+        if (value === undefined) {
+          console.error(`❌ ERREUR CRITIQUE: Le champ ${key} contient undefined après filtrage!`);
+          return true;
+        }
+        return false;
+      });
+
+      if (hasUndefinedFields) {
+        throw new Error('Impossible de mettre à jour la consultation : des champs contiennent des valeurs undefined');
+      }
       console.log('🔐 Final data for storage (after filtering undefined/null):', finalDataToStore);
       console.log('🔍 Champs cliniques dans FINAL data:', {
         currentTreatment: finalDataToStore.currentTreatment,
