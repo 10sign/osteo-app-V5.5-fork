@@ -290,11 +290,11 @@ export class ConsultationService {
       dataToStore.documents = documents;
       console.log('🔵 ÉTAPE 3: Documents ajoutés:', dataToStore.documents?.length || 0, 'document(s)');
 
-      // ✅ FIX CRITIQUE: Nettoyer TOUS les champs undefined/null pour éviter l'erreur addDoc
-      // Firestore rejette les documents contenant des valeurs undefined ou null
+      // ✅ FIX CRITIQUE: Nettoyer UNIQUEMENT les champs undefined/null
+      // IMPORTANT: Ne PAS supprimer les chaînes vides chiffrées (elles contiennent "U2FsdGVkX1...")
       const cleanedData = Object.fromEntries(
         Object.entries(dataToStore).filter(([key, value]) => {
-          // Exclure complètement les valeurs undefined et null
+          // Exclure UNIQUEMENT undefined et null (garder les chaînes vides chiffrées)
           if (value === undefined) {
             console.log(`🚫 CREATE: BLOCKING undefined field: ${key}`);
             return false;
@@ -303,9 +303,22 @@ export class ConsultationService {
             console.log(`🚫 CREATE: BLOCKING null field: ${key}`);
             return false;
           }
-          return true;
+          // Garder les chaînes (même vides après chiffrement)
+          if (typeof value === 'string' && value.length > 0) {
+            return true;
+          }
+          // Garder tous les autres types valides (number, boolean, array, object, Timestamp)
+          return value !== undefined && value !== null;
         })
       );
+
+      console.log('✅ CREATE: Champs cliniques après nettoyage:', {
+        currentTreatment: cleanedData.currentTreatment ? 'PRÉSENT (chiffré)' : 'ABSENT',
+        consultationReason: cleanedData.consultationReason ? 'PRÉSENT (chiffré)' : 'ABSENT',
+        medicalAntecedents: cleanedData.medicalAntecedents ? 'PRÉSENT (chiffré)' : 'ABSENT',
+        medicalHistory: cleanedData.medicalHistory ? 'PRÉSENT (chiffré)' : 'ABSENT',
+        osteopathicTreatment: cleanedData.osteopathicTreatment ? 'PRÉSENT (chiffré)' : 'ABSENT'
+      });
 
       // ✅ VALIDATION FINALE: Double vérification pour garantir qu'aucun champ undefined n'existe
       const hasUndefinedFields = Object.entries(cleanedData).some(([key, value]) => {
@@ -491,9 +504,16 @@ export class ConsultationService {
         osteopathicTreatment: updateData.osteopathicTreatment
       });
 
-      // ✅ CORRECTION: Nettoyer les champs undefined pour éviter l'erreur updateDoc
+      // ✅ CORRECTION: Nettoyer UNIQUEMENT undefined (garder les chaînes vides chiffrées)
       const cleanedUpdateData = Object.fromEntries(
-        Object.entries(updateData).filter(([_, value]) => value !== undefined)
+        Object.entries(updateData).filter(([key, value]) => {
+          if (value === undefined) {
+            console.log(`🚫 UPDATE: BLOCKING undefined field: ${key}`);
+            return false;
+          }
+          // Garder null, chaînes vides, et tous les autres types valides
+          return true;
+        })
       );
 
       console.log('🧹 Cleaned update data:', cleanedUpdateData);

@@ -122,22 +122,38 @@ export class HDSCompliance {
     );
     
     // Chiffrement des champs sensibles
+    // ✅ AJOUT: Liste des champs cliniques qui doivent TOUJOURS être sauvegardés même s'ils sont vides
+    const clinicalFields = [
+      'currentTreatment',
+      'consultationReason',
+      'medicalAntecedents',
+      'medicalHistory',
+      'osteopathicTreatment',
+      'notes',
+      'reason',
+      'treatment'
+    ];
+
     fieldsToEncrypt.forEach(field => {
       try {
-        // ✅ CORRECTION: Ne pas skip les valeurs vides pour les champs cliniques
-        // Les champs cliniques doivent être sauvegardés même s'ils sont vides
+        // Skip null/undefined SAUF pour les champs cliniques
         if (processedData[field] === null || processedData[field] === undefined) {
-          return; // Skip only null/undefined values
+          // Pour les champs cliniques, initialiser avec chaîne vide chiffrée
+          if (clinicalFields.includes(field)) {
+            processedData[field] = encryptData('', userId);
+            console.log(`✅ Champ clinique vide initialisé et chiffré: ${field}`);
+          }
+          return;
         }
-        
+
         // Gestion spéciale pour les objets complexes comme address
         if (field === 'address' && typeof processedData[field] === 'object') {
           // Chiffrer l'objet address complet
           processedData[field] = encryptData(processedData[field], userId);
         } else {
-          // ✅ CORRECTION: Sauvegarder même les valeurs vides pour les champs cliniques
+          // Chiffrer la valeur (même si vide pour les champs cliniques)
           const valueToEncrypt = String(processedData[field] || '').trim();
-          // Toujours chiffrer, même si vide (pour les champs cliniques)
+          // Toujours chiffrer
           processedData[field] = encryptData(valueToEncrypt, userId);
         }
       } catch (error) {
