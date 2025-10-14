@@ -659,8 +659,9 @@ const FirstConsultationSyncModal: React.FC<{ onClose: () => void; onSuccess: () 
   const runSync = async () => {
     setRunning(true);
     try {
-      const { syncFirstConsultationsWithPatients } = await import('../../scripts/syncFirstConsultationWithPatient');
-      const syncResult = await syncFirstConsultationsWithPatients();
+      // Synchroniser spécifiquement pour Julie Boddaert
+      const { syncForOsteopathByEmail } = await import('../../scripts/syncFirstConsultationWithPatient');
+      const syncResult = await syncForOsteopathByEmail('julie.boddaert@hotmail.fr');
       setResult(syncResult);
       if (syncResult.success) {
         setTimeout(() => {
@@ -682,13 +683,13 @@ const FirstConsultationSyncModal: React.FC<{ onClose: () => void; onSuccess: () 
 
   return (
     <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
-      <h2 className="text-2xl font-bold mb-4">Synchronisation des premières consultations</h2>
+      <h2 className="text-2xl font-bold mb-4">Synchronisation pour Julie Boddaert</h2>
 
       {!result && !running && (
         <>
           <p className="text-gray-600 mb-4">
-            Cette opération va compléter les premières consultations de tous les patients avec les données cliniques
-            de leur dossier patient (motif de consultation, antécédents, traitement, etc.).
+            Cette opération va compléter les premières consultations de <strong>Julie Boddaert (julie.boddaert@hotmail.fr)</strong> avec les données cliniques
+            de ses dossiers patients (motif de consultation, antécédents, traitement, etc.).
           </p>
           <p className="text-sm text-gray-500 mb-6">
             ⚠️ Seules les consultations vides ou incomplètes seront mises à jour.

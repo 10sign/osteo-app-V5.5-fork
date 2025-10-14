@@ -38,6 +38,32 @@ interface ConsultationData {
   symptoms?: string[];
 }
 
+/**
+ * Trouve un ostéopathe par son email
+ */
+export async function findOsteopathByEmail(email: string): Promise<string | null> {
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('email', '==', email));
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+      console.error(`❌ Aucun utilisateur trouvé avec l'email: ${email}`);
+      return null;
+    }
+
+    const userDoc = snapshot.docs[0];
+    console.log(`✅ Utilisateur trouvé: ${userDoc.data().firstName} ${userDoc.data().lastName} (${userDoc.id})`);
+    return userDoc.id;
+  } catch (error) {
+    console.error('❌ Erreur lors de la recherche de l\'utilisateur:', error);
+    return null;
+  }
+}
+
+/**
+ * Synchronise les premières consultations avec les données des patients
+ */
 export async function syncFirstConsultationsWithPatients(osteopathId?: string): Promise<{
   success: boolean;
   patientsProcessed: number;
@@ -229,5 +255,27 @@ export async function syncFirstConsultationsWithPatients(osteopathId?: string): 
 export async function runSyncScript() {
   console.log('🚀 Lancement du script de synchronisation...');
   const result = await syncFirstConsultationsWithPatients();
+  return result;
+}
+
+/**
+ * Synchronise les consultations pour un ostéopathe spécifique identifié par email
+ */
+export async function syncForOsteopathByEmail(email: string) {
+  console.log(`🔍 Recherche de l'ostéopathe: ${email}`);
+
+  const osteopathId = await findOsteopathByEmail(email);
+
+  if (!osteopathId) {
+    return {
+      success: false,
+      patientsProcessed: 0,
+      consultationsUpdated: 0,
+      errors: [`Ostéopathe non trouvé: ${email}`]
+    };
+  }
+
+  console.log(`\n🚀 Lancement de la synchronisation pour ${email}...\n`);
+  const result = await syncFirstConsultationsWithPatients(osteopathId);
   return result;
 }
