@@ -101,9 +101,9 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
   const watchedPatientId = watch('patientId');
 
   // Fill patient fields function with useCallback
-  const fillPatientFields = useCallback((patient: Patient, preserveExistingData = false) => {
+  const fillPatientFields = useCallback(async (patient: Patient, preserveExistingData = false) => {
     console.log('Filling patient fields for:', patient.firstName, patient.lastName, 'preserveExistingData:', preserveExistingData);
-    
+
     // Champs d'identité (lecture seule) - toujours remplis
     setValue('patientFirstName', patient.firstName || '');
     setValue('patientLastName', patient.lastName || '');
@@ -116,16 +116,51 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
     setValue('patientInsurance', patient.insurance?.provider || '');
     setValue('patientInsuranceNumber', patient.insurance?.policyNumber || '');
 
-    // ✅ CORRECTION: Champs cliniques - pré-remplir avec les données du patient
-    // Ne remplir que si preserveExistingData est false (nouvelle consultation)
+    // ✅ CORRECTION CRITIQUE: Vérifier si c'est la première consultation du patient
+    // Les champs cliniques ne sont pré-remplis QUE pour la première consultation
     if (!preserveExistingData) {
-      console.log('Pre-filling clinical fields with patient data');
-      setValue('currentTreatment', patient.currentTreatment || '');
-      setValue('consultationReason', patient.consultationReason || '');
-      setValue('medicalAntecedents', patient.medicalAntecedents || '');
-      setValue('medicalHistory', patient.medicalHistory || '');
-      setValue('osteopathicTreatment', patient.osteopathicTreatment || '');
-      setValue('symptoms', Array.isArray(patient.tags) ? patient.tags.join(', ') : (patient.tags || ''));
+      try {
+        // Compter le nombre de consultations existantes pour ce patient
+        const consultationsRef = collection(db, 'consultations');
+        const q = query(
+          consultationsRef,
+          where('osteopathId', '==', auth.currentUser?.uid),
+          where('patientId', '==', patient.id)
+        );
+        const consultationsSnapshot = await getDocs(q);
+        const consultationsCount = consultationsSnapshot.size;
+
+        console.log(`📊 Patient ${patient.firstName} ${patient.lastName} has ${consultationsCount} existing consultation(s)`);
+
+        // ✅ Pré-remplir UNIQUEMENT si c'est la PREMIÈRE consultation (count === 0)
+        if (consultationsCount === 0) {
+          console.log('✅ PREMIÈRE CONSULTATION: Pré-remplissage des champs cliniques avec les données du patient');
+          setValue('currentTreatment', patient.currentTreatment || '');
+          setValue('consultationReason', patient.consultationReason || '');
+          setValue('medicalAntecedents', patient.medicalAntecedents || '');
+          setValue('medicalHistory', patient.medicalHistory || '');
+          setValue('osteopathicTreatment', patient.osteopathicTreatment || '');
+          setValue('symptoms', Array.isArray(patient.tags) ? patient.tags.join(', ') : (patient.tags || ''));
+        } else {
+          console.log(`❌ CONSULTATION N°${consultationsCount + 1}: Champs cliniques laissés VIDES (comportement attendu)`);
+          // Laisser les champs vides pour les consultations suivantes
+          setValue('currentTreatment', '');
+          setValue('consultationReason', '');
+          setValue('medicalAntecedents', '');
+          setValue('medicalHistory', '');
+          setValue('osteopathicTreatment', '');
+          setValue('symptoms', '');
+        }
+      } catch (error) {
+        console.error('❌ Erreur lors du comptage des consultations:', error);
+        // En cas d'erreur, ne pas pré-remplir pour éviter les doublons
+        setValue('currentTreatment', '');
+        setValue('consultationReason', '');
+        setValue('medicalAntecedents', '');
+        setValue('medicalHistory', '');
+        setValue('osteopathicTreatment', '');
+        setValue('symptoms', '');
+      }
     } else {
       console.log('Preserving existing clinical data');
     }
