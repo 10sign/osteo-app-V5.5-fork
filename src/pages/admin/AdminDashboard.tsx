@@ -55,6 +55,7 @@ const AdminDashboard: React.FC = () => {
   const [showEncryptionDiagnostic, setShowEncryptionDiagnostic] = useState(false);
   const [showDataRepairTool, setShowDataRepairTool] = useState(false);
   const [showRetroactiveInvoiceGenerator, setShowRetroactiveInvoiceGenerator] = useState(false);
+  const [showFirstConsultationSync, setShowFirstConsultationSync] = useState(false);
 
   useEffect(() => {
     // Charger les statistiques
@@ -302,6 +303,25 @@ const AdminDashboard: React.FC = () => {
                 </Button>
               </div>
               
+              {/* Synchronisation des premières consultations */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <RefreshCw size={20} className="mr-2 text-primary-600" />
+                  Synchronisation des premières consultations
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Complète automatiquement les premières consultations avec les données cliniques du dossier patient.
+                  Seules les consultations vides ou incomplètes seront mises à jour.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowFirstConsultationSync(true)}
+                  leftIcon={<RefreshCw size={16} />}
+                >
+                  Synchroniser les premières consultations
+                </Button>
+              </div>
+
               {/* Outil de nettoyage des doublons de patients */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
@@ -600,13 +620,146 @@ const AdminDashboard: React.FC = () => {
       {/* Modal de génération rétroactive de factures */}
       {showRetroactiveInvoiceGenerator && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <RetroactiveInvoiceGenerator 
+          <RetroactiveInvoiceGenerator
             onClose={() => setShowRetroactiveInvoiceGenerator(false)}
             onSuccess={() => {
               setShowRetroactiveInvoiceGenerator(false);
               loadStats(); // Refresh stats after successful generation
             }}
           />
+        </div>
+      )}
+
+      {/* Modal de synchronisation des premières consultations */}
+      {showFirstConsultationSync && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <FirstConsultationSyncModal
+            onClose={() => setShowFirstConsultationSync(false)}
+            onSuccess={() => {
+              setShowFirstConsultationSync(false);
+              setSuccess('Premières consultations synchronisées avec succès.');
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Composant modal pour la synchronisation des premières consultations
+const FirstConsultationSyncModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = ({ onClose, onSuccess }) => {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<{
+    success: boolean;
+    patientsProcessed: number;
+    consultationsUpdated: number;
+    errors: string[];
+  } | null>(null);
+
+  const runSync = async () => {
+    setRunning(true);
+    try {
+      const { syncFirstConsultationsWithPatients } = await import('../../scripts/syncFirstConsultationWithPatient');
+      const syncResult = await syncFirstConsultationsWithPatients();
+      setResult(syncResult);
+      if (syncResult.success) {
+        setTimeout(() => {
+          onSuccess();
+        }, 3000);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la synchronisation:', error);
+      setResult({
+        success: false,
+        patientsProcessed: 0,
+        consultationsUpdated: 0,
+        errors: [(error as Error).message]
+      });
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+      <h2 className="text-2xl font-bold mb-4">Synchronisation des premières consultations</h2>
+
+      {!result && !running && (
+        <>
+          <p className="text-gray-600 mb-4">
+            Cette opération va compléter les premières consultations de tous les patients avec les données cliniques
+            de leur dossier patient (motif de consultation, antécédents, traitement, etc.).
+          </p>
+          <p className="text-sm text-gray-500 mb-6">
+            ⚠️ Seules les consultations vides ou incomplètes seront mises à jour.
+            Les données déjà saisies ne seront jamais écrasées.
+          </p>
+          <div className="flex justify-end space-x-3">
+            <Button variant="outline" onClick={onClose} disabled={running}>
+              Annuler
+            </Button>
+            <Button onClick={runSync} disabled={running}>
+              Lancer la synchronisation
+            </Button>
+          </div>
+        </>
+      )}
+
+      {running && (
+        <div className="text-center py-8">
+          <RefreshCw className="animate-spin mx-auto mb-4 text-primary-600" size={48} />
+          <p className="text-lg font-medium">Synchronisation en cours...</p>
+          <p className="text-sm text-gray-500 mt-2">Veuillez patienter</p>
+        </div>
+      )}
+
+      {result && (
+        <div className="py-4">
+          {result.success ? (
+            <>
+              <div className="flex items-center justify-center mb-4">
+                <CheckCircle className="text-green-600" size={48} />
+              </div>
+              <h3 className="text-lg font-semibold text-center mb-4">Synchronisation terminée</h3>
+              <div className="space-y-2 text-sm">
+                <p><strong>Patients traités :</strong> {result.patientsProcessed}</p>
+                <p><strong>Consultations mises à jour :</strong> {result.consultationsUpdated}</p>
+                {result.errors.length > 0 && (
+                  <>
+                    <p className="text-red-600 mt-4"><strong>Erreurs ({result.errors.length}) :</strong></p>
+                    <ul className="list-disc list-inside text-red-600 text-xs max-h-40 overflow-y-auto">
+                      {result.errors.map((error, index) => (
+                        <li key={index}>{error}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+              <div className="flex justify-end mt-6">
+                <Button onClick={onClose}>Fermer</Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-center mb-4">
+                <AlertTriangle className="text-red-600" size={48} />
+              </div>
+              <h3 className="text-lg font-semibold text-center mb-4 text-red-600">Erreur</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Une erreur s'est produite lors de la synchronisation.
+              </p>
+              {result.errors.length > 0 && (
+                <ul className="list-disc list-inside text-red-600 text-sm">
+                  {result.errors.map((error, index) => (
+                    <li key={index}>{error}</li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex justify-end mt-6">
+                <Button onClick={onClose}>Fermer</Button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

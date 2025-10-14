@@ -461,8 +461,18 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         treatmentHistory: []
       };
 
+      console.log('🔍 CRÉATION PREMIÈRE CONSULTATION - Données envoyées:', {
+        currentTreatment: initialConsultationData.currentTreatment,
+        consultationReason: initialConsultationData.consultationReason,
+        medicalAntecedents: initialConsultationData.medicalAntecedents,
+        medicalHistory: initialConsultationData.medicalHistory,
+        osteopathicTreatment: initialConsultationData.osteopathicTreatment,
+        symptoms: initialConsultationData.symptoms,
+        notes: initialConsultationData.notes
+      });
+
       const initialConsultationId = await ConsultationService.createConsultation(initialConsultationData);
-      console.log('✅ Consultation automatique créée avec snapshot complet des données patient');
+      console.log('✅ Consultation automatique créée avec snapshot complet des données patient - ID:', initialConsultationId);
 
       // Créer automatiquement une facture liée à cette consultation
       const invoiceNumber = `F-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
