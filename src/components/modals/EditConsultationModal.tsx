@@ -281,9 +281,15 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         documents: consultationDocuments
       };
 
-      // ✅ FIX: Ajouter appointmentId seulement s'il existe
-      if (consultationData.appointmentId) {
+      // ✅ FIX: Ajouter les champs optionnels seulement s'ils existent et ne sont pas undefined/null
+      if (consultationData.appointmentId !== undefined && consultationData.appointmentId !== null) {
         updateData.appointmentId = consultationData.appointmentId;
+      }
+      if (consultationData.reason !== undefined && consultationData.reason !== null) {
+        updateData.reason = consultationData.reason;
+      }
+      if (consultationData.treatment !== undefined && consultationData.treatment !== null) {
+        updateData.treatment = consultationData.treatment;
       }
 
       console.log('💾 Prepared update data (complete):', updateData);

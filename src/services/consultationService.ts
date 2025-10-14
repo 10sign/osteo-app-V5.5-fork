@@ -290,13 +290,21 @@ export class ConsultationService {
       dataToStore.documents = documents;
       console.log('🔵 ÉTAPE 3: Documents ajoutés:', dataToStore.documents?.length || 0, 'document(s)');
 
-      // 🔧 NOUVEAU : Nettoyer les champs undefined pour éviter l'erreur addDoc
+      // ✅ FIX CRITIQUE: Nettoyer TOUS les champs undefined et null pour éviter l'erreur addDoc
+      // Firestore rejette les documents contenant des valeurs undefined ou null
       const cleanedData = Object.fromEntries(
-        Object.entries(dataToStore).filter(([_, value]) => value !== undefined)
+        Object.entries(dataToStore).filter(([key, value]) => {
+          // Exclure complètement les valeurs undefined et null
+          if (value === undefined || value === null) {
+            console.log(`🚫 CREATE: Removing ${key} (value: ${value})`);
+            return false;
+          }
+          return true;
+        })
       );
 
       console.log('🔵 ÉTAPE 4: Documents à sauvegarder dans Firestore:', cleanedData.documents?.length || 0, 'document(s)');
-      
+
       const docRef = await addDoc(collection(db, 'consultations'), cleanedData);
       const consultationId = docRef.id;
       
@@ -524,11 +532,19 @@ export class ConsultationService {
       dataToStore.documents = documents;
       console.log('🔵 UPDATE: Documents ajoutés après HDS:', dataToStore.documents?.length || 0, 'document(s)');
 
-      // ✅ FIX CRITIQUE: Filtrer tous les champs undefined après le chiffrement HDS
+      // ✅ FIX CRITIQUE: Filtrer TOUS les champs undefined après le chiffrement HDS
+      // Ceci est essentiel car Firestore rejette les documents contenant des valeurs undefined
       const finalDataToStore = Object.fromEntries(
-        Object.entries(dataToStore).filter(([_, value]) => value !== undefined)
+        Object.entries(dataToStore).filter(([key, value]) => {
+          // Exclure complètement les valeurs undefined et null
+          if (value === undefined || value === null) {
+            console.log(`🚫 Removing ${key} (value: ${value})`);
+            return false;
+          }
+          return true;
+        })
       );
-      console.log('🔐 Final data for storage (after filtering undefined):', finalDataToStore);
+      console.log('🔐 Final data for storage (after filtering undefined/null):', finalDataToStore);
 
       await updateDoc(docRef, finalDataToStore);
       console.log('✅ Consultation updated successfully in Firestore');
