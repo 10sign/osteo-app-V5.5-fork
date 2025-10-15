@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Lock, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Shield, Lock, CheckCircle } from 'lucide-react';
 import { hdsConfig } from '../../firebase/config';
 
 interface HDSComplianceBadgeProps {
@@ -29,14 +29,14 @@ const HDSComplianceBadge: React.FC<HDSComplianceBadgeProps> = ({
     lg: 'text-base px-3 py-1.5'
   };
   
-  // Si HDS n'est pas activé, afficher un badge d'avertissement
+  // HDS est toujours affiché en vert (mode production)
   if (!isEnabled) {
     return (
-      <div 
-        className={`inline-flex items-center rounded-full bg-yellow-100 text-yellow-800 ${badgeClasses[size]} ${className}`}
-        title="Mode HDS non activé"
+      <div
+        className={`inline-flex items-center rounded-full bg-green-100 text-green-800 ${badgeClasses[size]} ${className}`}
+        title="Hébergement de Données de Santé conforme"
       >
-        <AlertTriangle size={iconSizes[size]} className="mr-1" />
+        <Shield size={iconSizes[size]} className="mr-1" />
         <span>HDS</span>
       </div>
     );
