@@ -27,6 +27,7 @@ import AddUserModal from '../../components/admin/AddUserModal';
 import DataMigrationDashboard from '../../components/admin/DataMigrationDashboard';
 import SubstituteManagement from '../../components/admin/SubstituteManagement';
 import RetroactiveInvoiceGenerator from '../../components/admin/RetroactiveInvoiceGenerator';
+import ClinicalDataSyncPanel from '../../components/admin/ClinicalDataSyncPanel';
 import { trackEvent } from '../../lib/clarityClient';
 import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
 import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
@@ -583,7 +584,10 @@ const AdminDashboard: React.FC = () => {
           )}
 
           {activeTab === 'migration' && hasPermission('system:config') && (
-            <DataMigrationDashboard />
+            <div className="space-y-6">
+              <ClinicalDataSyncPanel />
+              <DataMigrationDashboard />
+            </div>
           )}
 
           {activeTab === 'config' && hasPermission('system:config') && (
