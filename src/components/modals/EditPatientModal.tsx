@@ -427,11 +427,9 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
           medicalAntecedents: data.medicalAntecedents || '',
           medicalHistory: data.medicalHistory || '',
           osteopathicTreatment: data.osteopathicTreatment || '',
-          tags: selectedTags,
-          pathologies: selectedTags
+          tags: selectedTags
         };
 
-        console.log('🔄 Tentative de synchronisation avec les données:', clinicalData);
         await ClinicalDataSyncService.syncPatientToFirstConsultation(
           patient.id,
           auth.currentUser.uid,
