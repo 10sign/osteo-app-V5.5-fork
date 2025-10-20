@@ -58,23 +58,6 @@ interface ConsultationFormData {
 }
 
 
-const COMMON_SYMPTOMS = [
-  'Lombalgie',
-  'Cervicalgie',
-  'Dorsalgie',
-  'Sciatique',
-  'Migraine',
-  'Vertiges',
-  'Entorse',
-  'Tendinite',
-  'Arthrose',
-  'Scoliose',
-  'Stress',
-  'Anxiété',
-  'Troubles digestifs',
-  'Troubles du sommeil'
-];
-
 const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
   isOpen,
   onClose,
@@ -91,8 +74,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
   const [isPatientPreselected, setIsPatientPreselected] = useState(false);
   const [consultationDocuments, setConsultationDocuments] = useState<DocumentMetadata[]>([]);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
-  const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
-  const [customSymptom, setCustomSymptom] = useState('');
 
   const { register, handleSubmit, formState: { errors, isValid }, reset, control, watch, setValue } = useForm<ConsultationFormData>({
     mode: 'onChange',
@@ -159,9 +140,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
           setValue('medicalAntecedents', patient.medicalAntecedents || '');
           setValue('medicalHistory', patient.medicalHistory || '');
           setValue('osteopathicTreatment', patient.osteopathicTreatment || '');
-          const patientSymptoms = Array.isArray(patient.tags) ? patient.tags : [];
-          setSelectedSymptoms(patientSymptoms);
-          setValue('symptoms', patientSymptoms.join(', '));
+          setValue('symptoms', Array.isArray(patient.tags) ? patient.tags.join(', ') : (patient.tags || ''));
         } else {
           console.log(`❌ CONSULTATION N°${consultationsCount + 1}: Champs cliniques laissés VIDES (comportement attendu)`);
           // Laisser les champs vides pour les consultations suivantes
@@ -170,7 +149,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
           setValue('medicalAntecedents', '');
           setValue('medicalHistory', '');
           setValue('osteopathicTreatment', '');
-          setSelectedSymptoms([]);
           setValue('symptoms', '');
         }
       } catch (error) {
@@ -630,10 +608,10 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                     />
                   </div>
 
-                  {/* Historique médical général */}
+                  {/* Historique médical */}
                   <div className="mb-4">
                     <label htmlFor="medicalHistory" className="block mb-1 text-sm font-medium text-gray-700">
-                      Historique médical général
+                      Historique médical
                     </label>
                     <AutoResizeTextarea
                       id="medicalHistory"
@@ -645,10 +623,10 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                     />
                   </div>
 
-                  {/* Traitement ostéopathique prescrit */}
+                  {/* Traitement ostéopathique */}
                   <div className="mb-4">
                     <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                      Traitement ostéopathique prescrit
+                      Traitement ostéopathique prévu
                     </label>
                     <AutoResizeTextarea
                       id="osteopathicTreatment"
@@ -660,194 +638,114 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                     />
                   </div>
 
-                  {/* Symptômes / Syndromes */}
+                  {/* Symptômes */}
                   <div className="mb-4">
-                    <label className="block mb-2 text-sm font-medium text-gray-700">
-                      Symptômes / Syndromes
+                    <label htmlFor="symptoms" className="block mb-1 text-sm font-medium text-gray-700">
+                      Symptômes
                     </label>
-                    <div className="space-y-3">
-                      {selectedSymptoms.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {selectedSymptoms.map((symptom, index) => (
-                            <span
-                              key={index}
-                              className="inline-flex items-center px-3 py-1 text-sm rounded-full bg-primary-50 text-primary-700 border border-primary-200"
-                            >
-                              {symptom}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const updated = selectedSymptoms.filter((_, i) => i !== index);
-                                  setSelectedSymptoms(updated);
-                                  setValue('symptoms', updated.join(', '));
-                                }}
-                                className="ml-2 text-primary-500 hover:text-primary-700"
-                              >
-                                <X size={14} />
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={customSymptom}
-                          onChange={(e) => setCustomSymptom(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              if (customSymptom.trim() && !selectedSymptoms.includes(customSymptom.trim())) {
-                                const updated = [...selectedSymptoms, customSymptom.trim()];
-                                setSelectedSymptoms(updated);
-                                setValue('symptoms', updated.join(', '));
-                                setCustomSymptom('');
-                              }
-                            }
-                          }}
-                          className="flex-1 input"
-                          placeholder="Ajouter un symptôme personnalisé..."
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            if (customSymptom.trim() && !selectedSymptoms.includes(customSymptom.trim())) {
-                              const updated = [...selectedSymptoms, customSymptom.trim()];
-                              setSelectedSymptoms(updated);
-                              setValue('symptoms', updated.join(', '));
-                              setCustomSymptom('');
-                            }
-                          }}
-                          disabled={!customSymptom.trim()}
-                        >
-                          Ajouter
-                        </Button>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {COMMON_SYMPTOMS.map((symptom) => (
-                          <button
-                            key={symptom}
-                            type="button"
-                            onClick={() => {
-                              if (!selectedSymptoms.includes(symptom)) {
-                                const updated = [...selectedSymptoms, symptom];
-                                setSelectedSymptoms(updated);
-                                setValue('symptoms', updated.join(', '));
-                              }
-                            }}
-                            disabled={selectedSymptoms.includes(symptom)}
-                            className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-                              selectedSymptoms.includes(symptom)
-                                ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                            }`}
-                          >
-                            {symptom}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <input type="hidden" {...register('symptoms')} />
+                    <input
+                      type="text"
+                      id="symptoms"
+                      className="w-full input"
+                      {...register('symptoms')}
+                      placeholder="Symptômes séparés par des virgules..."
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Séparez les symptômes par des virgules (ex: Lombalgie, Cervicalgie, Fatigue)
+                    </p>
                   </div>
                 </div>
 
-                {/* Documents médicaux (Examens + Prescriptions) */}
-                <div className="space-y-4">
-                  <h3 className="text-base font-medium text-gray-900">Documents médicaux</h3>
-
-                  {/* Examens demandés */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Examens / Imageries demandés
-                      </label>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => appendExamination({ value: '' })}
-                        leftIcon={<Plus size={14} />}
-                      >
-                        Ajouter
-                      </Button>
-                    </div>
-
-                    {examinationFields.length > 0 ? (
-                      <div className="space-y-2">
-                        {examinationFields.map((field, index) => (
-                          <div key={field.id} className="flex items-center space-x-2">
-                            <AutoResizeTextarea
-                              minRows={1}
-                              maxRows={3}
-                              className="flex-1 input"
-                              placeholder="Ex: Radiographie lombaire, IRM cervicale..."
-                              {...register(`examinations.${index}.value`)}
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeExamination(index)}
-                            >
-                              <Trash2 size={14} />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-sm italic text-gray-500">
-                        Aucun examen demandé
-                      </div>
-                    )}
+                {/* Examens demandés */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Examens demandés
+                    </label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => appendExamination({ value: '' })}
+                      leftIcon={<Plus size={14} />}
+                    >
+                      Ajouter
+                    </Button>
                   </div>
-
-                  {/* Prescriptions / Ordonnances */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Prescriptions / Ordonnances
-                      </label>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => appendPrescription({ value: '' })}
-                        leftIcon={<Plus size={14} />}
-                      >
-                        Ajouter
-                      </Button>
+                  
+                  {examinationFields.length > 0 ? (
+                    <div className="space-y-2">
+                      {examinationFields.map((field, index) => (
+                        <div key={field.id} className="flex items-center space-x-2">
+                          <AutoResizeTextarea
+                            minRows={1}
+                            maxRows={3}
+                            className="flex-1 input"
+                            placeholder="Ex: Radiographie lombaire..."
+                            {...register(`examinations.${index}.value`)}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeExamination(index)}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      ))}
                     </div>
+                  ) : (
+                    <div className="text-sm italic text-gray-500">
+                      Aucun examen demandé
+                    </div>
+                  )}
+                </div>
 
-                    {prescriptionFields.length > 0 ? (
-                      <div className="space-y-2">
-                        {prescriptionFields.map((field, index) => (
-                          <div key={field.id} className="flex items-center space-x-2">
-                            <AutoResizeTextarea
-                              minRows={1}
-                              maxRows={3}
-                              className="flex-1 input"
-                              placeholder="Ex: Antalgiques, anti-inflammatoires, repos..."
-                              {...register(`prescriptions.${index}.value`)}
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removePrescription(index)}
-                            >
-                              <Trash2 size={14} />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-sm italic text-gray-500">
-                        Aucune prescription
-                      </div>
-                    )}
+                {/* Prescriptions */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Prescriptions
+                    </label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => appendPrescription({ value: '' })}
+                      leftIcon={<Plus size={14} />}
+                    >
+                      Ajouter
+                    </Button>
                   </div>
+                  
+                  {prescriptionFields.length > 0 ? (
+                    <div className="space-y-2">
+                      {prescriptionFields.map((field, index) => (
+                        <div key={field.id} className="flex items-center space-x-2">
+                          <AutoResizeTextarea
+                            minRows={1}
+                            maxRows={3}
+                            className="flex-1 input"
+                            placeholder="Ex: Antalgiques, repos..."
+                            {...register(`prescriptions.${index}.value`)}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removePrescription(index)}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm italic text-gray-500">
+                      Aucune prescription
+                    </div>
+                  )}
                 </div>
 
                 {/* Documents de consultation */}
@@ -865,7 +763,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
 
                 <div>
                   <label htmlFor="notes" className="block mb-1 text-sm font-medium text-gray-700">
-                    Note sur le patient
+                    Notes complémentaires
                   </label>
                   <AutoResizeTextarea
                     id="notes"
@@ -873,7 +771,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                     maxRows={6}
                     className="w-full resize-none input"
                     {...register('notes')}
-                    placeholder="Notes additionnelles sur le patient..."
+                    placeholder="Notes additionnelles..."
                   />
                 </div>
 
