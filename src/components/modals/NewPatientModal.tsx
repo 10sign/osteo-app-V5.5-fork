@@ -399,9 +399,11 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
           medicalAntecedents: data.medicalAntecedents || '',
           medicalHistory: data.medicalHistory || '',
           osteopathicTreatment: data.osteopathicTreatment || '',
-          tags: selectedTags
+          tags: selectedTags,
+          pathologies: selectedTags
         };
 
+        console.log('🔄 Tentative de synchronisation avec les données:', clinicalData);
         await ClinicalDataSyncService.syncPatientToFirstConsultation(
           patientId,
           auth.currentUser.uid,
