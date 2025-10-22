@@ -57,10 +57,15 @@ const FirstConsultationSyncPanel: React.FC = () => {
   };
 
   const handleSyncAll = async () => {
+    console.log('🚀 Bouton TOUS les ostéopathes cliqué');
+
     if (!auth.currentUser) {
+      console.error('❌ Utilisateur non connecté');
       setError('Vous devez être connecté pour lancer la synchronisation');
       return;
     }
+
+    console.log('✅ Utilisateur connecté:', auth.currentUser.uid);
 
     setIsRunningAll(true);
     setError(null);
@@ -70,11 +75,18 @@ const FirstConsultationSyncPanel: React.FC = () => {
     try {
       const results: Record<string, SingleResult> = {};
 
+      console.log('📋 Récupération de la liste des ostéopathes...');
       const usersRef = collection(db, 'users');
       const usersQuery = query(usersRef, where('role', '==', 'Ostéopathe'));
       const usersSnapshot = await getDocs(usersQuery);
 
       console.log(`📊 ${usersSnapshot.size} ostéopathes trouvés`);
+
+      if (usersSnapshot.empty) {
+        console.warn('⚠️ Aucun ostéopathe trouvé dans la base de données');
+        setError('Aucun ostéopathe trouvé dans la base de données');
+        return;
+      }
 
       for (const userDoc of usersSnapshot.docs) {
         const userId = userDoc.id;
@@ -108,10 +120,13 @@ const FirstConsultationSyncPanel: React.FC = () => {
       }
 
       console.log('\n✅ Synchronisation globale terminée !');
+      console.log('📊 Résultats:', results);
       setAllResults(results);
     } catch (err) {
+      console.error('❌ Erreur critique:', err);
       setError((err as Error).message);
     } finally {
+      console.log('🏁 Fin de la synchronisation globale');
       setIsRunningAll(false);
     }
   };
