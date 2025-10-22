@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { RefreshCw, CheckCircle, AlertCircle, Info, Users } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { auth } from '../../firebase/config';
-import { syncFirstConsultationData, syncAllOsteopaths } from '../../scripts/syncFirstConsultationData';
+import { InitialConsultationSyncService } from '../../services/initialConsultationSyncService';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 
 interface SyncDetail {
   patientId: string;
@@ -38,8 +40,15 @@ const FirstConsultationSyncPanel: React.FC = () => {
     setAllResults(null);
 
     try {
-      const migrationResult = await syncFirstConsultationData(auth.currentUser.uid);
-      setResult(migrationResult);
+      const syncResult = await InitialConsultationSyncService.syncAllInitialConsultationsRetroactive(auth.currentUser.uid);
+
+      setResult({
+        totalPatients: syncResult.patientsProcessed,
+        patientsWithConsultations: syncResult.patientsProcessed,
+        consultationsUpdated: syncResult.consultationsUpdated,
+        errors: syncResult.errors,
+        details: syncResult.details
+      });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -59,7 +68,46 @@ const FirstConsultationSyncPanel: React.FC = () => {
     setAllResults(null);
 
     try {
-      const results = await syncAllOsteopaths();
+      const results: Record<string, SingleResult> = {};
+
+      const usersRef = collection(db, 'users');
+      const usersQuery = query(usersRef, where('role', '==', 'Ostéopathe'));
+      const usersSnapshot = await getDocs(usersQuery);
+
+      console.log(`📊 ${usersSnapshot.size} ostéopathes trouvés`);
+
+      for (const userDoc of usersSnapshot.docs) {
+        const userId = userDoc.id;
+        const userData = userDoc.data();
+        const osteopathName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userId;
+
+        console.log(`\n👤 Synchronisation pour: ${osteopathName} (${userId})`);
+
+        try {
+          const syncResult = await InitialConsultationSyncService.syncAllInitialConsultationsRetroactive(userId);
+
+          results[userId] = {
+            totalPatients: syncResult.patientsProcessed,
+            patientsWithConsultations: syncResult.patientsProcessed,
+            consultationsUpdated: syncResult.consultationsUpdated,
+            errors: syncResult.errors,
+            details: syncResult.details
+          };
+
+          console.log(`  ✅ Terminé pour ${osteopathName}`);
+        } catch (error) {
+          console.error(`  ❌ Erreur pour ${osteopathName}:`, error);
+          results[userId] = {
+            totalPatients: 0,
+            patientsWithConsultations: 0,
+            consultationsUpdated: 0,
+            errors: [`Erreur: ${(error as Error).message}`],
+            details: []
+          };
+        }
+      }
+
+      console.log('\n✅ Synchronisation globale terminée !');
       setAllResults(results);
     } catch (err) {
       setError((err as Error).message);
