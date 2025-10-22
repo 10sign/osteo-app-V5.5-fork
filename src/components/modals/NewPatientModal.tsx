@@ -458,7 +458,12 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         medicalHistory: data.medicalHistory || '',
         osteopathicTreatment: data.osteopathicTreatment || '',
         symptoms: selectedTags || [],
-        treatmentHistory: []
+        treatmentHistory: [],
+
+        // ✅ FLAG DE CONSULTATION INITIALE
+        // Cette consultation est créée automatiquement lors de la création du dossier patient
+        // Elle est la seule à être pré-remplie avec les données du dossier patient
+        isInitialConsultation: true
       };
 
       console.log('🔍 CRÉATION PREMIÈRE CONSULTATION - Données envoyées:', {
@@ -468,7 +473,8 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         medicalHistory: initialConsultationData.medicalHistory,
         osteopathicTreatment: initialConsultationData.osteopathicTreatment,
         symptoms: initialConsultationData.symptoms,
-        notes: initialConsultationData.notes
+        notes: initialConsultationData.notes,
+        isInitialConsultation: initialConsultationData.isInitialConsultation
       });
 
       const initialConsultationId = await ConsultationService.createConsultation(initialConsultationData);

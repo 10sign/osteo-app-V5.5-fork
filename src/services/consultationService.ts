@@ -272,7 +272,7 @@ export class ConsultationService {
         examinations: consultationData.examinations,
         prescriptions: consultationData.prescriptions,
         appointmentId: consultationData.appointmentId,
-        
+
         // Champs d'identité patient (snapshot)
         patientFirstName: consultationData.patientFirstName,
         patientLastName: consultationData.patientLastName,
@@ -284,7 +284,7 @@ export class ConsultationService {
         patientAddress: consultationData.patientAddress,
         patientInsurance: consultationData.patientInsurance,
         patientInsuranceNumber: consultationData.patientInsuranceNumber,
-        
+
         // ✅ CORRECTION: Champs cliniques (mapping explicite)
         currentTreatment: consultationData.currentTreatment || '',
         consultationReason: consultationData.consultationReason || '',
@@ -293,7 +293,10 @@ export class ConsultationService {
         osteopathicTreatment: consultationData.osteopathicTreatment || '',
         symptoms: consultationData.symptoms || [],
         treatmentHistory: consultationData.treatmentHistory,
-        
+
+        // ✅ FLAG DE CONSULTATION INITIALE
+        isInitialConsultation: consultationData.isInitialConsultation || false,
+
         // Métadonnées
         osteopathId: userId,
         date: Timestamp.fromDate(new Date(consultationData.date)),
@@ -582,6 +585,9 @@ export class ConsultationService {
         osteopathicTreatment: cleanedUpdateData.osteopathicTreatment !== undefined ? cleanedUpdateData.osteopathicTreatment : (existingData.osteopathicTreatment || ''),
         symptoms: cleanedUpdateData.symptoms !== undefined ? cleanedUpdateData.symptoms : (existingData.symptoms || []),
         treatmentHistory: cleanedUpdateData.treatmentHistory !== undefined ? cleanedUpdateData.treatmentHistory : (existingData.treatmentHistory || []),
+
+        // ✅ FLAG DE CONSULTATION INITIALE - Préserver le flag existant, ne jamais le modifier
+        isInitialConsultation: existingData.isInitialConsultation || false,
 
         // Métadonnées
         osteopathId: userId,

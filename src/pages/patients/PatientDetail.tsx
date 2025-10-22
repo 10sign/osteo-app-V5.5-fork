@@ -328,18 +328,26 @@ const PatientDetail: React.FC = () => {
     }
   }, [id]);
 
-  // Get the most recent consultation for overview display
+  // Get the most recent consultation for overview display (by date chronologique)
   const getLatestConsultation = useCallback(() => {
     if (consultations.length === 0) return null;
-    
+
     // Sort by date to ensure we get the most recent
     const sortedConsultations = [...consultations].sort((a, b) => {
       const dateA = a.date instanceof Date ? a.date : new Date(a.date);
       const dateB = b.date instanceof Date ? b.date : new Date(b.date);
       return dateB.getTime() - dateA.getTime();
     });
-    
+
     return sortedConsultations[0];
+  }, [consultations]);
+
+  // Get the initial consultation (created automatically when patient was created)
+  const getInitialConsultation = useCallback(() => {
+    if (consultations.length === 0) return null;
+
+    // Find the consultation with isInitialConsultation flag set to true
+    return consultations.find(c => c.isInitialConsultation === true) || null;
   }, [consultations]);
 
   // Load invoices
@@ -1517,6 +1525,11 @@ const PatientDetail: React.FC = () => {
                           <h4 className="text-lg font-medium text-gray-900">
                             Consultation #{consultations.length - index} - {formatDateTime(consultation.date)}
                           </h4>
+                          {consultation.isInitialConsultation && (
+                            <span className="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-full">
+                              Consultation initiale
+                            </span>
+                          )}
                           <span className={`px-2 py-1 text-xs font-medium rounded-full ${getConsultationStatusColor(consultation.status)}`}>
                             {getConsultationStatusText(consultation.status)}
                           </span>

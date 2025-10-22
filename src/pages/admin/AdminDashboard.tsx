@@ -35,6 +35,7 @@ import { db } from '../../firebase/config';
 import EncryptionDiagnostic from '../../components/ui/EncryptionDiagnostic';
 import DataRepairTool from '../../components/ui/DataRepairTool';
 import { DataMigrationService } from '../../services/dataMigrationService';
+import InitialConsultationFlagPanel from '../../components/admin/InitialConsultationFlagPanel';
 
 const AdminDashboard: React.FC = () => {
   const { user, logout, hasPermission } = useAuth();
@@ -583,7 +584,10 @@ const AdminDashboard: React.FC = () => {
           )}
 
           {activeTab === 'migration' && hasPermission('system:config') && (
-            <DataMigrationDashboard />
+            <div className="space-y-6">
+              <DataMigrationDashboard />
+              <InitialConsultationFlagPanel />
+            </div>
           )}
 
           {activeTab === 'config' && hasPermission('system:config') && (

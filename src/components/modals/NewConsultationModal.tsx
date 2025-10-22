@@ -349,7 +349,12 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         medicalHistory: data.medicalHistory || '',
         osteopathicTreatment: data.osteopathicTreatment || '',
         symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : [],
-        treatmentHistory: []
+        treatmentHistory: [],
+
+        // ✅ FLAG DE CONSULTATION MANUELLE
+        // Les consultations créées manuellement ne sont JAMAIS des consultations initiales
+        // Seule la consultation créée automatiquement lors de la création du patient a ce flag à true
+        isInitialConsultation: false
       };
 
       // Inclure les documents dans les données de consultation
