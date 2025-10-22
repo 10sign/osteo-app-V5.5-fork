@@ -50,6 +50,8 @@ import { patientCache } from '../../utils/patientCache';
 import { trackEvent } from '../../lib/clarityClient';
 import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
 import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
+import FieldHistory from '../../components/patient/FieldHistory';
+import { buildFieldHistory } from '../../utils/fieldHistoryBuilder';
 
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -1015,87 +1017,73 @@ const PatientDetail: React.FC = () => {
               </div>
             )}
 
-            {/* ✅ CORRIGÉ : Section Traitement effectué - Affiche les données de la dernière consultation */}
             {(() => {
               const latestConsultation = getLatestConsultation();
-              return latestConsultation?.currentTreatment && (
-                <div className="p-6 bg-white shadow rounded-xl">
-                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                    <Pill size={20} className="mr-2 text-gray-600" />
-                    Traitement effectué (dernière consultation)
-                  </h3>
-                  <p className="text-gray-700 whitespace-pre-wrap">{latestConsultation.currentTreatment}</p>
-                </div>
+              if (!latestConsultation) return null;
+
+              return (
+                <FieldHistory
+                  fieldLabel="Traitement effectué"
+                  currentValue={latestConsultation.currentTreatment || ''}
+                  history={patient ? buildFieldHistory('currentTreatment', patient, consultations) : []}
+                  emptyMessage="Aucun traitement effectué renseigné"
+                />
               );
             })()}
 
-            {/* ✅ CORRIGÉ : Section Motif de consultation - Affiche les données de la dernière consultation */}
             {(() => {
               const latestConsultation = getLatestConsultation();
-              return latestConsultation?.consultationReason && (
-                <div className="p-6 bg-white shadow rounded-xl">
-                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                    <FileText size={20} className="mr-2 text-gray-600" />
-                    Motif de consultation (dernière consultation)
-                  </h3>
-                  <p className="text-gray-700 whitespace-pre-wrap">{latestConsultation.consultationReason}</p>
-                </div>
+              if (!latestConsultation) return null;
+
+              return (
+                <FieldHistory
+                  fieldLabel="Motif de consultation"
+                  currentValue={latestConsultation.consultationReason || ''}
+                  history={patient ? buildFieldHistory('consultationReason', patient, consultations) : []}
+                  emptyMessage="Aucun motif de consultation renseigné"
+                />
               );
             })()}
 
-            {/* ✅ CORRIGÉ : Section Antécédents médicaux - Affiche les données de la dernière consultation */}
             {(() => {
               const latestConsultation = getLatestConsultation();
-              return latestConsultation?.medicalAntecedents && (
-                <div className="p-6 bg-white shadow rounded-xl">
-                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                    <AlertTriangle size={20} className="mr-2 text-gray-600" />
-                    Antécédents médicaux (dernière consultation)
-                  </h3>
-                  <p className="text-gray-700 whitespace-pre-wrap">{latestConsultation.medicalAntecedents}</p>
-                </div>
+              if (!latestConsultation) return null;
+
+              return (
+                <FieldHistory
+                  fieldLabel="Antécédents médicaux"
+                  currentValue={latestConsultation.medicalAntecedents || ''}
+                  history={patient ? buildFieldHistory('medicalAntecedents', patient, consultations) : []}
+                  emptyMessage="Aucun antécédent médical renseigné"
+                />
               );
             })()}
 
-            {/* ✅ CORRIGÉ : Section Traitement ostéopathique - Affiche les données de la dernière consultation */}
             {(() => {
               const latestConsultation = getLatestConsultation();
-              return latestConsultation?.osteopathicTreatment && (
-                <div className="p-6 bg-white shadow rounded-xl">
-                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                    <Stethoscope size={20} className="mr-2 text-gray-600" />
-                    Traitement ostéopathique (dernière consultation)
-                  </h3>
-                  <p className="text-gray-700 whitespace-pre-wrap">{latestConsultation.osteopathicTreatment}</p>
-                </div>
+              if (!latestConsultation) return null;
+
+              return (
+                <FieldHistory
+                  fieldLabel="Traitement ostéopathique"
+                  currentValue={latestConsultation.osteopathicTreatment || ''}
+                  history={patient ? buildFieldHistory('osteopathicTreatment', patient, consultations) : []}
+                  emptyMessage="Aucun traitement ostéopathique renseigné"
+                />
               );
             })()}
 
-            {/* ✅ NOUVEAU : Section Notes complémentaires - Affiche les notes de la dernière consultation */}
             {(() => {
               const latestConsultation = getLatestConsultation();
-              console.log('🔍 Debug notes complémentaires:', {
-                hasConsultation: !!latestConsultation,
-                hasNotes: !!latestConsultation?.notes,
-                notesValue: latestConsultation?.notes,
-                cleanedNotes: latestConsultation?.notes ? cleanDecryptedField(latestConsultation.notes, false, '') : null
-              });
-              
-              // Afficher la carte si la consultation existe, même sans notes
-              return latestConsultation && (
-                <div className="p-6 bg-white shadow rounded-xl">
-                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                    <FileText size={20} className="mr-2 text-gray-600" />
-                    Notes complémentaires (dernière consultation)
-                  </h3>
-                  {latestConsultation.notes && cleanDecryptedField(latestConsultation.notes, false, '') ? (
-                    <p className="text-gray-700 whitespace-pre-wrap">
-                      {cleanDecryptedField(latestConsultation.notes, false, '')}
-                    </p>
-                  ) : (
-                    <p className="italic text-gray-500">Aucune note complémentaire pour cette consultation</p>
-                  )}
-                </div>
+              if (!latestConsultation) return null;
+
+              return (
+                <FieldHistory
+                  fieldLabel="Notes complémentaires"
+                  currentValue={cleanDecryptedField(latestConsultation.notes || '', false, '')}
+                  history={patient ? buildFieldHistory('notes', patient, consultations) : []}
+                  emptyMessage="Aucune note complémentaire"
+                />
               );
             })()}
 
@@ -1333,18 +1321,17 @@ const PatientDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* ✅ CORRIGÉ : Historique médical - Affiche les données de la dernière consultation */}
             {(() => {
               const latestConsultation = getLatestConsultation();
-              return latestConsultation?.medicalHistory && (
-                <div className="p-6 bg-white shadow rounded-xl">
-                  <h3 className="mb-4 text-lg font-medium text-gray-900">Historique médical (dernière consultation)</h3>
-                  <div className="prose-sm prose max-w-none">
-                    <p className="text-gray-700 whitespace-pre-wrap">
-                      {cleanDecryptedField(latestConsultation.medicalHistory, false, 'Aucun historique médical renseigné')}
-                    </p>
-                  </div>
-                </div>
+              if (!latestConsultation) return null;
+
+              return (
+                <FieldHistory
+                  fieldLabel="Historique médical général"
+                  currentValue={cleanDecryptedField(latestConsultation.medicalHistory || '', false, '')}
+                  history={patient ? buildFieldHistory('medicalHistory', patient, consultations) : []}
+                  emptyMessage="Aucun historique médical renseigné"
+                />
               );
             })()}
 

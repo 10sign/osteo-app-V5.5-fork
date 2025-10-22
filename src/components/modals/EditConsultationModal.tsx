@@ -12,6 +12,7 @@ import { HDSCompliance } from '../../utils/hdsCompliance';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
 import { ConsultationService } from '../../services/consultationService';
+import { BidirectionalSyncService } from '../../services/bidirectionalSyncService';
 
 interface EditConsultationModalProps {
   isOpen: boolean;
@@ -74,6 +75,8 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
   const [consultationData, setConsultationData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [pendingData, setPendingData] = useState<ConsultationFormData | null>(null);
 
   // Gestion des documents
   const [consultationDocuments, setConsultationDocuments] = useState<DocumentMetadata[]>([]);
@@ -254,6 +257,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
       return;
     }
 
+    if (consultationData?.isInitialConsultation && !showConfirmationModal) {
+      console.log('🔔 Consultation initiale détectée, demande de confirmation...');
+      setPendingData(data);
+      setShowConfirmationModal(true);
+      return;
+    }
+
     console.log('📤 Submitting consultation update:', {
       consultationId,
       formData: data,
@@ -342,6 +352,38 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
       await ConsultationService.updateConsultation(consultationId, updateData);
 
       console.log('✅ Consultation updated successfully in Firestore');
+
+      if (consultationData?.isInitialConsultation) {
+        console.log('🔄 Synchronisation bidirectionnelle pour consultation initiale...');
+        try {
+          const syncResult = await BidirectionalSyncService.syncPatientFromInitialConsultation(
+            consultationId,
+            {
+              id: consultationId,
+              patientId: consultationData.patientId,
+              osteopathId: auth.currentUser.uid,
+              isInitialConsultation: true,
+              currentTreatment: data.currentTreatment,
+              consultationReason: data.consultationReason,
+              medicalAntecedents: data.medicalAntecedents,
+              medicalHistory: data.medicalHistory,
+              osteopathicTreatment: data.osteopathicTreatment,
+              symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : []
+            },
+            consultationData.patientId,
+            auth.currentUser.uid
+          );
+
+          if (syncResult.success && syncResult.fieldsUpdated.length > 0) {
+            console.log(`✅ Dossier patient synchronisé: ${syncResult.fieldsUpdated.length} champs`);
+          }
+        } catch (syncError) {
+          console.warn('⚠️ Erreur lors de la synchronisation bidirectionnelle (non bloquant):', syncError);
+        }
+      }
+
+      setShowConfirmationModal(false);
+      setPendingData(null);
 
       // Afficher le message de succès après que tout soit enregistré
       setShowSuccessBanner(true);
@@ -871,6 +913,65 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                 disabled={!isValid || isSubmitting || loading}
               >
                 Modifier la consultation
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {showConfirmationModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ type: 'spring', duration: 0.5 }}
+            className="relative w-full max-w-md bg-white rounded-xl shadow-2xl"
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Confirmation requise</h3>
+            </div>
+
+            <div className="px-6 py-4">
+              <p className="mb-4 text-gray-700">
+                <strong className="text-primary-600">Attention :</strong> Vous modifiez la consultation initiale de ce patient.
+              </p>
+              <p className="mb-4 text-gray-700">
+                Les modifications des champs cliniques seront automatiquement synchronisées avec le dossier patient.
+              </p>
+              <p className="text-sm text-gray-600">
+                Voulez-vous continuer ?
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowConfirmationModal(false);
+                  setPendingData(null);
+                }}
+                disabled={isSubmitting}
+              >
+                Annuler
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (pendingData) {
+                    onSubmit(pendingData);
+                  }
+                }}
+                disabled={isSubmitting}
+              >
+                Confirmer la modification
               </Button>
             </div>
           </motion.div>
