@@ -72,11 +72,11 @@ const FirstConsultationSyncPanel: React.FC = () => {
     <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">
-            Synchronisation des premières consultations
+          <h3 className="text-lg font-semibold text-red-900">
+            ⚠️ Synchronisation rétroactive avec écrasement complet
           </h3>
-          <p className="mt-1 text-sm text-gray-600">
-            Copie les données du dossier patient dans leur première consultation
+          <p className="mt-1 text-sm text-red-600 font-medium">
+            ATTENTION : Cette action écrase TOUTES les données des consultations initiales
           </p>
         </div>
         <div className="flex gap-2">
@@ -87,6 +87,7 @@ const FirstConsultationSyncPanel: React.FC = () => {
             loadingText="Synchronisation..."
             leftIcon={<RefreshCw size={16} />}
             variant="outline"
+            className="border-red-300 text-red-700 hover:bg-red-50"
           >
             Mon compte uniquement
           </Button>
@@ -96,9 +97,25 @@ const FirstConsultationSyncPanel: React.FC = () => {
             isLoading={isRunningAll}
             loadingText="Synchronisation globale..."
             leftIcon={<Users size={16} />}
+            className="bg-red-600 hover:bg-red-700"
           >
             TOUS les ostéopathes
           </Button>
+        </div>
+      </div>
+
+      <div className="p-4 mb-4 border border-red-200 rounded-lg bg-red-50">
+        <div className="flex items-start">
+          <AlertCircle className="flex-shrink-0 mr-3 text-red-600" size={20} />
+          <div className="text-sm text-red-900">
+            <p className="font-bold mb-2">⚠️ ATTENTION - ÉCRASEMENT DES DONNÉES</p>
+            <ul className="space-y-1 list-disc list-inside">
+              <li><strong>Cette action va ÉCRASER TOUTES les données des consultations initiales</strong></li>
+              <li>Les données de la consultation initiale seront remplacées par celles du dossier patient</li>
+              <li>Cette opération est <strong>IRRÉVERSIBLE</strong></li>
+              <li>Toutes les modifications manuelles dans les consultations initiales seront perdues</li>
+            </ul>
+          </div>
         </div>
       </div>
 
@@ -106,12 +123,12 @@ const FirstConsultationSyncPanel: React.FC = () => {
         <div className="flex items-start">
           <Info className="flex-shrink-0 mr-3 text-blue-600" size={20} />
           <div className="text-sm text-blue-900">
-            <p className="font-medium mb-2">À quoi sert cette synchronisation ?</p>
+            <p className="font-medium mb-2">Comment fonctionne cette synchronisation ?</p>
             <ul className="space-y-1 list-disc list-inside">
-              <li>Vérifie que chaque première consultation contient les données du dossier patient</li>
-              <li>Copie automatiquement les informations manquantes (nom, prénom, antécédents, etc.)</li>
-              <li>Ne modifie que les premières consultations qui ont des données incomplètes</li>
-              <li>Sécurisé : aucune donnée n'est supprimée, seulement ajoutée</li>
+              <li>Identifie la consultation initiale de chaque patient (flag isInitialConsultation ou plus ancienne)</li>
+              <li>Écrase TOUS les champs cliniques avec les données actuelles du dossier patient</li>
+              <li>Synchronise : traitement, motif, antécédents, historique médical, traitement ostéopathique, symptômes</li>
+              <li>Les données du dossier patient restent inchangées</li>
             </ul>
           </div>
         </div>

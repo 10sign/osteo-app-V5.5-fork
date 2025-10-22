@@ -1,17 +1,21 @@
 /**
  * Script de migration rétroactive : Synchroniser les premières consultations avec les données du patient
  *
- * Ce script écrase les premières consultations avec les données cliniques du dossier patient.
+ * Ce script écrase TOUTES les données des consultations initiales avec les données cliniques du dossier patient.
+ *
+ * ⚠️ ATTENTION : Ce script ÉCRASE SYSTÉMATIQUEMENT tous les champs cliniques,
+ * même si la consultation initiale contient déjà des données.
  *
  * Objectif:
- * - Pour chaque patient, identifier sa première consultation (par date)
- * - ÉCRASER cette consultation avec les données cliniques complètes du patient
- * - Les données existantes seront remplacées par celles du dossier patient
+ * - Pour chaque patient, identifier sa consultation initiale (flag isInitialConsultation ou plus ancienne)
+ * - ÉCRASER TOUS LES CHAMPS CLINIQUES avec les données du dossier patient
+ * - Les données existantes dans la consultation initiale seront remplacées
  */
 
 import { collection, getDocs, query, where, doc, updateDoc, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { HDSCompliance } from '../utils/hdsCompliance';
+import { InitialConsultationSyncService } from '../services/initialConsultationSyncService';
 
 interface PatientData {
   id: string;
@@ -62,6 +66,7 @@ export async function findOsteopathByEmail(email: string): Promise<string | null
 
 /**
  * Synchronise les premières consultations avec les données des patients
+ * ⚠️ NOUVELLE VERSION : Utilise le service InitialConsultationSyncService pour un écrasement complet
  */
 export async function syncFirstConsultationsWithPatients(osteopathId?: string): Promise<{
   success: boolean;
@@ -69,13 +74,6 @@ export async function syncFirstConsultationsWithPatients(osteopathId?: string): 
   consultationsUpdated: number;
   errors: string[];
 }> {
-  const result = {
-    success: true,
-    patientsProcessed: 0,
-    consultationsUpdated: 0,
-    errors: [] as string[]
-  };
-
   try {
     // Utiliser l'osteopathe connecté ou celui fourni
     const userId = osteopathId || auth.currentUser?.uid;
@@ -84,164 +82,29 @@ export async function syncFirstConsultationsWithPatients(osteopathId?: string): 
       throw new Error('Aucun utilisateur authentifié');
     }
 
-    console.log('🔄 Début de la synchronisation des premières consultations...');
+    console.log('🔄 ⚠️ SYNCHRONISATION RÉTROACTIVE AVEC ÉCRASEMENT COMPLET');
+    console.log('📋 Ce script va ÉCRASER toutes les données des consultations initiales');
     console.log('👤 Ostéopathe:', userId);
 
-    // 1. Récupérer tous les patients de cet ostéopathe
-    const patientsRef = collection(db, 'patients');
-    const patientsQuery = query(patientsRef, where('osteopathId', '==', userId));
-    const patientsSnapshot = await getDocs(patientsQuery);
+    // Utiliser le service InitialConsultationSyncService qui gère l'écrasement complet
+    const result = await InitialConsultationSyncService.syncAllInitialConsultationsRetroactive(userId);
 
-    console.log(`📊 ${patientsSnapshot.size} patient(s) trouvé(s)`);
-
-    // 2. Pour chaque patient
-    for (const patientDoc of patientsSnapshot.docs) {
-      try {
-        const patientData = patientDoc.data();
-        const patientId = patientDoc.id;
-
-        // Déchiffrer les données du patient
-        const decryptedPatientData = HDSCompliance.decryptDataForDisplay(
-          patientData,
-          'patients',
-          userId
-        ) as PatientData;
-
-        decryptedPatientData.id = patientId;
-
-        console.log(`\n👤 Traitement du patient: ${decryptedPatientData.firstName} ${decryptedPatientData.lastName}`);
-
-        // 3. Récupérer la première consultation de ce patient (par date)
-        const consultationsRef = collection(db, 'consultations');
-        const firstConsultationQuery = query(
-          consultationsRef,
-          where('osteopathId', '==', userId),
-          where('patientId', '==', patientId),
-          orderBy('date', 'asc'),
-          limit(1)
-        );
-
-        const firstConsultationSnapshot = await getDocs(firstConsultationQuery);
-
-        if (firstConsultationSnapshot.empty) {
-          console.log('  ⚠️  Aucune consultation trouvée pour ce patient');
-          result.patientsProcessed++;
-          continue;
-        }
-
-        const firstConsultationDoc = firstConsultationSnapshot.docs[0];
-        const consultationData = firstConsultationDoc.data();
-        const consultationId = firstConsultationDoc.id;
-
-        // Déchiffrer les données de la consultation
-        const decryptedConsultationData = HDSCompliance.decryptDataForDisplay(
-          consultationData,
-          'consultations',
-          userId
-        ) as ConsultationData;
-
-        decryptedConsultationData.id = consultationId;
-
-        console.log(`  📅 Première consultation trouvée: ${consultationId}`);
-        console.log(`     Date: ${decryptedConsultationData.date?.toDate?.() || decryptedConsultationData.date}`);
-
-        // 4. ÉCRASER tous les champs cliniques avec les données du patient (pas seulement les vides)
-        const fieldsToUpdate: Record<string, any> = {};
-        let hasUpdates = false;
-
-        // Écraser systématiquement chaque champ si la donnée patient existe
-        if (decryptedPatientData.currentTreatment) {
-          fieldsToUpdate.currentTreatment = decryptedPatientData.currentTreatment;
-          hasUpdates = true;
-          console.log('  ✅ Écrasement du traitement effectué');
-        }
-
-        if (decryptedPatientData.consultationReason) {
-          fieldsToUpdate.consultationReason = decryptedPatientData.consultationReason;
-          hasUpdates = true;
-          console.log('  ✅ Écrasement du motif de consultation');
-        }
-
-        if (decryptedPatientData.medicalAntecedents) {
-          fieldsToUpdate.medicalAntecedents = decryptedPatientData.medicalAntecedents;
-          hasUpdates = true;
-          console.log('  ✅ Écrasement des antécédents médicaux');
-        }
-
-        if (decryptedPatientData.medicalHistory) {
-          fieldsToUpdate.medicalHistory = decryptedPatientData.medicalHistory;
-          hasUpdates = true;
-          console.log('  ✅ Écrasement de l\'historique médical');
-        }
-
-        if (decryptedPatientData.osteopathicTreatment) {
-          fieldsToUpdate.osteopathicTreatment = decryptedPatientData.osteopathicTreatment;
-          hasUpdates = true;
-          console.log('  ✅ Écrasement du traitement ostéopathique');
-        }
-
-        if (decryptedPatientData.tags && decryptedPatientData.tags.length > 0) {
-          fieldsToUpdate.symptoms = decryptedPatientData.tags;
-          hasUpdates = true;
-          console.log('  ✅ Écrasement des symptômes');
-        }
-
-        // 5. Si des champs doivent être mis à jour
-        if (hasUpdates) {
-          // Ajouter la date de mise à jour
-          fieldsToUpdate.updatedAt = Timestamp.fromDate(new Date());
-
-          // Chiffrer les données avant la mise à jour
-          const encryptedUpdates = HDSCompliance.prepareDataForStorage(
-            fieldsToUpdate,
-            'consultations',
-            userId
-          );
-
-          // Filtrer les valeurs undefined/null
-          const cleanedUpdates = Object.fromEntries(
-            Object.entries(encryptedUpdates).filter(([_, value]) => value !== undefined && value !== null)
-          );
-
-          console.log('  💾 Mise à jour de la consultation avec les données du patient...');
-
-          const consultationRef = doc(db, 'consultations', consultationId);
-          await updateDoc(consultationRef, cleanedUpdates);
-
-          result.consultationsUpdated++;
-          console.log('  ✅ Consultation mise à jour avec succès');
-        } else {
-          console.log('  ℹ️  Aucune mise à jour nécessaire (champs déjà remplis)');
-        }
-
-        result.patientsProcessed++;
-
-      } catch (error) {
-        console.error(`❌ Erreur lors du traitement du patient ${patientDoc.id}:`, error);
-        result.errors.push(`Patient ${patientDoc.id}: ${(error as Error).message}`);
-      }
-    }
-
-    console.log('\n✅ Synchronisation terminée');
-    console.log(`📊 Résumé:`);
-    console.log(`   - Patients traités: ${result.patientsProcessed}`);
-    console.log(`   - Consultations mises à jour: ${result.consultationsUpdated}`);
-    console.log(`   - Erreurs: ${result.errors.length}`);
-
-    if (result.errors.length > 0) {
-      console.log('\n⚠️  Erreurs rencontrées:');
-      result.errors.forEach((error, index) => {
-        console.log(`   ${index + 1}. ${error}`);
-      });
-    }
+    return {
+      success: result.success,
+      patientsProcessed: result.patientsProcessed,
+      consultationsUpdated: result.consultationsUpdated,
+      errors: result.errors
+    };
 
   } catch (error) {
     console.error('❌ Erreur critique lors de la synchronisation:', error);
-    result.success = false;
-    result.errors.push(`Erreur critique: ${(error as Error).message}`);
+    return {
+      success: false,
+      patientsProcessed: 0,
+      consultationsUpdated: 0,
+      errors: [`Erreur critique: ${(error as Error).message}`]
+    };
   }
-
-  return result;
 }
 
 // Fonction helper pour exécuter le script manuellement

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, X as XIcon, Trash2, CheckCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc, Timestamp, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import AutoCapitalizeInput from '../ui/AutoCapitalizeInput';
@@ -11,6 +11,8 @@ import { Patient, PatientFormData, TreatmentHistoryEntry } from '../../types';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
 import { saveFormData, getFormData, clearFormData } from '../../utils/sessionPersistence';
+import { InitialConsultationSyncService } from '../../services/initialConsultationSyncService';
+import { HDSCompliance } from '../../utils/hdsCompliance';
 
 interface EditPatientModalProps {
   isOpen: boolean;
@@ -461,9 +463,47 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
       const patientRef = doc(db, 'patients', patient.id);
       await updateDoc(patientRef, updatedData);
 
-      console.log('Patient updated successfully');
-      setSuccess('Dossier patient mis à jour avec succès !');
-      
+      console.log('✅ Patient updated successfully');
+
+      // ✅ SYNCHRONISATION AUTOMATIQUE DE LA CONSULTATION INITIALE
+      // Après la mise à jour du patient, synchroniser automatiquement sa consultation initiale
+      try {
+        console.log('🔄 Déclenchement de la synchronisation automatique de la consultation initiale...');
+
+        // Récupérer les données complètes du patient mises à jour
+        const updatedPatientSnap = await getDoc(patientRef);
+        const updatedPatientData = updatedPatientSnap.data();
+
+        if (updatedPatientData && auth.currentUser) {
+          // Déchiffrer les données pour la synchronisation
+          const decryptedPatientData = HDSCompliance.decryptDataForDisplay(
+            updatedPatientData,
+            'patients',
+            auth.currentUser.uid
+          );
+
+          // Synchroniser la consultation initiale
+          const syncResult = await InitialConsultationSyncService.syncInitialConsultationForPatient(
+            patient.id,
+            { ...decryptedPatientData, id: patient.id },
+            auth.currentUser.uid
+          );
+
+          if (syncResult.success && syncResult.fieldsUpdated.length > 0) {
+            console.log(`✅ Consultation initiale synchronisée: ${syncResult.fieldsUpdated.length} champs mis à jour`);
+            setSuccess(`Dossier patient mis à jour avec succès ! La consultation initiale a été synchronisée (${syncResult.fieldsUpdated.length} champs).`);
+          } else if (syncResult.success && syncResult.fieldsUpdated.length === 0) {
+            setSuccess('Dossier patient mis à jour avec succès !');
+          } else {
+            setSuccess('Dossier patient mis à jour avec succès !');
+            console.warn('⚠️ La synchronisation de la consultation initiale a échoué (non bloquant)');
+          }
+        }
+      } catch (syncError) {
+        console.warn('⚠️ Erreur lors de la synchronisation automatique (non bloquant):', syncError);
+        setSuccess('Dossier patient mis à jour avec succès !');
+      }
+
       // Clear saved form data after successful submission
       try {
         clearFormData(formId);
