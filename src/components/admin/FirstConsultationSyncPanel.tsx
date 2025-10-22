@@ -75,6 +75,7 @@ const FirstConsultationSyncPanel: React.FC = () => {
     try {
       const results: Record<string, SingleResult> = {};
 
+      console.log('🔥🔥🔥 CODE VERSION 2.0 - NOUVEAU CODE CHARGÉ 🔥🔥🔥');
       console.log('📋 Récupération de la liste des ostéopathes...');
       const usersRef = collection(db, 'users');
 
