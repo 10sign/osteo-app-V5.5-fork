@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Flag, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
+import { Flag, AlertCircle, CheckCircle, RefreshCw, Download, BarChart } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { syncForOsteopathByEmail, syncInitialConsultationFlag } from '../../scripts/syncInitialConsultationFlag';
+import { MigrationDetectionService } from '../../services/migrationDetectionService';
 import { auth } from '../../firebase/config';
 
 interface MigrationResult {
@@ -17,6 +18,24 @@ const InitialConsultationFlagPanel: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<MigrationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [migrationStatus, setMigrationStatus] = useState<any>(null);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+
+  useEffect(() => {
+    checkCurrentStatus();
+  }, []);
+
+  const checkCurrentStatus = async () => {
+    setIsCheckingStatus(true);
+    try {
+      const status = await MigrationDetectionService.checkMigrationStatus();
+      setMigrationStatus(status);
+    } catch (err) {
+      console.error('Error checking migration status:', err);
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
 
   const handleMigrateCurrentUser = async () => {
     if (!auth.currentUser) {
@@ -36,6 +55,9 @@ const InitialConsultationFlagPanel: React.FC = () => {
       console.log('🚀 Lancement de la migration pour l\'utilisateur actuel:', auth.currentUser.uid);
       const migrationResult = await syncInitialConsultationFlag(auth.currentUser.uid);
       setResult(migrationResult);
+
+      await MigrationDetectionService.recordMigration(migrationResult);
+      await checkCurrentStatus();
 
       if (migrationResult.errors.length === 0) {
         console.log('✅ Migration terminée avec succès');
@@ -71,6 +93,9 @@ const InitialConsultationFlagPanel: React.FC = () => {
       const migrationResult = await syncForOsteopathByEmail(email);
       setResult(migrationResult);
 
+      await MigrationDetectionService.recordMigration(migrationResult);
+      await checkCurrentStatus();
+
       if (migrationResult.errors.length === 0) {
         console.log('✅ Migration terminée avec succès');
       } else {
@@ -85,19 +110,94 @@ const InitialConsultationFlagPanel: React.FC = () => {
     }
   };
 
+  const exportResults = () => {
+    if (!result) return;
+
+    const csvContent = [
+      ['Métrique', 'Valeur'],
+      ['Patients traités', result.patientsProcessed],
+      ['Consultations mises à jour', result.consultationsUpdated],
+      ['Consultations initiales', result.consultationsMarkedAsInitial],
+      ['Consultations non-initiales', result.consultationsMarkedAsNonInitial],
+      ['Erreurs', result.errors.length],
+      [''],
+      ['Détail des erreurs'],
+      ...result.errors.map((err, i) => [`Erreur ${i + 1}`, err])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `migration-report-${new Date().toISOString()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="p-6 bg-white shadow rounded-xl">
       <div className="flex items-center mb-4 space-x-3">
         <div className="p-2 bg-blue-100 rounded-lg">
           <Flag className="text-blue-600" size={24} />
         </div>
-        <div>
+        <div className="flex-1">
           <h3 className="text-lg font-semibold text-gray-900">Migration des flags de consultation initiale</h3>
           <p className="text-sm text-gray-500">
             Marque automatiquement les consultations initiales pour chaque patient
           </p>
         </div>
+        {isCheckingStatus && (
+          <RefreshCw className="animate-spin text-gray-400" size={20} />
+        )}
       </div>
+
+      {migrationStatus && (
+        <div className={`p-4 mb-4 border-l-4 rounded-lg ${
+          migrationStatus.needsMigration
+            ? 'border-yellow-500 bg-yellow-50'
+            : 'border-green-500 bg-green-50'
+        }`}>
+          <div className="flex items-start">
+            {migrationStatus.needsMigration ? (
+              <AlertCircle className="flex-shrink-0 mt-0.5 mr-3 text-yellow-500" size={20} />
+            ) : (
+              <CheckCircle className="flex-shrink-0 mt-0.5 mr-3 text-green-500" size={20} />
+            )}
+            <div className="flex-1">
+              <h4 className={`mb-2 font-medium ${
+                migrationStatus.needsMigration ? 'text-yellow-900' : 'text-green-900'
+              }`}>
+                {migrationStatus.needsMigration
+                  ? 'Migration nécessaire'
+                  : '✓ Toutes vos données sont à jour'
+                }
+              </h4>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className={migrationStatus.needsMigration ? 'text-yellow-800' : 'text-green-800'}>
+                  <BarChart className="inline mr-1" size={14} />
+                  <strong>Patients:</strong> {migrationStatus.totalPatients}
+                </div>
+                <div className={migrationStatus.needsMigration ? 'text-yellow-800' : 'text-green-800'}>
+                  <BarChart className="inline mr-1" size={14} />
+                  <strong>Consultations:</strong> {migrationStatus.totalConsultations}
+                </div>
+                {migrationStatus.needsMigration && (
+                  <>
+                    <div className="text-yellow-800">
+                      <strong>À migrer:</strong> {migrationStatus.consultationsWithoutFlag}
+                    </div>
+                    <div className="text-yellow-800">
+                      <strong>Patients concernés:</strong> {migrationStatus.affectedPatients.length}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="p-4 mb-4 border-l-4 border-blue-500 bg-blue-50">
         <div className="flex items-start">
@@ -115,7 +215,7 @@ const InitialConsultationFlagPanel: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex space-x-3">
+      <div className="flex flex-wrap gap-3">
         <Button
           variant="primary"
           onClick={handleMigrateCurrentUser}
@@ -133,6 +233,25 @@ const InitialConsultationFlagPanel: React.FC = () => {
         >
           Migrer par email
         </Button>
+
+        <Button
+          variant="outline"
+          onClick={checkCurrentStatus}
+          disabled={isCheckingStatus}
+          leftIcon={<RefreshCw size={16} />}
+        >
+          Actualiser le statut
+        </Button>
+
+        {result && (
+          <Button
+            variant="outline"
+            onClick={exportResults}
+            leftIcon={<Download size={16} />}
+          >
+            Exporter le rapport
+          </Button>
+        )}
       </div>
 
       {error && (
@@ -163,7 +282,7 @@ const InitialConsultationFlagPanel: React.FC = () => {
               <h4 className={`font-medium ${result.errors.length === 0 ? 'text-green-900' : 'text-yellow-900'}`}>
                 Migration terminée
               </h4>
-              <div className="mt-2 space-y-1 text-sm">
+              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
                 <p className={result.errors.length === 0 ? 'text-green-800' : 'text-yellow-800'}>
                   <strong>Patients traités:</strong> {result.patientsProcessed}
                 </p>
@@ -181,7 +300,7 @@ const InitialConsultationFlagPanel: React.FC = () => {
               {result.errors.length > 0 && (
                 <div className="mt-3">
                   <h5 className="mb-1 font-medium text-yellow-900">Erreurs rencontrées:</h5>
-                  <ul className="space-y-1 text-sm text-yellow-800 list-disc list-inside">
+                  <ul className="space-y-1 text-sm text-yellow-800 list-disc list-inside max-h-40 overflow-y-auto">
                     {result.errors.map((err, index) => (
                       <li key={index}>{err}</li>
                     ))}

@@ -17,6 +17,7 @@ import { DashboardService } from '../services/dashboardService';
 import { auth } from '../firebase/config';
 import HDSComplianceBadge from '../components/ui/HDSComplianceBadge';
 import SubstitutesList from '../components/dashboard/SubstitutesList';
+import MigrationAlertBanner from '../components/ui/MigrationAlertBanner';
 import { trackEvent } from '../lib/clarityClient';
 import { trackEvent as trackMatomoEvent } from '../lib/matomoTagManager';
 import { trackEvent as trackGAEvent } from '../lib/googleAnalytics';
@@ -173,6 +174,9 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Bannière de migration automatique */}
+      <MigrationAlertBanner onMigrationComplete={() => loadDashboardStats(false)} />
 
       {/* Message d'erreur */}
       {error && (
