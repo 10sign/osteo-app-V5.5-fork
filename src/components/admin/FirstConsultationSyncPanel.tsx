@@ -77,14 +77,34 @@ const FirstConsultationSyncPanel: React.FC = () => {
 
       console.log('📋 Récupération de la liste des ostéopathes...');
       const usersRef = collection(db, 'users');
-      const usersQuery = query(usersRef, where('role', '==', 'Ostéopathe'));
-      const usersSnapshot = await getDocs(usersQuery);
 
-      console.log(`📊 ${usersSnapshot.size} ostéopathes trouvés`);
+      // Debug: afficher tous les utilisateurs et leurs rôles
+      const allUsersSnapshot = await getDocs(usersRef);
+      console.log(`📊 Total utilisateurs dans la base: ${allUsersSnapshot.size}`);
+      const roles = new Set<string>();
+      allUsersSnapshot.docs.forEach(doc => {
+        const role = doc.data().role;
+        if (role) roles.add(role);
+      });
+      console.log('🏷️ Rôles trouvés dans la base:', Array.from(roles));
 
-      if (usersSnapshot.empty) {
+      // Essayer différentes variations du rôle
+      let usersSnapshot;
+      const roleVariations = ['Ostéopathe', 'osteopathe', 'OSTEOPATHE', 'Ostéopathe', 'osteo'];
+
+      for (const roleVariation of roleVariations) {
+        const usersQuery = query(usersRef, where('role', '==', roleVariation));
+        usersSnapshot = await getDocs(usersQuery);
+
+        if (!usersSnapshot.empty) {
+          console.log(`✅ Trouvé ${usersSnapshot.size} utilisateurs avec le rôle: "${roleVariation}"`);
+          break;
+        }
+      }
+
+      if (!usersSnapshot || usersSnapshot.empty) {
         console.warn('⚠️ Aucun ostéopathe trouvé dans la base de données');
-        setError('Aucun ostéopathe trouvé dans la base de données');
+        setError(`Aucun ostéopathe trouvé. Rôles disponibles: ${Array.from(roles).join(', ')}`);
         return;
       }
 
