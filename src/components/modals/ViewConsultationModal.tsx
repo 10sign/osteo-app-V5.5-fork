@@ -3,10 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, Clock, FileText, User, Stethoscope, Eye, AlertCircle, Download, Image as ImageIcon } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ConsultationService } from '../../services/consultationService';
+import { PatientService } from '../../services/patientService';
 import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { DocumentMetadata, formatFileSize, isImageFile } from '../../utils/documentStorage';
+import { HDSCompliance } from '../../utils/hdsCompliance';
 
 interface ViewConsultationModalProps {
   isOpen: boolean;
@@ -29,6 +31,7 @@ interface Consultation {
   appointmentId?: string;
   examinations?: string[];
   prescriptions?: string[];
+  isInitialConsultation?: boolean;
 
   // Champs cliniques
   currentTreatment?: string;
@@ -60,24 +63,26 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
   const [consultation, setConsultation] = useState<Consultation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [patientData, setPatientData] = useState<any>(null);
+  const [patientLastUpdated, setPatientLastUpdated] = useState<Date | null>(null);
 
   // Load consultation data when modal opens
   useEffect(() => {
     const loadConsultation = async () => {
       if (!consultationId) return;
-      
+
       setLoading(true);
       setError(null);
-      
+
       try {
         console.log('🔄 Loading consultation details for ID:', consultationId);
-        
+
         const consultationData = await ConsultationService.getConsultationById(consultationId);
-        
+
         if (!consultationData) {
           throw new Error('Consultation non trouvée');
         }
-        
+
         console.log('✅ Consultation data loaded:', consultationData);
 
         // Rétrocompatibilité : s'assurer que tous les champs existent
@@ -105,7 +110,38 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
         };
 
         setConsultation(completeConsultation);
-        
+
+        // Si consultation initiale, charger les données du patient
+        if (completeConsultation.isInitialConsultation && completeConsultation.patientId) {
+          console.log('🔄 Consultation initiale détectée, chargement des données patient...');
+          try {
+            const patient = await PatientService.getPatientById(completeConsultation.patientId);
+
+            if (patient) {
+              console.log('✅ Données patient chargées:', patient);
+
+              // Déchiffrer les données patient
+              const decryptedPatient = HDSCompliance.decryptPatientData(patient);
+
+              setPatientData(decryptedPatient);
+              setPatientLastUpdated(patient.updatedAt || patient.createdAt || new Date());
+
+              // Injecter les données du patient dans la consultation affichée
+              setConsultation(prev => prev ? {
+                ...prev,
+                currentTreatment: decryptedPatient.currentTreatment || prev.currentTreatment,
+                consultationReason: decryptedPatient.consultationReason || prev.consultationReason,
+                medicalAntecedents: decryptedPatient.medicalAntecedents || prev.medicalAntecedents,
+                medicalHistory: decryptedPatient.medicalHistory || prev.medicalHistory,
+                osteopathicTreatment: decryptedPatient.osteopathicTreatment || prev.osteopathicTreatment,
+                symptoms: decryptedPatient.symptoms || prev.symptoms
+              } : prev);
+            }
+          } catch (patientError) {
+            console.error('⚠️ Erreur lors du chargement des données patient:', patientError);
+          }
+        }
+
       } catch (error) {
         console.error('Error loading consultation:', error);
         setError('Erreur lors du chargement de la consultation');
@@ -203,6 +239,26 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                 </div>
               ) : consultation ? (
                 <div className="space-y-6">
+                  {/* Bandeau d'information pour consultation initiale */}
+                  {consultation.isInitialConsultation && (
+                    <div className="bg-blue-50 border-l-4 border-blue-400 rounded-lg p-4">
+                      <div className="flex items-start">
+                        <AlertCircle size={20} className="text-blue-600 mr-3 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <h4 className="font-medium text-blue-900">Consultation initiale synchronisée</h4>
+                          <p className="mt-1 text-sm text-blue-700">
+                            Les données cliniques affichées proviennent du dossier patient et sont automatiquement synchronisées.
+                          </p>
+                          {patientLastUpdated && (
+                            <p className="mt-1 text-xs text-blue-600">
+                              Dernière mise à jour du dossier patient : {patientLastUpdated.toLocaleDateString('fr-FR')} à {patientLastUpdated.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Informations générales de la consultation */}
                   <div className="bg-primary-50 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
