@@ -36,6 +36,7 @@ import EncryptionDiagnostic from '../../components/ui/EncryptionDiagnostic';
 import DataRepairTool from '../../components/ui/DataRepairTool';
 import { DataMigrationService } from '../../services/dataMigrationService';
 import InitialConsultationFlagPanel from '../../components/admin/InitialConsultationFlagPanel';
+import MarkInitialConsultationsPanel from '../../components/admin/MarkInitialConsultationsPanel';
 
 const AdminDashboard: React.FC = () => {
   const { user, logout, hasPermission } = useAuth();
@@ -285,6 +286,9 @@ const AdminDashboard: React.FC = () => {
           
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              {/* Panneau de marquage des premières consultations */}
+              <MarkInitialConsultationsPanel />
+
               {/* Outil de génération rétroactive de factures */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
