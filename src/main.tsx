@@ -7,6 +7,13 @@ import { initClarity } from './lib/clarityClient';
 import { initMatomoTagManager } from './lib/matomoTagManager';
 import { initGoogleAnalytics } from './lib/googleAnalytics';
 import { initPersistenceSystem } from './utils/sessionPersistence';
+import { runManualSync } from './scripts/manualSyncConsole';
+
+// Rendre accessible globalement pour la console développeur
+if (typeof window !== 'undefined') {
+  (window as any).runManualSync = runManualSync;
+  console.log('🔧 Script de synchronisation manuelle disponible. Utilisez: runManualSync("email@example.com")');
+}
 
 // Initialize Microsoft Clarity
 initClarity();
