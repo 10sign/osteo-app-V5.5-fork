@@ -587,7 +587,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                   {/* Motif de consultation spécifique */}
                   <div className="mb-4">
                     <label htmlFor="consultationReason" className="block mb-1 text-sm font-medium text-gray-700">
-                      Motif de consultation détaillé *
+                      Motif de consultation *
                     </label>
                     <AutoResizeTextarea
                       id="consultationReason"
@@ -605,7 +605,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                   {/* Traitement effectué */}
                   <div className="mb-4">
                     <label htmlFor="currentTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                      Traitement effectué du patient *
+                      Traitement effectué *
                     </label>
                     <AutoResizeTextarea
                       id="currentTreatment"
@@ -650,10 +650,10 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                     />
                   </div>
 
-                  {/* Traitement ostéopathique prescrit */}
+                  {/* Traitement ostéopathique */}
                   <div className="mb-4">
                     <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                      Traitement ostéopathique prescrit
+                      Traitement ostéopathique
                     </label>
                     <AutoResizeTextarea
                       id="osteopathicTreatment"

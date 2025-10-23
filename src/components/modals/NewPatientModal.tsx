@@ -54,7 +54,6 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [pastAppointments, setPastAppointments] = useState<PastAppointment[]>([]);
   const [treatmentHistory, setTreatmentHistory] = useState<TreatmentHistoryEntry[]>([]);
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>([]);
   const [clickCount, setClickCount] = useState(0);
@@ -114,7 +113,6 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
       
       // Reset all state values to empty
       setSelectedTags([]);
-      setPastAppointments([]);
       setTreatmentHistory([]);
       setPatientDocuments([]);
       setClickCount(0);
@@ -151,7 +149,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
       
       // Vérifier si des éléments ont été ajoutés aux listes
       const hasListData = selectedTags.length > 0 || 
-                          pastAppointments.length > 0 || 
+ 
                           treatmentHistory.length > 0 ||
                           patientDocuments.length > 0;
       
@@ -178,7 +176,6 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
       saveFormData(FORM_ID, {
         formData,
         selectedTags,
-        pastAppointments,
         treatmentHistory
       });
     };
@@ -193,7 +190,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
       clearInterval(intervalId);
       saveData(); // Save on unmount
     };
-  }, [isOpen, watch, selectedTags, pastAppointments, treatmentHistory, patientDocuments, isDirty]);
+  }, [isOpen, watch, selectedTags, treatmentHistory, patientDocuments, isDirty]);
 
   // Gérer le clic extérieur avec double-clic
   const handleBackdropClick = () => {
@@ -227,8 +224,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
       clearFormData(FORM_ID);
       reset();
       setSelectedTags([]);
-      setPastAppointments([]);
-      setTreatmentHistory([]);
+        setTreatmentHistory([]);
       setPatientDocuments([]);
       setError(null);
       setSuccess(null);
@@ -256,7 +252,6 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
     // Reset all form state
     reset();
     setSelectedTags([]);
-    setPastAppointments([]);
     setTreatmentHistory([]);
     setPatientDocuments([]);
     setError(null);
@@ -315,19 +310,6 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
     setTreatmentHistory(updatedHistory);
   };
 
-  const addPastAppointment = () => {
-    setPastAppointments([...pastAppointments, { date: '', time: '', notes: '' }]);
-  };
-
-  const removePastAppointment = (index: number) => {
-    setPastAppointments(pastAppointments.filter((_, i) => i !== index));
-  };
-
-  const updatePastAppointment = (index: number, field: keyof PastAppointment, value: string) => {
-    const updatedAppointments = [...pastAppointments];
-    updatedAppointments[index] = { ...updatedAppointments[index], [field]: value };
-    setPastAppointments(updatedAppointments);
-  };
 
   const handleDocumentsUpdate = (documents: DocumentMetadata[]) => {
     setPatientDocuments(documents);
@@ -352,14 +334,6 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
     try {
       const patientId = crypto.randomUUID();
       
-      // Format past appointments
-      const formattedPastAppointments = pastAppointments
-        .filter(app => app.date && app.time) // Only include appointments with date and time
-        .map(app => ({
-          date: `${app.date}T${app.time}:00`,
-          notes: app.notes,
-          isHistorical: true
-        }));
 
       // Extract address components from the full address
       const addressParts = data.address.split(',').map(part => part.trim());
@@ -386,10 +360,9 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         medicalHistory: data.medicalHistory || '',
         notes: data.notes || '',
         pathologies: selectedTags,
-        nextAppointment: data.nextAppointment && data.nextAppointmentTime 
+        nextAppointment: data.nextAppointment && data.nextAppointmentTime
           ? `${data.nextAppointment}T${data.nextAppointmentTime}:00`
           : null,
-        pastAppointments: formattedPastAppointments,
         currentTreatment: data.currentTreatment || '',
         consultationReason: data.consultationReason || '',
         osteopathicTreatment: data.osteopathicTreatment || '',
@@ -579,8 +552,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         // Reset form
         reset();
         setSelectedTags([]);
-        setPastAppointments([]);
-        setTreatmentHistory([]);
+            setTreatmentHistory([]);
         setPatientDocuments([]);
         
         console.log('Calling onSuccess to refresh patient list...');
@@ -637,7 +609,6 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
     // Reset all form state
     reset();
     setSelectedTags([]);
-    setPastAppointments([]);
     setTreatmentHistory([]);
     setPatientDocuments([]);
     setError(null);

@@ -528,10 +528,28 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                     <div className="pt-6 mt-6 border-t col-span-full">
                       <h3 className="mb-4 text-lg font-medium text-gray-900">Données cliniques de la consultation</h3>
 
-                      {/* Motif de consultation détaillé */}
+                      {/* Bandeau d'information pour consultation initiale */}
+                      {consultationData?.isInitialConsultation && (
+                        <div className="p-4 mb-4 border rounded-lg bg-blue-50 border-blue-200">
+                          <div className="flex items-start">
+                            <svg className="w-5 h-5 mt-0.5 mr-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div className="flex-1">
+                              <h4 className="font-medium text-blue-900">Consultation initiale automatiquement synchronisée</h4>
+                              <p className="mt-1 text-sm text-blue-700">
+                                Les champs cliniques de cette consultation sont automatiquement synchronisés avec le dossier patient et ne peuvent pas être modifiés directement ici.
+                                Pour mettre à jour ces informations, modifiez le dossier patient.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Motif de consultation */}
                       <div className="mb-4">
                         <label htmlFor="consultationReason" className="block mb-1 text-sm font-medium text-gray-700">
-                          Motif de consultation détaillé *
+                          Motif de consultation *
                         </label>
                         <AutoResizeTextarea
                           id="consultationReason"
@@ -540,6 +558,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                           className="w-full resize-none input"
                           {...register('consultationReason')}
                           placeholder="Détaillez le motif de consultation..."
+                          disabled={consultationData?.isInitialConsultation}
                         />
                         {errors.consultationReason && (
                           <p className="mt-1 text-sm text-error">{errors.consultationReason.message}</p>
@@ -549,7 +568,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Traitement effectué */}
                       <div className="mb-4">
                         <label htmlFor="currentTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                          Traitement effectué du patient *
+                          Traitement effectué *
                         </label>
                         <AutoResizeTextarea
                           id="currentTreatment"
@@ -558,6 +577,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                           className="w-full resize-none input"
                           {...register('currentTreatment')}
                           placeholder="Traitements médicamenteux ou thérapies en cours..."
+                          disabled={consultationData?.isInitialConsultation}
                         />
                         {errors.currentTreatment && (
                           <p className="mt-1 text-sm text-error">{errors.currentTreatment.message}</p>
@@ -576,6 +596,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                           className="w-full resize-none input"
                           {...register('medicalAntecedents')}
                           placeholder="Antécédents médicaux significatifs..."
+                          disabled={consultationData?.isInitialConsultation}
                         />
                       </div>
 
@@ -591,13 +612,14 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                           className="w-full resize-none input"
                           {...register('medicalHistory')}
                           placeholder="Historique médical général..."
+                          disabled={consultationData?.isInitialConsultation}
                         />
                       </div>
 
-                      {/* Traitement ostéopathique prescrit */}
+                      {/* Traitement ostéopathique */}
                       <div className="mb-4">
                         <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                          Traitement ostéopathique prescrit
+                          Traitement ostéopathique
                         </label>
                         <AutoResizeTextarea
                           id="osteopathicTreatment"
@@ -606,6 +628,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                           className="w-full resize-none input"
                           {...register('osteopathicTreatment')}
                           placeholder="Décrivez le traitement ostéopathique..."
+                          disabled={consultationData?.isInitialConsultation}
                         />
                       </div>
 
@@ -623,47 +646,51 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                                   className="inline-flex items-center px-3 py-1 text-sm rounded-full bg-primary-50 text-primary-700 border border-primary-200"
                                 >
                                   {symptom}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const updated = selectedSymptoms.filter((_, i) => i !== index);
-                                      setSelectedSymptoms(updated);
-                                      setValue('symptoms', updated.join(', '));
-                                    }}
-                                    className="ml-2 text-primary-500 hover:text-primary-700"
-                                  >
-                                    <X size={14} />
-                                  </button>
+                                  {!consultationData?.isInitialConsultation && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const updated = selectedSymptoms.filter((_, i) => i !== index);
+                                        setSelectedSymptoms(updated);
+                                        setValue('symptoms', updated.join(', '));
+                                      }}
+                                      className="ml-2 text-primary-500 hover:text-primary-700"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  )}
                                 </span>
                               ))}
                             </div>
                           )}
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={customSymptom}
-                              onChange={(e) => setCustomSymptom(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  if (customSymptom.trim() && !selectedSymptoms.includes(customSymptom.trim())) {
-                                    const updated = [...selectedSymptoms, customSymptom.trim()];
-                                    setSelectedSymptoms(updated);
-                                    setValue('symptoms', updated.join(', '));
-                                    setCustomSymptom('');
-                                  }
-                                }
-                              }}
-                              className="flex-1 input"
-                              placeholder="Ajouter un symptôme personnalisé..."
-                            />
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                if (customSymptom.trim() && !selectedSymptoms.includes(customSymptom.trim())) {
-                                  const updated = [...selectedSymptoms, customSymptom.trim()];
+                          {!consultationData?.isInitialConsultation && (
+                            <>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={customSymptom}
+                                  onChange={(e) => setCustomSymptom(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      if (customSymptom.trim() && !selectedSymptoms.includes(customSymptom.trim())) {
+                                        const updated = [...selectedSymptoms, customSymptom.trim()];
+                                        setSelectedSymptoms(updated);
+                                        setValue('symptoms', updated.join(', '));
+                                        setCustomSymptom('');
+                                      }
+                                    }
+                                  }}
+                                  className="flex-1 input"
+                                  placeholder="Ajouter un symptôme personnalisé..."
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (customSymptom.trim() && !selectedSymptoms.includes(customSymptom.trim())) {
+                                      const updated = [...selectedSymptoms, customSymptom.trim()];
                                   setSelectedSymptoms(updated);
                                   setValue('symptoms', updated.join(', '));
                                   setCustomSymptom('');
@@ -697,6 +724,8 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                               </button>
                             ))}
                           </div>
+                            </>
+                          )}
                         </div>
                         <input type="hidden" {...register('symptoms')} />
                       </div>
