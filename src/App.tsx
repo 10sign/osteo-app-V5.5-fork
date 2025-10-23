@@ -31,6 +31,7 @@ import Referral from './pages/Referral';
 
 // Admin pages
 import AdminDashboard from './pages/admin/AdminDashboard';
+import SyncConsultations from './pages/admin/SyncConsultations';
 
 // Other pages
 import Unauthorized from './pages/Unauthorized';
@@ -166,13 +167,21 @@ function AppRoutes() {
       
       {/* Admin routes */}
       <Route path="/admin/login" element={<AdminLogin />} />
-      <Route 
-        path="/admin" 
+      <Route
+        path="/admin"
         element={
           <ProtectedRoute adminOnly>
             <AdminDashboard />
           </ProtectedRoute>
-        } 
+        }
+      />
+      <Route
+        path="/admin/sync-consultations"
+        element={
+          <ProtectedRoute adminOnly>
+            <SyncConsultations />
+          </ProtectedRoute>
+        }
       />
 
       {/* Auth routes */}

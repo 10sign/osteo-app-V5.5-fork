@@ -305,23 +305,24 @@ const AdminDashboard: React.FC = () => {
               </div>
               
               {/* Synchronisation des premières consultations */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                  <RefreshCw size={20} className="mr-2 text-primary-600" />
-                  Synchronisation des premières consultations (Julie Boddaert)
+              <div className="bg-gradient-to-r from-blue-50 to-primary-50 rounded-lg shadow-md border-2 border-primary-200 p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                  <RefreshCw size={24} className="mr-3 text-primary-600" />
+                  Synchronisation des Consultations
                 </h3>
-                <p className="text-sm text-gray-600 mb-2">
-                  ÉCRASE les premières consultations de Julie Boddaert avec les données cliniques complètes du dossier patient.
+                <p className="text-sm text-gray-700 mb-2">
+                  Interface simplifiée pour synchroniser les premières consultations avec les données du dossier patient.
                 </p>
-                <p className="text-sm text-red-600 font-medium mb-4">
-                  ⚠️ Les données existantes seront remplacées.
+                <p className="text-sm text-gray-600 mb-4">
+                  Aucune compétence technique requise - Interface guidée en 3 étapes simples.
                 </p>
                 <Button
-                  variant="outline"
-                  onClick={() => setShowFirstConsultationSync(true)}
+                  variant="primary"
+                  onClick={() => navigate('/admin/sync-consultations')}
                   leftIcon={<RefreshCw size={16} />}
+                  size="lg"
                 >
-                  Synchroniser les premières consultations
+                  Ouvrir l'interface de synchronisation
                 </Button>
               </div>
 
