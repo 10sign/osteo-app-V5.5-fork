@@ -78,6 +78,10 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [pendingData, setPendingData] = useState<ConsultationFormData | null>(null);
 
+  // État pour les données du patient (consultation initiale)
+  const [patientData, setPatientData] = useState<any>(null);
+  const [patientLastUpdated, setPatientLastUpdated] = useState<Date | null>(null);
+
   // Gestion des documents
   const [consultationDocuments, setConsultationDocuments] = useState<DocumentMetadata[]>([]);
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
@@ -125,10 +129,34 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         
         const rawData = consultationDoc.data();
         console.log('📋 Raw consultation data:', rawData);
-        
+
         // Vérifier la propriété
         if (rawData.osteopathId !== auth.currentUser.uid) {
           throw new Error('Accès non autorisé à cette consultation');
+        }
+
+        // ✅ NOUVEAU: Si consultation initiale, charger les données du patient
+        let loadedPatientData = null;
+        if (rawData.isInitialConsultation && rawData.patientId) {
+          console.log('🔄 Consultation initiale détectée, chargement des données patient...');
+          try {
+            const patientRef = doc(db, 'patients', rawData.patientId);
+            const patientDoc = await getDoc(patientRef);
+
+            if (patientDoc.exists()) {
+              const rawPatientData = patientDoc.data();
+              loadedPatientData = HDSCompliance.decryptDataForDisplay(
+                rawPatientData,
+                'patients',
+                auth.currentUser.uid
+              );
+              setPatientData(loadedPatientData);
+              setPatientLastUpdated(rawPatientData.updatedAt?.toDate() || null);
+              console.log('✅ Données patient chargées pour consultation initiale');
+            }
+          } catch (patientError) {
+            console.error('⚠️ Erreur lors du chargement des données patient:', patientError);
+          }
         }
         
         // Déchiffrer les données pour l'affichage avec gestion d'erreur robuste
@@ -147,6 +175,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         
         console.log('🔓 Decrypted consultation data:', decryptedData);
         
+        // ✅ Pour les consultations initiales, utiliser les données du patient comme source de vérité
         const consultation = {
           id: consultationDoc.id,
           ...decryptedData,
@@ -163,12 +192,20 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
           patientAddress: decryptedData.patientAddress || '',
           patientInsurance: decryptedData.patientInsurance || '',
           patientInsuranceNumber: decryptedData.patientInsuranceNumber || '',
-          currentTreatment: decryptedData.currentTreatment || '',
-          consultationReason: decryptedData.consultationReason || '',
-          medicalAntecedents: decryptedData.medicalAntecedents || '',
-          medicalHistory: decryptedData.medicalHistory || '',
-          osteopathicTreatment: decryptedData.osteopathicTreatment || '',
-          symptoms: decryptedData.symptoms || []
+
+          // ✅ Pour les consultations initiales, utiliser les données du dossier patient
+          currentTreatment: rawData.isInitialConsultation && loadedPatientData ?
+            (loadedPatientData.currentTreatment || '') : (decryptedData.currentTreatment || ''),
+          consultationReason: rawData.isInitialConsultation && loadedPatientData ?
+            (loadedPatientData.consultationReason || '') : (decryptedData.consultationReason || ''),
+          medicalAntecedents: rawData.isInitialConsultation && loadedPatientData ?
+            (loadedPatientData.medicalAntecedents || '') : (decryptedData.medicalAntecedents || ''),
+          medicalHistory: rawData.isInitialConsultation && loadedPatientData ?
+            (loadedPatientData.medicalHistory || '') : (decryptedData.medicalHistory || ''),
+          osteopathicTreatment: rawData.isInitialConsultation && loadedPatientData ?
+            (loadedPatientData.osteopathicTreatment || '') : (decryptedData.osteopathicTreatment || ''),
+          symptoms: rawData.isInitialConsultation && loadedPatientData ?
+            (loadedPatientData.tags || []) : (decryptedData.symptoms || [])
         };
 
         setConsultationData(consultation);
@@ -257,10 +294,9 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
       return;
     }
 
-    if (consultationData?.isInitialConsultation && !showConfirmationModal) {
-      console.log('🔔 Consultation initiale détectée, demande de confirmation...');
-      setPendingData(data);
-      setShowConfirmationModal(true);
+    // ✅ Empêcher la modification des consultations initiales
+    if (consultationData?.isInitialConsultation) {
+      setError('Les consultations initiales sont en lecture seule. Veuillez modifier le dossier patient pour mettre à jour ces informations.');
       return;
     }
 
@@ -353,38 +389,6 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
       console.log('✅ Consultation updated successfully in Firestore');
 
-      if (consultationData?.isInitialConsultation) {
-        console.log('🔄 Synchronisation bidirectionnelle pour consultation initiale...');
-        try {
-          const syncResult = await BidirectionalSyncService.syncPatientFromInitialConsultation(
-            consultationId,
-            {
-              id: consultationId,
-              patientId: consultationData.patientId,
-              osteopathId: auth.currentUser.uid,
-              isInitialConsultation: true,
-              currentTreatment: data.currentTreatment,
-              consultationReason: data.consultationReason,
-              medicalAntecedents: data.medicalAntecedents,
-              medicalHistory: data.medicalHistory,
-              osteopathicTreatment: data.osteopathicTreatment,
-              symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : []
-            },
-            consultationData.patientId,
-            auth.currentUser.uid
-          );
-
-          if (syncResult.success && syncResult.fieldsUpdated.length > 0) {
-            console.log(`✅ Dossier patient synchronisé: ${syncResult.fieldsUpdated.length} champs`);
-          }
-        } catch (syncError) {
-          console.warn('⚠️ Erreur lors de la synchronisation bidirectionnelle (non bloquant):', syncError);
-        }
-      }
-
-      setShowConfirmationModal(false);
-      setPendingData(null);
-
       // Afficher le message de succès après que tout soit enregistré
       setShowSuccessBanner(true);
 
@@ -476,13 +480,14 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div>
                         <label htmlFor="date" className="block mb-1 text-sm font-medium text-gray-700">
-                          Date *
+                          Date * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                         </label>
                         <input
                           type="date"
                           id="date"
-                          className={`input w-full ${errors.date ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                          className={`input w-full ${errors.date ? 'border-error focus:border-error focus:ring-error' : ''} ${consultationData?.isInitialConsultation ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                           {...register('date', { required: 'Ce champ est requis' })}
+                          disabled={consultationData?.isInitialConsultation}
                         />
                         {errors.date && (
                           <p className="mt-1 text-sm text-error">{errors.date.message}</p>
@@ -491,13 +496,14 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                       <div>
                         <label htmlFor="time" className="block mb-1 text-sm font-medium text-gray-700">
-                          Heure *
+                          Heure * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                         </label>
                         <input
                           type="time"
                           id="time"
-                          className={`input w-full ${errors.time ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                          className={`input w-full ${errors.time ? 'border-error focus:border-error focus:ring-error' : ''} ${consultationData?.isInitialConsultation ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                           {...register('time', { required: 'Ce champ est requis' })}
+                          disabled={consultationData?.isInitialConsultation}
                         />
                         {errors.time && (
                           <p className="mt-1 text-sm text-error">{errors.time.message}</p>
@@ -508,12 +514,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                     <div>
                       <label htmlFor="status" className="block mb-1 text-sm font-medium text-gray-700">
-                        Statut *
+                        Statut * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                       </label>
                       <select
                         id="status"
-                        className={`input w-full ${errors.status ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                        className={`input w-full ${errors.status ? 'border-error focus:border-error focus:ring-error' : ''} ${consultationData?.isInitialConsultation ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                         {...register('status', { required: 'Ce champ est requis' })}
+                        disabled={consultationData?.isInitialConsultation}
                       >
                         <option value="completed">Effectué</option>
                         <option value="draft">En cours</option>
@@ -536,11 +543,19 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <div className="flex-1">
-                              <h4 className="font-medium text-blue-900">Consultation initiale automatiquement synchronisée</h4>
+                              <h4 className="font-medium text-blue-900">✋ Consultation initiale en lecture seule</h4>
                               <p className="mt-1 text-sm text-blue-700">
-                                Les champs cliniques de cette consultation sont automatiquement synchronisés avec le dossier patient et ne peuvent pas être modifiés directement ici.
-                                Pour mettre à jour ces informations, modifiez le dossier patient.
+                                Cette consultation initiale est automatiquement synchronisée avec le dossier patient.
+                                <strong> Tous les champs affichés sont en lecture seule</strong> et proviennent directement du dossier patient.
                               </p>
+                              <p className="mt-2 text-sm text-blue-700">
+                                💡 Pour modifier ces informations, veuillez modifier directement le <strong>dossier patient</strong>.
+                              </p>
+                              {patientLastUpdated && (
+                                <p className="mt-2 text-xs text-blue-600">
+                                  📅 Dernière mise à jour du dossier patient : {patientLastUpdated.toLocaleDateString('fr-FR')} à {patientLastUpdated.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -549,13 +564,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Motif de consultation */}
                       <div className="mb-4">
                         <label htmlFor="consultationReason" className="block mb-1 text-sm font-medium text-gray-700">
-                          Motif de consultation *
+                          Motif de consultation * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
                         </label>
                         <AutoResizeTextarea
                           id="consultationReason"
                           minRows={2}
                           maxRows={4}
-                          className="w-full resize-none input"
+                          className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('consultationReason')}
                           placeholder="Détaillez le motif de consultation..."
                           disabled={consultationData?.isInitialConsultation}
@@ -568,13 +583,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Traitement effectué */}
                       <div className="mb-4">
                         <label htmlFor="currentTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                          Traitement effectué *
+                          Traitement effectué * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
                         </label>
                         <AutoResizeTextarea
                           id="currentTreatment"
                           minRows={2}
                           maxRows={4}
-                          className="w-full resize-none input"
+                          className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('currentTreatment')}
                           placeholder="Traitements médicamenteux ou thérapies en cours..."
                           disabled={consultationData?.isInitialConsultation}
@@ -587,13 +602,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Antécédents médicaux */}
                       <div className="mb-4">
                         <label htmlFor="medicalAntecedents" className="block mb-1 text-sm font-medium text-gray-700">
-                          Antécédents médicaux
+                          Antécédents médicaux {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
                         </label>
                         <AutoResizeTextarea
                           id="medicalAntecedents"
                           minRows={3}
                           maxRows={6}
-                          className="w-full resize-none input"
+                          className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('medicalAntecedents')}
                           placeholder="Antécédents médicaux significatifs..."
                           disabled={consultationData?.isInitialConsultation}
@@ -603,13 +618,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Historique médical général */}
                       <div className="mb-4">
                         <label htmlFor="medicalHistory" className="block mb-1 text-sm font-medium text-gray-700">
-                          Historique médical général
+                          Historique médical général {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
                         </label>
                         <AutoResizeTextarea
                           id="medicalHistory"
                           minRows={3}
                           maxRows={6}
-                          className="w-full resize-none input"
+                          className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('medicalHistory')}
                           placeholder="Historique médical général..."
                           disabled={consultationData?.isInitialConsultation}
@@ -619,13 +634,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Traitement ostéopathique */}
                       <div className="mb-4">
                         <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                          Traitement ostéopathique
+                          Traitement ostéopathique {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
                         </label>
                         <AutoResizeTextarea
                           id="osteopathicTreatment"
                           minRows={3}
                           maxRows={6}
-                          className="w-full resize-none input"
+                          className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('osteopathicTreatment')}
                           placeholder="Décrivez le traitement ostéopathique..."
                           disabled={consultationData?.isInitialConsultation}
@@ -635,7 +650,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Symptômes / Syndromes */}
                       <div className="mb-4">
                         <label className="block mb-2 text-sm font-medium text-gray-700">
-                          Symptômes / Syndromes
+                          Symptômes / Syndromes {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
                         </label>
                         <div className="space-y-3">
                           {selectedSymptoms.length > 0 && (
@@ -739,17 +754,19 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <label className="block text-sm font-medium text-gray-700">
-                            Examens / Imageries demandés
+                            Examens / Imageries demandés {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                           </label>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => appendExamination({ value: '' })}
-                            leftIcon={<Plus size={14} />}
-                          >
-                            Ajouter
-                          </Button>
+                          {!consultationData?.isInitialConsultation && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => appendExamination({ value: '' })}
+                              leftIcon={<Plus size={14} />}
+                            >
+                              Ajouter
+                            </Button>
+                          )}
                         </div>
 
                         {examinationFields.length > 0 ? (
@@ -759,18 +776,21 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                                 <AutoResizeTextarea
                                   minRows={1}
                                   maxRows={3}
-                                  className="flex-1 input"
+                                  className={`flex-1 input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                                   placeholder="Ex: Radiographie lombaire, IRM cervicale..."
                                   {...register(`examinations.${index}.value`)}
+                                  disabled={consultationData?.isInitialConsultation}
                                 />
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removeExamination(index)}
-                                >
-                                  <Trash2 size={14} />
-                                </Button>
+                                {!consultationData?.isInitialConsultation && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeExamination(index)}
+                                  >
+                                    <Trash2 size={14} />
+                                  </Button>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -785,17 +805,19 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <label className="block text-sm font-medium text-gray-700">
-                            Prescriptions / Ordonnances
+                            Prescriptions / Ordonnances {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                           </label>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => appendPrescription({ value: '' })}
-                            leftIcon={<Plus size={14} />}
-                          >
-                            Ajouter
-                          </Button>
+                          {!consultationData?.isInitialConsultation && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => appendPrescription({ value: '' })}
+                              leftIcon={<Plus size={14} />}
+                            >
+                              Ajouter
+                            </Button>
+                          )}
                         </div>
 
                         {prescriptionFields.length > 0 ? (
@@ -805,18 +827,21 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                                 <AutoResizeTextarea
                                   minRows={1}
                                   maxRows={3}
-                                  className="flex-1 input"
+                                  className={`flex-1 input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                                   placeholder="Ex: Antalgiques, anti-inflammatoires, repos..."
                                   {...register(`prescriptions.${index}.value`)}
+                                  disabled={consultationData?.isInitialConsultation}
                                 />
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removePrescription(index)}
-                                >
-                                  <Trash2 size={14} />
-                                </Button>
+                                {!consultationData?.isInitialConsultation && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removePrescription(index)}
+                                  >
+                                    <Trash2 size={14} />
+                                  </Button>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -830,21 +855,22 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                     <div>
                       <label htmlFor="notes" className="block mb-1 text-sm font-medium text-gray-700">
-                        Note sur le patient
+                        Note sur le patient {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                       </label>
                       <AutoResizeTextarea
                         id="notes"
                         minRows={3}
                         maxRows={6}
-                        className="w-full resize-none input"
+                        className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                         {...register('notes')}
                         placeholder="Notes additionnelles sur le patient..."
+                        disabled={consultationData?.isInitialConsultation}
                       />
                     </div>
 
                     {/* Documents de consultation */}
                     <div className="pt-6 border-t">
-                      <h3 className="mb-4 text-lg font-medium text-gray-900">Documents de consultation</h3>
+                      <h3 className="mb-4 text-lg font-medium text-gray-900">Documents de consultation {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}</h3>
                       <DocumentUploadManager
                         patientId="temp"
                         entityType="consultation"
@@ -852,7 +878,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                         customFolderPath={`users/${auth.currentUser?.uid}/consultations/${consultationId}/documents`}
                         onUploadSuccess={handleDocumentsUpdate}
                         onUploadError={handleDocumentError}
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || consultationData?.isInitialConsultation}
                         initialDocuments={consultationDocuments}
                       />
                     </div>
@@ -860,18 +886,19 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                       <div>
                         <label htmlFor="duration" className="block mb-1 text-sm font-medium text-gray-700">
-                          Durée (minutes) *
+                          Durée (minutes) * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                         </label>
                         <input
                           type="number"
                           id="duration"
                           min="15"
                           step="15"
-                          className={`input w-full ${errors.duration ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                          {...register('duration', { 
+                          className={`input w-full ${errors.duration ? 'border-error focus:border-error focus:ring-error' : ''} ${consultationData?.isInitialConsultation ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                          {...register('duration', {
                             required: 'Ce champ est requis',
                             min: { value: 15, message: 'Durée minimum 15 minutes' }
                           })}
+                          disabled={consultationData?.isInitialConsultation}
                         />
                         {errors.duration && (
                           <p className="mt-1 text-sm text-error">{errors.duration.message}</p>
@@ -880,18 +907,19 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                       <div>
                         <label htmlFor="price" className="block mb-1 text-sm font-medium text-gray-700">
-                          Tarif (€) *
+                          Tarif (€) * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                         </label>
                         <input
                           type="number"
                           id="price"
                           min="0"
                           step="5"
-                          className={`input w-full ${errors.price ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                          {...register('price', { 
+                          className={`input w-full ${errors.price ? 'border-error focus:border-error focus:ring-error' : ''} ${consultationData?.isInitialConsultation ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                          {...register('price', {
                             required: 'Ce champ est requis',
                             min: { value: 0, message: 'Le tarif doit être positif' }
                           })}
+                          disabled={consultationData?.isInitialConsultation}
                         />
                         {errors.price && (
                           <p className="mt-1 text-sm text-error">{errors.price.message}</p>
@@ -900,12 +928,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                       <div>
                         <label htmlFor="status" className="block mb-1 text-sm font-medium text-gray-700">
-                          Statut *
+                          Statut * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                         </label>
                         <select
                           id="status"
-                          className={`input w-full ${errors.status ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                          className={`input w-full ${errors.status ? 'border-error focus:border-error focus:ring-error' : ''} ${consultationData?.isInitialConsultation ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                           {...register('status', { required: 'Ce champ est requis' })}
+                          disabled={consultationData?.isInitialConsultation}
                         >
                           <option value="completed">Effectué</option>
                           <option value="draft">En cours</option>
@@ -931,81 +960,25 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                 onClick={onClose}
                 disabled={isSubmitting}
               >
-                Annuler
+                {consultationData?.isInitialConsultation ? 'Fermer' : 'Annuler'}
               </Button>
-              <Button
-                type="submit"
-                form="editConsultationForm"
-                variant="primary"
-                isLoading={isSubmitting}
-                loadingText="Modification en cours..."
-                disabled={!isValid || isSubmitting || loading}
-              >
-                Modifier la consultation
-              </Button>
+              {!consultationData?.isInitialConsultation && (
+                <Button
+                  type="submit"
+                  form="editConsultationForm"
+                  variant="primary"
+                  isLoading={isSubmitting}
+                  loadingText="Modification en cours..."
+                  disabled={!isValid || isSubmitting || loading}
+                >
+                  Modifier la consultation
+                </Button>
+              )}
             </div>
           </motion.div>
         </div>
       )}
 
-      {showConfirmationModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-          />
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ type: 'spring', duration: 0.5 }}
-            className="relative w-full max-w-md bg-white rounded-xl shadow-2xl"
-          >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Confirmation requise</h3>
-            </div>
-
-            <div className="px-6 py-4">
-              <p className="mb-4 text-gray-700">
-                <strong className="text-primary-600">Attention :</strong> Vous modifiez la consultation initiale de ce patient.
-              </p>
-              <p className="mb-4 text-gray-700">
-                Les modifications des champs cliniques seront automatiquement synchronisées avec le dossier patient.
-              </p>
-              <p className="text-sm text-gray-600">
-                Voulez-vous continuer ?
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowConfirmationModal(false);
-                  setPendingData(null);
-                }}
-                disabled={isSubmitting}
-              >
-                Annuler
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  if (pendingData) {
-                    onSubmit(pendingData);
-                  }
-                }}
-                disabled={isSubmitting}
-              >
-                Confirmer la modification
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-      )}
     </AnimatePresence>
   );
 };
