@@ -8,6 +8,7 @@ import AutoResizeTextarea from '../components/ui/AutoResizeTextarea';
 import HDSComplianceBadge from '../components/ui/HDSComplianceBadge';
 import HDSComplianceInfo from '../components/ui/HDSComplianceInfo';
 import ConsultationMigrationPanel from '../components/admin/ConsultationMigrationPanel';
+import TwoPhasePatientMigration from '../components/admin/TwoPhasePatientMigration';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 
 const Settings: React.FC = () => {
@@ -683,6 +684,10 @@ const Settings: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            <TwoPhasePatientMigration />
+
+            <div className="border-t border-gray-200 my-8"></div>
 
             <ConsultationMigrationPanel />
           </div>
