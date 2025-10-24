@@ -291,12 +291,12 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                   {/* ✅ SUPPRIMÉ : Anciens champs "Motif de consultation" et "Traitement effectué" 
                       Ces champs sont remplacés par les champs détaillés dans la section "Données cliniques" */}
 
-                  {/* Notes complémentaires */}
+                  {/* Note sur le patient */}
                   {consultation.notes && cleanDecryptedField(consultation.notes, false, '') && (
                     <div>
                       <h4 className="font-medium text-gray-900 mb-2 flex items-center">
                         <FileText size={16} className="mr-2 text-gray-600" />
-                        Notes complémentaires
+                        Note sur le patient
                       </h4>
                       <div className="bg-white border border-gray-200 rounded-lg p-4">
                         <p className="text-gray-900 whitespace-pre-wrap">

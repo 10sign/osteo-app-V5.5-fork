@@ -1009,7 +1009,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                               minRows={2}
                               maxRows={4}
                               className="w-full resize-none input"
-                              placeholder="Notes complémentaires"
+                              placeholder="Note sur le patient"
                             />
                           </div>
                         </div>
@@ -1090,7 +1090,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
 
                 <div>
                   <label htmlFor="notes" className="block mb-1 text-sm font-medium text-gray-700">
-                    Notes complémentaires
+                    Note sur le patient
                   </label>
                   <AutoResizeTextarea
                     id="notes"
@@ -1098,7 +1098,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                     maxRows={8}
                     className="w-full resize-none input"
                     {...register('notes')}
-                    placeholder="Notes générales sur le patient"
+                    placeholder="Note sur le patient"
                   />
                 </div>
 

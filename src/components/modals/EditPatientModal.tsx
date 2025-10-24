@@ -857,7 +857,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                               minRows={2}
                               maxRows={4}
                               className="input w-full resize-none"
-                              placeholder="Notes complémentaires"
+                              placeholder="Note sur le patient"
                             />
                           </div>
                         </div>

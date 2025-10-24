@@ -1084,10 +1084,10 @@ const PatientDetail: React.FC = () => {
 
               return (
                 <FieldHistory
-                  fieldLabel="Notes complémentaires"
+                  fieldLabel="Note sur le patient"
                   currentValue={cleanDecryptedField(latestConsultation.notes || '', false, '')}
                   history={patient ? buildFieldHistory('notes', patient, consultations) : []}
-                  emptyMessage="Aucune note complémentaire"
+                  emptyMessage="Aucune note sur le patient"
                 />
               );
             })()}
@@ -1392,15 +1392,15 @@ const PatientDetail: React.FC = () => {
               </div>
             )}
 
-            {/* ✅ CORRIGÉ : Notes - Affiche les données de la dernière consultation */}
+            {/* ✅ CORRIGÉ : Note sur le patient - Affiche les données de la dernière consultation */}
             {(() => {
               const latestConsultation = getLatestConsultation();
               return latestConsultation?.notes && (
                 <div className="p-6 bg-white shadow rounded-xl">
-                  <h3 className="mb-4 text-lg font-medium text-gray-900">Notes (dernière consultation)</h3>
+                  <h3 className="mb-4 text-lg font-medium text-gray-900">Note sur le patient (dernière consultation)</h3>
                   <div className="prose-sm prose max-w-none">
                     <p className="text-gray-700 whitespace-pre-wrap">
-                      {cleanDecryptedField(latestConsultation.notes, false, 'Aucune note')}
+                      {cleanDecryptedField(latestConsultation.notes, false, 'Aucune note sur le patient')}
                     </p>
                   </div>
                 </div>
@@ -1571,7 +1571,7 @@ const PatientDetail: React.FC = () => {
 
                       {consultation.notes && cleanDecryptedField(consultation.notes, false, '') && (
                         <div>
-                          <h5 className="mb-1 text-sm font-medium text-gray-700">Notes complémentaires</h5>
+                          <h5 className="mb-1 text-sm font-medium text-gray-700">Note sur le patient</h5>
                           <p className="text-gray-900 whitespace-pre-wrap">
                             {cleanDecryptedField(consultation.notes, false, '')}
                           </p>
