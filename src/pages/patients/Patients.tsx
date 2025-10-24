@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Search, Plus, Filter, Tags, Calendar, Users, ArrowDown, ArrowUp, Clock } from 'lucide-react';
-import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../../components/ui/Button';
 import NewPatientModal from '../../components/modals/NewPatientModal';
@@ -38,10 +38,6 @@ const Patients: React.FC = () => {
     setError(null);
 
     try {
-      // ✅ Invalider tout le cache avant de recharger pour garantir les données les plus récentes
-      const { patientCache } = await import('../../utils/patientCache');
-      patientCache.clear();
-
       const patientsRef = collection(db, 'patients');
       // Query for all patients belonging to the current user
       const q = query(
@@ -103,40 +99,6 @@ const Patients: React.FC = () => {
   useEffect(() => {
     loadPatients();
   }, [refreshTrigger]);
-
-  // ✅ Listener en temps réel pour détecter les changements dans la collection patients
-  useEffect(() => {
-    if (!auth.currentUser) return;
-
-    console.log('🔄 Setting up real-time listener for patients collection');
-
-    const patientsRef = collection(db, 'patients');
-    const q = query(
-      patientsRef,
-      where('osteopathId', '==', auth.currentUser.uid)
-    );
-
-    // Écouter les changements en temps réel
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        console.log('🔔 Patients collection changed, reloading...', snapshot.docChanges().length, 'changes detected');
-        // Ne recharger que si ce n'est pas le premier chargement
-        if (!loading) {
-          loadPatients();
-        }
-      },
-      (error) => {
-        console.error('❌ Real-time listener error:', error);
-      }
-    );
-
-    // Cleanup du listener
-    return () => {
-      console.log('🔌 Cleaning up real-time listener');
-      unsubscribe();
-    };
-  }, [loading]);
 
   // Fonction pour forcer le rechargement de la liste
   const refreshPatientList = () => {

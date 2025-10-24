@@ -1,21 +1,20 @@
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  getDocs,
-  doc,
-  getDoc,
-  addDoc,
-  updateDoc,
+import { 
+  collection, 
+  query, 
+  where, 
+  orderBy, 
+  getDocs, 
+  doc, 
+  getDoc, 
+  addDoc, 
+  updateDoc, 
   deleteDoc,
-  Timestamp
+  Timestamp 
 } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { Consultation, ConsultationFormData } from '../types';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import HDSCompliance from '../utils/hdsCompliance';
-import { patientCache } from '../utils/patientCache';
 
 export class ConsultationService {
   /**
@@ -776,10 +775,6 @@ export class ConsultationService {
         const { AppointmentService } = await import('./appointmentService');
         await AppointmentService.syncPatientNextAppointment(patientId);
         console.log('✅ Champ nextAppointment du patient mis à jour après suppression de la consultation');
-
-        // ✅ INVALIDATION DU CACHE : Forcer le rechargement des données patient
-        patientCache.invalidate(patientId);
-        console.log('✅ Cache patient invalidé pour forcer le rechargement');
       } catch (syncError) {
         console.warn('⚠️ Erreur lors de la synchronisation du nextAppointment:', syncError);
         // Ne pas faire échouer la suppression si la synchronisation échoue
