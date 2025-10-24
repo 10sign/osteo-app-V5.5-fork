@@ -37,6 +37,7 @@ import DataRepairTool from '../../components/ui/DataRepairTool';
 import { DataMigrationService } from '../../services/dataMigrationService';
 import InitialConsultationFlagPanel from '../../components/admin/InitialConsultationFlagPanel';
 import MarkInitialConsultationsPanel from '../../components/admin/MarkInitialConsultationsPanel';
+import SyncAllPatientsPanel from '../../components/admin/SyncAllPatientsPanel';
 
 const AdminDashboard: React.FC = () => {
   const { user, logout, hasPermission } = useAuth();
@@ -286,6 +287,9 @@ const AdminDashboard: React.FC = () => {
           
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              {/* Panneau de synchronisation des consultations à venir */}
+              <SyncAllPatientsPanel />
+
               {/* Panneau de marquage des premières consultations */}
               <MarkInitialConsultationsPanel />
 
