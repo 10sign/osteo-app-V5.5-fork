@@ -460,10 +460,12 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   };
 
   return (
-    <AnimatePresence>
+    <>
+    <AnimatePresence mode="wait">
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div key="edit-patient-modal" className="fixed inset-0 z-50 flex items-center justify-center">
           <motion.div
+            key="edit-patient-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -472,6 +474,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
           />
 
           <motion.div
+            key="edit-patient-content"
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -1038,12 +1041,14 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
           </motion.div>
         </div>
       )}
-      
+    </AnimatePresence>
+
       {/* Modal de confirmation pour fermeture */}
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {showConfirmation && (
-          <div className="fixed inset-0 z-60 flex items-center justify-center">
+          <div key="confirmation-modal" className="fixed inset-0 z-60 flex items-center justify-center">
             <motion.div
+              key="confirmation-backdrop"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -1051,6 +1056,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
             />
 
             <motion.div
+              key="confirmation-content"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -1089,7 +1095,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
           </div>
         )}
       </AnimatePresence>
-    </AnimatePresence>
+    </>
   );
 };
 

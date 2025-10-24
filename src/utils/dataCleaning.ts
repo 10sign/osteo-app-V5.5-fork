@@ -10,22 +10,17 @@
  * @returns La valeur nettoyée
  */
 export function cleanDecryptedField(
-  value: any, 
-  forEditing: boolean = false, 
+  value: any,
+  forEditing: boolean = false,
   defaultValue: string = "Information non disponible"
 ): string {
-  console.log('🧹 Cleaning field:', { value, forEditing, defaultValue });
-  
   // Si la valeur est null, undefined ou vide
   if (!value || value === null || value === undefined) {
-    const result = forEditing ? '' : defaultValue;
-    console.log('🧹 Empty value, returning:', result);
-    return result;
+    return forEditing ? '' : defaultValue;
   }
-  
+
   const stringValue = String(value);
-  console.log('🧹 String value to clean:', stringValue);
-  
+
   // Liste des marqueurs d'erreur à détecter
   const errorMarkers = [
     '[DECODING_FAILED]',
@@ -45,7 +40,7 @@ export function cleanDecryptedField(
     '[GENERAL_DECRYPTION_ERROR]',
     '[PREVIOUS_DECRYPTION_ERROR]'
   ];
-  
+
   // Liste des valeurs par défaut à remplacer
   const defaultValues = [
     'Information non disponible',
@@ -55,36 +50,37 @@ export function cleanDecryptedField(
     'Données non récupérables',
     'Adresse non disponible'
   ];
-  
+
   // Vérifier si la valeur contient un marqueur d'erreur
   const hasErrorMarker = errorMarkers.some(marker => stringValue.includes(marker));
-  console.log('🧹 Has error marker:', hasErrorMarker);
-  
+
   // Vérifier si c'est une valeur par défaut
   const isDefaultValue = defaultValues.includes(stringValue.trim());
-  console.log('🧹 Is default value:', isDefaultValue);
-  
+
   // Vérifier les caractères de remplacement UTF-8 ou caractères non imprimables
-  const hasInvalidChars = stringValue.includes('�') || 
+  const hasInvalidChars = stringValue.includes('�') ||
                          stringValue.match(/[^\x20-\x7E\u00C0-\u017F\u0100-\u024F\u0400-\u04FF]/);
-  console.log('🧹 Has invalid chars:', hasInvalidChars);
-  
+
   // Si c'est pour l'édition et qu'il y a un problème, retourner une chaîne vide
   if (forEditing && (hasErrorMarker || isDefaultValue || hasInvalidChars)) {
-    console.log('🧹 For editing with problems, returning empty string');
+    // Log seulement si c'est une vraie erreur de déchiffrement
+    if (hasErrorMarker) {
+      console.warn('⚠️ Données corrompues détectées lors de l\'édition, champ vidé');
+    }
     return '';
   }
-  
+
   // Si ce n'est pas pour l'édition et qu'il y a un problème, retourner le message par défaut
   if (!forEditing && (hasErrorMarker || isDefaultValue || hasInvalidChars)) {
-    console.log('🧹 For display with problems, returning default value:', defaultValue);
+    // Log seulement si c'est une vraie erreur de déchiffrement
+    if (hasErrorMarker) {
+      console.warn('⚠️ Données corrompues détectées lors de l\'affichage, valeur par défaut utilisée');
+    }
     return defaultValue;
   }
-  
+
   // Sinon, retourner la valeur nettoyée
-  const result = stringValue.trim();
-  console.log('🧹 Clean value, returning:', result);
-  return result;
+  return stringValue.trim();
 }
 
 /**
