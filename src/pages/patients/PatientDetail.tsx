@@ -589,12 +589,17 @@ const PatientDetail: React.FC = () => {
     setIsDeletingConsultation(true);
     try {
       await ConsultationService.deleteConsultation(consultationToDelete.id);
-      
+
       setIsDeleteConsultationModalOpen(false);
       setConsultationToDelete(null);
-      
-      // Reload consultations
-      loadConsultations();
+
+      // Reload consultations AND patient data to update nextAppointment field
+      await Promise.all([
+        loadConsultations(),
+        loadPatientData()
+      ]);
+
+      console.log('✅ Consultation deleted and patient data refreshed');
     } catch (error) {
       console.error('Error deleting consultation:', error);
       setError('Erreur lors de la suppression de la consultation');

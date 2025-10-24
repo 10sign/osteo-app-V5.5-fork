@@ -712,25 +712,25 @@ export class ConsultationService {
     try {
       const docRef = doc(db, 'consultations', id);
       const docSnap = await getDoc(docRef);
-      
+
       if (!docSnap.exists()) {
         throw new Error('Consultation non trouvée');
       }
-      
+
       const data = docSnap.data();
-      
+
       // Vérification de propriété
       if (data.osteopathId !== auth.currentUser.uid) {
         throw new Error('Accès non autorisé à cette consultation');
       }
-      
+
       // Récupérer le patientId avant suppression
       const patientId = data.patientId;
-      
+
       // 🔄 NOUVEAU : Supprimer la facture liée automatiquement
       try {
         const { InvoiceService } = await import('./invoiceService');
-        
+
         // Rechercher les factures liées à cette consultation
         const invoicesRef = collection(db, 'invoices');
         const invoiceQuery = query(
@@ -738,14 +738,14 @@ export class ConsultationService {
           where('consultationId', '==', id),
           where('osteopathId', '==', auth.currentUser.uid)
         );
-        
+
         const invoiceSnapshot = await getDocs(invoiceQuery);
-        
+
         // Supprimer toutes les factures liées à cette consultation
         for (const invoiceDoc of invoiceSnapshot.docs) {
           await InvoiceService.deleteInvoice(invoiceDoc.id);
           console.log('🗑️ Facture liée supprimée automatiquement:', invoiceDoc.id);
-          
+
           // Journalisation de la suppression de facture
           await AuditLogger.log(
             AuditEventType.DATA_DELETION,
@@ -756,7 +756,7 @@ export class ConsultationService {
             { consultationId: id, patientId }
           );
         }
-        
+
         if (invoiceSnapshot.docs.length > 0) {
           console.log(`✅ ${invoiceSnapshot.docs.length} facture(s) liée(s) supprimée(s) automatiquement`);
         }
@@ -765,13 +765,21 @@ export class ConsultationService {
         // Ne pas faire échouer la suppression de consultation si la facture échoue
         // La consultation doit être supprimée même si la facture pose problème
       }
-      
+
       // Supprimer la consultation
       await deleteDoc(docRef);
-      
-      // ✅ SUPPRIMÉ : Synchronisation automatique qui modifie les données du patient
-      // La suppression de consultation ne doit pas affecter le dossier patient
-      
+
+      // ✅ SYNCHRONISATION : Mettre à jour le champ nextAppointment du patient
+      // Après suppression d'une consultation, recalculer le prochain rendez-vous
+      try {
+        const { AppointmentService } = await import('./appointmentService');
+        await AppointmentService.syncPatientNextAppointment(patientId);
+        console.log('✅ Champ nextAppointment du patient mis à jour après suppression de la consultation');
+      } catch (syncError) {
+        console.warn('⚠️ Erreur lors de la synchronisation du nextAppointment:', syncError);
+        // Ne pas faire échouer la suppression si la synchronisation échoue
+      }
+
       // Journalisation de la suppression de consultation
       await AuditLogger.log(
         AuditEventType.DATA_DELETION,
@@ -781,10 +789,10 @@ export class ConsultationService {
         'success',
         { patientId }
       );
-      
+
     } catch (error) {
       console.error('❌ Erreur lors de la suppression de la consultation:', error);
-      
+
       // Journalisation de l'erreur
       await AuditLogger.log(
         AuditEventType.DATA_DELETION,
@@ -794,7 +802,7 @@ export class ConsultationService {
         'failure',
         { error: (error as Error).message }
       );
-      
+
       throw error;
     }
   }
