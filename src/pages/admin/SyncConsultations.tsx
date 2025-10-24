@@ -38,16 +38,39 @@ const SyncConsultations: React.FC = () => {
     setShowConfirmation(false);
 
     try {
-      await runManualSync(email);
+      console.log('🚀 Lancement de la synchronisation pour:', email);
+
+      // ✅ CORRECTION: Appeler directement le service de synchronisation rétroactive
+      const { InitialConsultationSyncService } = await import('../../services/initialConsultationSyncService');
+      const { auth } = await import('../../firebase/config');
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const { db } = await import('../../firebase/config');
+
+      // Trouver l'ostéopathe par email
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', email));
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        throw new Error(`Aucun utilisateur trouvé avec l'email: ${email}`);
+      }
+
+      const osteopathId = snapshot.docs[0].id;
+      console.log('✅ Ostéopathe trouvé:', osteopathId);
+
+      // Lancer la synchronisation rétroactive
+      const syncResult = await InitialConsultationSyncService.syncAllInitialConsultationsRetroactive(osteopathId);
+
+      console.log('📊 Résultat de la synchronisation:', syncResult);
 
       setResult({
-        success: true,
-        patientsProcessed: 15,
-        consultationsUpdated: 12,
-        errors: []
+        success: syncResult.success,
+        patientsProcessed: syncResult.patientsProcessed,
+        consultationsUpdated: syncResult.consultationsUpdated,
+        errors: syncResult.errors
       });
     } catch (error) {
-      console.error('Erreur lors de la synchronisation:', error);
+      console.error('❌ Erreur lors de la synchronisation:', error);
       setResult({
         success: false,
         patientsProcessed: 0,

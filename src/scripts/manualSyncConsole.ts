@@ -96,38 +96,79 @@ async function syncConsultationWithPatient(
   try {
     const fieldsToUpdate: Record<string, any> = {};
 
-    // Champs cliniques - ÉCRASEMENT SYSTÉMATIQUE
-    if (patientData.currentTreatment !== undefined) {
-      fieldsToUpdate.currentTreatment = patientData.currentTreatment || '';
+    // ✅ CORRECTION: Copier SEULEMENT les champs NON VIDES du dossier patient
+    // On ne copie PAS les chaînes vides pour ne pas écraser des données existantes
+
+    // Champs cliniques - COPIE SÉLECTIVE (seulement si non vide)
+    if (patientData.currentTreatment && patientData.currentTreatment.trim() !== '') {
+      fieldsToUpdate.currentTreatment = patientData.currentTreatment;
       result.fieldsUpdated.push('currentTreatment');
     }
-    if (patientData.consultationReason !== undefined) {
-      fieldsToUpdate.consultationReason = patientData.consultationReason || '';
+    if (patientData.consultationReason && patientData.consultationReason.trim() !== '') {
+      fieldsToUpdate.consultationReason = patientData.consultationReason;
       result.fieldsUpdated.push('consultationReason');
     }
-    if (patientData.medicalAntecedents !== undefined) {
-      fieldsToUpdate.medicalAntecedents = patientData.medicalAntecedents || '';
+    if (patientData.medicalAntecedents && patientData.medicalAntecedents.trim() !== '') {
+      fieldsToUpdate.medicalAntecedents = patientData.medicalAntecedents;
       result.fieldsUpdated.push('medicalAntecedents');
     }
-    if (patientData.medicalHistory !== undefined) {
-      fieldsToUpdate.medicalHistory = patientData.medicalHistory || '';
+    if (patientData.medicalHistory && patientData.medicalHistory.trim() !== '') {
+      fieldsToUpdate.medicalHistory = patientData.medicalHistory;
       result.fieldsUpdated.push('medicalHistory');
     }
-    if (patientData.osteopathicTreatment !== undefined) {
-      fieldsToUpdate.osteopathicTreatment = patientData.osteopathicTreatment || '';
+    if (patientData.osteopathicTreatment && patientData.osteopathicTreatment.trim() !== '') {
+      fieldsToUpdate.osteopathicTreatment = patientData.osteopathicTreatment;
       result.fieldsUpdated.push('osteopathicTreatment');
     }
-    if (patientData.tags !== undefined) {
-      fieldsToUpdate.symptoms = patientData.tags || [];
+    if (patientData.tags && Array.isArray(patientData.tags) && patientData.tags.length > 0) {
+      fieldsToUpdate.symptoms = patientData.tags;
       result.fieldsUpdated.push('symptoms');
     }
 
-    // Champs d'identité patient (snapshot)
+    // Champs d'identité patient (snapshot) - Toujours copier
     if (patientData.firstName !== undefined) {
       fieldsToUpdate.patientFirstName = patientData.firstName;
     }
     if (patientData.lastName !== undefined) {
       fieldsToUpdate.patientLastName = patientData.lastName;
+    }
+    if (patientData.dateOfBirth !== undefined) {
+      fieldsToUpdate.patientDateOfBirth = patientData.dateOfBirth;
+    }
+    if (patientData.gender !== undefined) {
+      fieldsToUpdate.patientGender = patientData.gender;
+    }
+    if (patientData.email !== undefined) {
+      fieldsToUpdate.patientEmail = patientData.email;
+    }
+    if (patientData.phone !== undefined) {
+      fieldsToUpdate.patientPhone = patientData.phone;
+    }
+    if (patientData.profession !== undefined) {
+      fieldsToUpdate.patientProfession = patientData.profession;
+    }
+
+    // Adresse patient
+    if (patientData.address) {
+      const addressString = typeof patientData.address === 'string'
+        ? patientData.address
+        : patientData.address.street || '';
+      if (addressString.trim() !== '') {
+        fieldsToUpdate.patientAddress = addressString;
+      }
+    }
+
+    // Assurance patient
+    if (patientData.insurance) {
+      const insuranceString = typeof patientData.insurance === 'string'
+        ? patientData.insurance
+        : patientData.insurance.provider || '';
+      if (insuranceString.trim() !== '') {
+        fieldsToUpdate.patientInsurance = insuranceString;
+      }
+    }
+    if (patientData.insuranceNumber && patientData.insuranceNumber.trim() !== '') {
+      fieldsToUpdate.patientInsuranceNumber = patientData.insuranceNumber;
     }
 
     fieldsToUpdate.updatedAt = Timestamp.fromDate(new Date());

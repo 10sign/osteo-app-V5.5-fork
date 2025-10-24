@@ -75,13 +75,24 @@ export class InitialConsultationSyncService {
       // 2. Préparer les champs à écraser avec les données du patient
       const fieldsToUpdate = this.prepareFieldsToUpdate(patientData);
 
+      console.log(`  🔍 DEBUG - Données patient reçues:`, {
+        currentTreatment: patientData.currentTreatment,
+        consultationReason: patientData.consultationReason,
+        medicalAntecedents: patientData.medicalAntecedents,
+        medicalHistory: patientData.medicalHistory,
+        osteopathicTreatment: patientData.osteopathicTreatment,
+        tags: patientData.tags
+      });
+
+      console.log(`  🔍 DEBUG - Champs préparés pour mise à jour:`, fieldsToUpdate);
+
       if (Object.keys(fieldsToUpdate).length === 0) {
-        console.log('  ℹ️  Aucune donnée patient à synchroniser');
+        console.log('  ℹ️  Aucune donnée patient à synchroniser (tous les champs sont vides)');
         result.success = true;
         return result;
       }
 
-      console.log(`  ✏️  Écrasement de ${Object.keys(fieldsToUpdate).length} champs`);
+      console.log(`  ✏️  Copie de ${Object.keys(fieldsToUpdate).length} champs non vides`);
       result.fieldsUpdated = Object.keys(fieldsToUpdate);
 
       // 3. Ajouter la date de mise à jour
@@ -194,12 +205,13 @@ export class InitialConsultationSyncService {
 
   /**
    * Prépare les champs à mettre à jour dans la consultation
-   * ÉCRASE systématiquement tous les champs, même s'ils ne sont pas vides
+   * ✅ CORRECTION: Copie SEULEMENT les champs NON VIDES du dossier patient
+   * Ne copie PAS les chaînes vides pour ne pas écraser des données existantes dans la consultation
    */
   private static prepareFieldsToUpdate(patientData: PatientData): Record<string, any> {
     const fieldsToUpdate: Record<string, any> = {};
 
-    // Champs d'identité du patient (snapshot)
+    // Champs d'identité du patient (snapshot) - Toujours copier
     if (patientData.firstName !== undefined) {
       fieldsToUpdate.patientFirstName = patientData.firstName;
     }
@@ -222,40 +234,52 @@ export class InitialConsultationSyncService {
       fieldsToUpdate.patientProfession = patientData.profession;
     }
 
-    // Traiter l'adresse
+    // Traiter l'adresse - Copier seulement si non vide
     if (patientData.address) {
       const addressString = typeof patientData.address === 'string'
         ? patientData.address
         : patientData.address.street || '';
-      fieldsToUpdate.patientAddress = addressString;
+      if (addressString && addressString.trim() !== '') {
+        fieldsToUpdate.patientAddress = addressString;
+      }
     }
 
-    // Traiter l'assurance
+    // Traiter l'assurance - Copier seulement si non vide
     if (patientData.insurance) {
       const insuranceString = typeof patientData.insurance === 'string'
         ? patientData.insurance
         : patientData.insurance.provider || '';
-      fieldsToUpdate.patientInsurance = insuranceString;
+      if (insuranceString && insuranceString.trim() !== '') {
+        fieldsToUpdate.patientInsurance = insuranceString;
+      }
     }
-    if (patientData.insuranceNumber !== undefined) {
+    if (patientData.insuranceNumber && patientData.insuranceNumber.trim() !== '') {
       fieldsToUpdate.patientInsuranceNumber = patientData.insuranceNumber;
     }
 
-    // ✅ CHAMPS CLINIQUES - ÉCRASEMENT SYSTÉMATIQUE
-    // Ces champs sont TOUJOURS écrasés avec les données du patient, même s'ils contiennent déjà des données
+    // ✅ CHAMPS CLINIQUES - COPIE SÉLECTIVE
+    // Copier SEULEMENT les champs qui ont une valeur non vide dans le dossier patient
+    // Ne PAS copier les champs vides pour éviter d'écraser des données existantes
 
-    // Utiliser des chaînes vides par défaut si le champ patient est vide
-    fieldsToUpdate.currentTreatment = patientData.currentTreatment || '';
-    fieldsToUpdate.consultationReason = patientData.consultationReason || '';
-    fieldsToUpdate.medicalAntecedents = patientData.medicalAntecedents || '';
-    fieldsToUpdate.medicalHistory = patientData.medicalHistory || '';
-    fieldsToUpdate.osteopathicTreatment = patientData.osteopathicTreatment || '';
+    if (patientData.currentTreatment && patientData.currentTreatment.trim() !== '') {
+      fieldsToUpdate.currentTreatment = patientData.currentTreatment;
+    }
+    if (patientData.consultationReason && patientData.consultationReason.trim() !== '') {
+      fieldsToUpdate.consultationReason = patientData.consultationReason;
+    }
+    if (patientData.medicalAntecedents && patientData.medicalAntecedents.trim() !== '') {
+      fieldsToUpdate.medicalAntecedents = patientData.medicalAntecedents;
+    }
+    if (patientData.medicalHistory && patientData.medicalHistory.trim() !== '') {
+      fieldsToUpdate.medicalHistory = patientData.medicalHistory;
+    }
+    if (patientData.osteopathicTreatment && patientData.osteopathicTreatment.trim() !== '') {
+      fieldsToUpdate.osteopathicTreatment = patientData.osteopathicTreatment;
+    }
 
-    // Symptômes (depuis les tags du patient)
-    if (patientData.tags !== undefined) {
+    // Symptômes (depuis les tags du patient) - Copier seulement si non vide
+    if (patientData.tags && Array.isArray(patientData.tags) && patientData.tags.length > 0) {
       fieldsToUpdate.symptoms = patientData.tags;
-    } else {
-      fieldsToUpdate.symptoms = [];
     }
 
     return fieldsToUpdate;
