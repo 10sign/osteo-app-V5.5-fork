@@ -35,6 +35,7 @@ interface PatientData {
   medicalHistory?: string;
   osteopathicTreatment?: string;
   tags?: string[];
+  notes?: string;
 }
 
 export class InitialConsultationSyncService {
@@ -81,7 +82,8 @@ export class InitialConsultationSyncService {
         medicalAntecedents: patientData.medicalAntecedents,
         medicalHistory: patientData.medicalHistory,
         osteopathicTreatment: patientData.osteopathicTreatment,
-        tags: patientData.tags
+        tags: patientData.tags,
+        notes: patientData.notes
       });
 
       console.log(`  🔍 DEBUG - Champs préparés pour mise à jour:`, fieldsToUpdate);
@@ -280,6 +282,11 @@ export class InitialConsultationSyncService {
     // Symptômes (depuis les tags du patient) - Copier seulement si non vide
     if (patientData.tags && Array.isArray(patientData.tags) && patientData.tags.length > 0) {
       fieldsToUpdate.symptoms = patientData.tags;
+    }
+
+    // Note sur le patient - Copier seulement si non vide
+    if (patientData.notes && patientData.notes.trim() !== '') {
+      fieldsToUpdate.notes = patientData.notes;
     }
 
     return fieldsToUpdate;
