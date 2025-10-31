@@ -12,7 +12,6 @@ import { HDSCompliance } from '../../utils/hdsCompliance';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
 import { ConsultationService } from '../../services/consultationService';
-import { BidirectionalSyncService } from '../../services/bidirectionalSyncService';
 
 interface EditConsultationModalProps {
   isOpen: boolean;
