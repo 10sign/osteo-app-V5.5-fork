@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, Clock, FileText, User, Plus, Trash2, CheckCircle } from 'lucide-react';
+import { X, User, Plus, Trash2, CheckCircle } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { doc, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import AutoResizeTextarea from '../ui/AutoResizeTextarea';
@@ -65,20 +65,20 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
   onClose,
   onSuccess,
   consultationId,
-  preselectedPatientId,
+  preselectedPatientId: _preselectedPatientId,
   preselectedPatientName
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [success, _setSuccess] = useState<string | null>(null);
   const [consultationData, setConsultationData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
-  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
-  const [pendingData, setPendingData] = useState<ConsultationFormData | null>(null);
+  const [_showConfirmationModal, _setShowConfirmationModal] = useState(false);
+  const [_pendingData, _setPendingData] = useState<ConsultationFormData | null>(null);
 
   // État pour les données du patient (consultation initiale)
-  const [patientData, setPatientData] = useState<any>(null);
+  const [_patientData, _setPatientData] = useState<any>(null);
   const [patientLastUpdated, setPatientLastUpdated] = useState<Date | null>(null);
 
   // Avertissement pour les données corrompues
@@ -94,7 +94,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
     defaultValues: {
       duration: 60,
       price: 60,
-      status: 'completed',
+      status: 'completed' as const,
       examinations: [],
       prescriptions: []
     }
@@ -152,7 +152,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                 'patients',
                 auth.currentUser.uid
               );
-              setPatientData(loadedPatientData);
+              _setPatientData(loadedPatientData);
               setPatientLastUpdated(rawPatientData.updatedAt?.toDate() || null);
               console.log('✅ Données patient chargées pour consultation initiale');
             }
@@ -586,7 +586,6 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                         <AutoResizeTextarea
                           id="consultationReason"
                           minRows={2}
-                          maxRows={4}
                           className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('consultationReason')}
                           placeholder="Détaillez le motif de consultation..."
@@ -605,7 +604,6 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                         <AutoResizeTextarea
                           id="currentTreatment"
                           minRows={2}
-                          maxRows={4}
                           className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('currentTreatment')}
                           placeholder="Traitements médicamenteux ou thérapies en cours..."
@@ -624,7 +622,6 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                         <AutoResizeTextarea
                           id="medicalAntecedents"
                           minRows={3}
-                          maxRows={6}
                           className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('medicalAntecedents')}
                           placeholder="Antécédents médicaux significatifs..."
@@ -640,7 +637,6 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                         <AutoResizeTextarea
                           id="medicalHistory"
                           minRows={3}
-                          maxRows={6}
                           className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('medicalHistory')}
                           placeholder="Historique médical général..."
@@ -656,7 +652,6 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                         <AutoResizeTextarea
                           id="osteopathicTreatment"
                           minRows={3}
-                          maxRows={6}
                           className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('osteopathicTreatment')}
                           placeholder="Décrivez le traitement ostéopathique..."
@@ -792,7 +787,6 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                               <div key={field.id} className="flex items-center space-x-2">
                                 <AutoResizeTextarea
                                   minRows={1}
-                                  maxRows={3}
                                   className={`flex-1 input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                                   placeholder="Ex: Radiographie lombaire, IRM cervicale..."
                                   {...register(`examinations.${index}.value`)}
@@ -843,7 +837,6 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                               <div key={field.id} className="flex items-center space-x-2">
                                 <AutoResizeTextarea
                                   minRows={1}
-                                  maxRows={3}
                                   className={`flex-1 input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                                   placeholder="Ex: Antalgiques, anti-inflammatoires, repos..."
                                   {...register(`prescriptions.${index}.value`)}
@@ -877,7 +870,6 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       <AutoResizeTextarea
                         id="notes"
                         minRows={3}
-                        maxRows={6}
                         className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                         {...register('notes')}
                         placeholder="Notes additionnelles sur le patient..."

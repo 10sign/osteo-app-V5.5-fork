@@ -1,17 +1,28 @@
-import React, { useEffect, useRef, forwardRef, useCallback } from 'react';
+import React, { useEffect, useRef, forwardRef, useCallback, useImperativeHandle } from 'react';
 
 interface AutoResizeTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   minRows?: number;
+  // If undefined or <= 0, height is unbounded and grows to show all content
   maxRows?: number;
 }
 
 const AutoResizeTextarea = forwardRef<HTMLTextAreaElement, AutoResizeTextareaProps>(
-  ({ minRows = 3, maxRows = 10, className = '', ...props }, ref) => {
+  ({ minRows = 3, maxRows, className = '', ...props }, ref) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const combinedRef = ref || textareaRef;
+
+    // Callback for function refs; avoid writing to read-only object refs
+    const setRefs = useCallback((el: HTMLTextAreaElement | null) => {
+      textareaRef.current = el;
+      if (typeof ref === 'function') {
+        ref(el);
+      }
+    }, [ref]);
+
+    // Expose our internal ref to object refs safely
+    useImperativeHandle(ref, () => textareaRef.current);
 
     const adjustHeight = useCallback(() => {
-      const textarea = (combinedRef as React.RefObject<HTMLTextAreaElement>)?.current;
+      const textarea = textareaRef.current;
       if (!textarea) return;
 
       // Store the current scroll position
@@ -28,7 +39,8 @@ const AutoResizeTextarea = forwardRef<HTMLTextAreaElement, AutoResizeTextareaPro
         : parseInt(computedStyle.lineHeight) || fontSize * 1.2;
       
       const minHeight = lineHeight * minRows;
-      const maxHeight = lineHeight * maxRows;
+      const hasMax = typeof maxRows === 'number' && maxRows > 0;
+      const maxHeight = hasMax ? lineHeight * (maxRows as number) : Infinity;
       
       // Calculate the new height based on scrollHeight
       const scrollHeight = textarea.scrollHeight;
@@ -39,7 +51,7 @@ const AutoResizeTextarea = forwardRef<HTMLTextAreaElement, AutoResizeTextareaPro
       
       // Restore scroll position
       textarea.scrollTop = scrollTop;
-    }, [minRows, maxRows, combinedRef]);
+    }, [minRows, maxRows]);
 
     useEffect(() => {
       // Use setTimeout to ensure the DOM is updated
@@ -48,7 +60,7 @@ const AutoResizeTextarea = forwardRef<HTMLTextAreaElement, AutoResizeTextareaPro
       }, 0);
       
       return () => clearTimeout(timeoutId);
-    }, [adjustHeight, props.value]);
+    });
 
     const handleInput = useCallback((e: React.FormEvent<HTMLTextAreaElement>) => {
       adjustHeight();
@@ -67,12 +79,15 @@ const AutoResizeTextarea = forwardRef<HTMLTextAreaElement, AutoResizeTextareaPro
     return (
       <textarea
         {...props}
-        ref={combinedRef}
-        className={`resize-none overflow-hidden ${className}`}
+        ref={setRefs}
+        className={`resize-none overflow-hidden whitespace-pre-wrap break-words ${className}`}
         onInput={handleInput}
         onChange={handleChange}
         style={{
           minHeight: `${20 * minRows}px`,
+          // Fallbacks au cas où les classes utilitaires ne sont pas disponibles
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
           ...props.style
         }}
       />

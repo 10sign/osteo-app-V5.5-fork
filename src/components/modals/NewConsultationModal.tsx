@@ -99,7 +99,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
     defaultValues: {
       duration: 60,
       price: 60,
-      status: 'draft',
+      status: 'draft' as const,
       examinations: [],
       prescriptions: [],
       date: preselectedDate || new Date().toISOString().split('T')[0],
@@ -304,7 +304,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         endTime: endTime,
         duration: data.duration,
         type: data.reason || 'Consultation ostéopathique',
-        status: 'confirmed',
+        status: 'confirmed' as const,
         location: {
           type: 'office',
           name: 'Cabinet principal'
@@ -592,7 +592,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                     <AutoResizeTextarea
                       id="consultationReason"
                       minRows={2}
-                      maxRows={4}
                       className="w-full resize-none input"
                       {...register('consultationReason')}
                       placeholder="Détaillez le motif de consultation..."
@@ -610,7 +609,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                     <AutoResizeTextarea
                       id="currentTreatment"
                       minRows={2}
-                      maxRows={4}
                       className="w-full resize-none input"
                       {...register('currentTreatment')}
                       placeholder="Traitements médicamenteux ou thérapies en cours..."
@@ -628,7 +626,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                     <AutoResizeTextarea
                       id="medicalAntecedents"
                       minRows={3}
-                      maxRows={6}
                       className="w-full resize-none input"
                       {...register('medicalAntecedents')}
                       placeholder="Antécédents médicaux significatifs..."
@@ -643,7 +640,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                     <AutoResizeTextarea
                       id="medicalHistory"
                       minRows={3}
-                      maxRows={6}
                       className="w-full resize-none input"
                       {...register('medicalHistory')}
                       placeholder="Historique médical général..."
@@ -658,7 +654,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                     <AutoResizeTextarea
                       id="osteopathicTreatment"
                       minRows={3}
-                      maxRows={6}
                       className="w-full resize-none input"
                       {...register('osteopathicTreatment')}
                       placeholder="Décrivez le traitement ostéopathique prévu..."
@@ -831,7 +826,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                           <div key={field.id} className="flex items-center space-x-2">
                             <AutoResizeTextarea
                               minRows={1}
-                              maxRows={3}
                               className="flex-1 input"
                               placeholder="Ex: Antalgiques, anti-inflammatoires, repos..."
                               {...register(`prescriptions.${index}.value`)}
@@ -875,7 +869,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                   <AutoResizeTextarea
                     id="notes"
                     minRows={3}
-                    maxRows={6}
                     className="w-full resize-none input"
                     {...register('notes')}
                     placeholder="Notes additionnelles sur le patient..."

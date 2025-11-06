@@ -1,18 +1,29 @@
-import React, { useState, useEffect, forwardRef, useRef, useCallback } from 'react';
+import React, { useState, useEffect, forwardRef, useRef, useCallback, useImperativeHandle } from 'react';
 import { useAutoCapitalize } from '../../hooks/useAutoCapitalize';
 
 interface AutoCapitalizeTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   onValueChange?: (value: string) => void;
   minRows?: number;
+  // If undefined or <= 0, height is unbounded and grows to show all content
   maxRows?: number;
 }
 
 const AutoCapitalizeTextarea = forwardRef<HTMLTextAreaElement, AutoCapitalizeTextareaProps>(
-  ({ value: propValue, onChange, onValueChange, minRows = 3, maxRows = 10, className = '', ...props }, ref) => {
+  ({ value: propValue, onChange, onValueChange, minRows = 3, maxRows, className = '', ...props }, ref) => {
     const [localValue, setLocalValue] = useState(propValue as string || '');
     const [value, setValue, handleAutoCapitalize] = useAutoCapitalize(localValue);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const combinedRef = ref || textareaRef;
+    
+    // Bridge our internal ref with any external ref safely
+    const setRefs = useCallback((el: HTMLTextAreaElement | null) => {
+      textareaRef.current = el;
+      if (typeof ref === 'function') {
+        ref(el);
+      }
+    }, [ref]);
+
+    // Expose our internal ref to object refs without assigning directly
+    useImperativeHandle(ref, () => textareaRef.current);
 
     // Update local value when prop value changes
     useEffect(() => {
@@ -30,7 +41,7 @@ const AutoCapitalizeTextarea = forwardRef<HTMLTextAreaElement, AutoCapitalizeTex
 
     // Auto-resize functionality
     const adjustHeight = useCallback(() => {
-      const textarea = (combinedRef as React.RefObject<HTMLTextAreaElement>)?.current;
+      const textarea = textareaRef.current;
       if (!textarea) return;
 
       // Store the current scroll position
@@ -47,7 +58,8 @@ const AutoCapitalizeTextarea = forwardRef<HTMLTextAreaElement, AutoCapitalizeTex
         : parseInt(computedStyle.lineHeight) || fontSize * 1.2;
       
       const minHeight = lineHeight * minRows;
-      const maxHeight = lineHeight * maxRows;
+      const hasMax = typeof maxRows === 'number' && maxRows > 0;
+      const maxHeight = hasMax ? lineHeight * (maxRows as number) : Infinity;
       
       // Calculate the new height based on scrollHeight
       const scrollHeight = textarea.scrollHeight;
@@ -58,7 +70,7 @@ const AutoCapitalizeTextarea = forwardRef<HTMLTextAreaElement, AutoCapitalizeTex
       
       // Restore scroll position
       textarea.scrollTop = scrollTop;
-    }, [minRows, maxRows, combinedRef]);
+    }, [minRows, maxRows]);
 
     useEffect(() => {
       // Use setTimeout to ensure the DOM is updated
@@ -98,12 +110,15 @@ const AutoCapitalizeTextarea = forwardRef<HTMLTextAreaElement, AutoCapitalizeTex
     return (
       <textarea
         {...props}
-        ref={combinedRef}
+        ref={setRefs}
         value={value}
         onChange={handleChange}
-        className={`resize-none overflow-hidden ${className}`}
+        className={`resize-none overflow-hidden whitespace-pre-wrap break-words ${className}`}
         style={{
           minHeight: `${20 * minRows}px`,
+          // Ensure long words and pasted text wrap nicely
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
           ...props.style
         }}
       />
