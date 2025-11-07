@@ -317,8 +317,8 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
       // L'ID patient sera fourni par le service HDS
       
 
-      // Extract street from full address
-      const street = data.address;
+      // Extract street from full address (optional)
+      const street = data.address || '';
       
       const patientPayload: Record<string, any> = {
         firstName: data.firstName.trim(),
@@ -741,12 +741,12 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
 
                   <div>
                     <label htmlFor="gender" className="block mb-1 text-sm font-medium text-gray-700">
-                      Sexe
+                      Sexe *
                     </label>
                     <select
                       id="gender"
                       className={`input w-full ${errors.gender ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                      {...register('gender')}
+                      {...register('gender', { required: 'Ce champ est requis' })}
                       defaultValue="" // Ensure no default selection
                     >
                       <option value="">Sélectionner</option>
