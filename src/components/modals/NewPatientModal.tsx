@@ -315,9 +315,12 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
     setError(null);
     setProgress(20);
 
+    // Déclarer patientId au niveau de la fonction pour qu'il soit accessible dans le catch
+    // et éviter l'erreur "Cannot find name 'patientId'".
+    let patientId!: string;
+
     try {
       // L'ID patient sera fourni par le service HDS
-      let patientId: string;
       
 
       // Extract street from full address
@@ -516,9 +519,13 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         
         // Update patient data with corrected document paths
         if (updatedDocuments.length > 0) {
-          // Mettre à jour les documents via le service HDS
-          await PatientService.updatePatient(patientId, { documents: updatedDocuments });
-          console.log('Patient document paths updated via PatientService');
+          try {
+            // Mettre à jour les documents via le service HDS
+            await PatientService.updatePatient(patientId, { documents: updatedDocuments });
+            console.log('Patient document paths updated via PatientService');
+          } catch (err) {
+            console.warn('⚠️ Échec de mise à jour des chemins de documents (non bloquant):', err);
+          }
         }
       }
       setProgress(100);
@@ -549,8 +556,16 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         onClose();
       }, 1500);
     } catch (error: any) {
-      console.error('Error creating new patient:', error);
-      setError('Erreur lors de la création du nouveau dossier patient: ' + error.message);
+      console.error('Error creating new patient flow:', error);
+      // Si le patient a déjà été créé, ne pas afficher une erreur bloquante
+      if (patientId) {
+        console.warn('Patient created but post-create step failed:', { patientId, error });
+        // Afficher un succès et un avertissement non bloquant
+        setSuccess('Dossier patient créé. Certaines actions automatiques ont échoué.');
+        // Ne pas définir d’erreur globale pour éviter le banner rouge
+      } else {
+        setError('Erreur lors de la création du nouveau dossier patient: ' + error.message);
+      }
     } finally {
       setIsSubmitting(false);
       setProgress(0);
