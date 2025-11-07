@@ -15,6 +15,8 @@ import { db, auth } from '../firebase/config';
 import { Consultation, ConsultationFormData } from '../types';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import HDSCompliance from '../utils/hdsCompliance';
+import { toDateSafe } from '../utils/dataCleaning';
+import { listDocuments } from '../utils/documentStorage';
 
 export class ConsultationService {
   /**
@@ -45,9 +47,9 @@ export class ConsultationService {
         consultations.push({
           id: docSnapshot.id,
           ...decryptedData,
-          date: data.date?.toDate?.() || new Date(data.date),
-          createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
-          updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)
+          date: toDateSafe(data.date),
+          createdAt: toDateSafe(data.createdAt),
+          updatedAt: toDateSafe(data.updatedAt)
         } as Consultation);
       }
       
@@ -310,7 +312,7 @@ export class ConsultationService {
 
       // ✅ FIX CRITIQUE: Nettoyer UNIQUEMENT les champs undefined/null
       // IMPORTANT: Ne PAS supprimer les chaînes vides chiffrées (elles contiennent "U2FsdGVkX1...")
-      const cleanedData = Object.fromEntries(
+      const cleanedData: any = Object.fromEntries(
         Object.entries(dataToStore).filter(([key, value]) => {
           // Exclure UNIQUEMENT undefined et null (garder les chaînes vides chiffrées)
           if (value === undefined) {
@@ -841,7 +843,7 @@ export class ConsultationService {
       
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        const consultationDate = data.date?.toDate?.() || new Date(data.date);
+        const consultationDate = toDateSafe(data.date);
         
         total++;
         
@@ -861,7 +863,7 @@ export class ConsultationService {
         AuditEventType.DATA_ACCESS,
         'consultations/stats',
         'read_stats',
-        SensitivityLevel.LOW,
+        SensitivityLevel.INTERNAL,
         'success'
       );
       
@@ -880,7 +882,7 @@ export class ConsultationService {
         AuditEventType.DATA_ACCESS,
         'consultations/stats',
         'read_stats',
-        SensitivityLevel.LOW,
+        SensitivityLevel.INTERNAL,
         'failure',
         { error: (error as Error).message }
       );

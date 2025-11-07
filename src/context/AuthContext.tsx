@@ -4,9 +4,12 @@ import { auth } from '../firebase/config';
 import { User, AuthState, LoginCredentials, ApiResponse } from '../types/auth';
 import { authService } from '../services/authService';
 import { tokenStorage } from '../utils/jwt';
-import { trackEvent, setUserTag } from '../lib/clarityClient';
-import { setUserId } from '../lib/matomoTagManager';
-import { setUserId as setGAUserId, setUserProperties } from '../lib/googleAnalytics';
+// Analytics supprimés: retirer les imports et utiliser des stubs locaux
+const trackEvent = (..._args: any[]) => {};
+const setUserTag = (..._args: any[]) => {};
+const setUserId = (..._args: any[]) => {};
+const setGAUserId = (..._args: any[]) => {};
+const setUserProperties = (..._args: any[]) => {};
 import { saveSessionState, hasValidSession } from '../utils/sessionPersistence';
 
 interface AuthContextType extends AuthState {
@@ -49,14 +52,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Obtenir l'ID de l'ostéopathe effectif
   const getEffectiveOsteopathId = useCallback(async (): Promise<string | null> => {
     if (!authState.user) return null;
-    
-    if (authState.user.role === 'osteopath') {
-      return authState.user.uid;
-    } else if (authState.user.role === 'substitute') {
+    // For substitutes, use the linked titular osteopath ID; otherwise fallback to current user ID
+    if (authState.user.role === 'substitute') {
       return authState.user.linkedTo || null;
     }
-    
-    return null;
+    return authState.user.uid;
   }, [authState.user]);
 
   // Connexion

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Trash2, User, Calendar, AlertCircle } from 'lucide-react';
+import { X, Plus, Trash2, User } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import AutoResizeTextarea from '../ui/AutoResizeTextarea';
@@ -29,6 +29,7 @@ interface InvoiceItem {
   description: string;
   quantity: number;
   unitPrice: number;
+  taxRate: number;
   amount: number;
 }
 
@@ -59,7 +60,7 @@ const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
   const { register, handleSubmit, formState: { errors, isValid }, reset, control, watch, setValue } = useForm<InvoiceFormData>({
     mode: 'onChange',
     defaultValues: {
-      items: [{ description: 'Consultation standard', quantity: 1, unitPrice: 60, amount: 60 }],
+      items: [{ id: crypto.randomUUID(), description: 'Consultation standard', quantity: 1, unitPrice: 60, taxRate: 0, amount: 60 }],
       issueDate: new Date().toISOString().split('T')[0],
       dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     }
@@ -152,7 +153,7 @@ const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
   };
 
   const addItem = () => {
-    append({ description: '', quantity: 1, unitPrice: 0, amount: 0 });
+    append({ id: crypto.randomUUID(), description: '', quantity: 1, unitPrice: 0, taxRate: 0, amount: 0 });
   };
 
   const removeItem = (index: number) => {
@@ -208,7 +209,7 @@ const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
         subtotal,
         tax,
         total,
-        status: 'draft',
+        status: 'draft' as const,
         notes: data.notes,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()

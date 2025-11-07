@@ -4,9 +4,10 @@ import { Eye, EyeOff, LogIn, Star, AlertCircle, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { LoginCredentials } from '../../types/auth';
-import { trackEvent } from '../../lib/clarityClient';
-import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
-import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
+// Analytics supprimés: retirer les imports et utiliser des stubs locaux
+const trackEvent = (..._args: any[]) => {};
+const trackMatomoEvent = (..._args: any[]) => {};
+const trackGAEvent = (..._args: any[]) => {};
 import AdminLoginButton from '../../components/auth/AdminLoginButton';
 
 const UserLogin: React.FC = () => {

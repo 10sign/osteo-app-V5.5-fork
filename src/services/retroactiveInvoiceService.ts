@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
+import { toDateSafe } from '../utils/dataCleaning';
 
 /**
  * Service pour la génération rétroactive de factures
@@ -103,25 +104,9 @@ export class RetroactiveInvoiceService {
           const patientName = consultationData.patientName || `${patientData.firstName} ${patientData.lastName}`;
 
           // Récupérer la date de consultation
-          let consultationDate: Date;
-          try {
-            if (consultationData.date?.toDate) {
-              consultationDate = consultationData.date.toDate();
-            } else if (consultationData.date?.seconds) {
-              consultationDate = new Date(consultationData.date.seconds * 1000);
-            } else if (typeof consultationData.date === 'string') {
-              consultationDate = new Date(consultationData.date);
-            } else if (consultationData.date instanceof Date) {
-              consultationDate = consultationData.date;
-            } else {
-              throw new Error('Invalid date format');
-            }
-
-            if (isNaN(consultationDate.getTime())) {
-              throw new Error('Invalid date value');
-            }
-          } catch (dateError) {
-            console.error(`❌ Error parsing date for consultation ${consultationId}:`, dateError);
+          const consultationDate = toDateSafe(consultationData.date);
+          if (isNaN(consultationDate.getTime())) {
+            console.error(`❌ Error parsing date for consultation ${consultationId}: invalid date`);
             results.errors.push(`Consultation ${consultationId}: date invalide`);
             continue;
           }
@@ -271,12 +256,9 @@ export class RetroactiveInvoiceService {
           // Formater la date pour l'affichage
           let dateString = 'Date inconnue';
           try {
-            if (consultationData.date?.toDate) {
-              dateString = consultationData.date.toDate().toLocaleDateString('fr-FR');
-            } else if (consultationData.date?.seconds) {
-              dateString = new Date(consultationData.date.seconds * 1000).toLocaleDateString('fr-FR');
-            } else if (typeof consultationData.date === 'string') {
-              dateString = new Date(consultationData.date).toLocaleDateString('fr-FR');
+            const d = toDateSafe(consultationData.date);
+            if (!isNaN(d.getTime())) {
+              dateString = d.toLocaleDateString('fr-FR');
             }
           } catch (error) {
             console.warn(`Error formatting date for consultation ${consultationId}`);

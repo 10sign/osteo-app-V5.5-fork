@@ -101,7 +101,7 @@ export function isCorruptedData(value: any): boolean {
   
   return errorMarkers.some(marker => stringValue.includes(marker)) ||
          stringValue.includes('�') ||
-         stringValue.match(/[^\x20-\x7E\u00C0-\u017F\u0100-\u024F\u0400-\u04FF]/);
+         !!stringValue.match(/[^\x20-\x7E\u00C0-\u017F\u0100-\u024F\u0400-\u04FF]/);
 }
 
 /**
@@ -126,4 +126,38 @@ export function cleanDecryptedObject(
   });
   
   return cleaned;
+}
+
+/**
+ * Conversion robuste d'une valeur vers Date avec prise en charge Timestamp, string et Date
+ * @param val - Valeur à convertir (Firestore Timestamp, string ISO, Date, objet avec seconds)
+ * @param defaultDate - Date par défaut si la conversion échoue
+ * @returns Date valide ou defaultDate
+ */
+export function toDateSafe(val: any, defaultDate: Date = new Date(0)): Date {
+  if (!val) return defaultDate;
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? defaultDate : val;
+  }
+  // Firestore Timestamp
+  if (val?.toDate && typeof val.toDate === 'function') {
+    try {
+      const d = val.toDate();
+      return isNaN(d.getTime()) ? defaultDate : d;
+    } catch {
+      return defaultDate;
+    }
+  }
+  // Objet avec seconds (Timestamp-like)
+  if (typeof val?.seconds === 'number') {
+    const d = new Date(val.seconds * 1000);
+    return isNaN(d.getTime()) ? defaultDate : d;
+  }
+  // Chaîne ou autres
+  try {
+    const d = new Date(val as string);
+    return isNaN(d.getTime()) ? defaultDate : d;
+  } catch {
+    return defaultDate;
+  }
 }

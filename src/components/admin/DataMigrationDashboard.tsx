@@ -17,10 +17,11 @@ import {
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { DataMigrationService } from '../../services/dataMigrationService';
-import { DashboardService } from '../../services/dashboardService';
-import { trackEvent } from '../../lib/clarityClient';
-import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
-import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
+import { auth } from '../../firebase/config';
+// Analytics supprimés: retirer les imports et utiliser des stubs locaux
+const trackEvent = (..._args: any[]) => {};
+const trackMatomoEvent = (..._args: any[]) => {};
+const trackGAEvent = (..._args: any[]) => {};
 import FirstConsultationSyncPanel from './FirstConsultationSyncPanel';
 
 const DataMigrationDashboard: React.FC = () => {
@@ -35,10 +36,10 @@ const DataMigrationDashboard: React.FC = () => {
   const [repairLoading, setRepairLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [step, setStep] = useState<'report' | 'migrate' | 'verify' | 'repair' | 'complete'>('report');
   const [cleanupStats, setCleanupStats] = useState<any>(null);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [showGlobalReport, setShowGlobalReport] = useState(true);
+  const [step, setStep] = useState<'report' | 'migrate' | 'verify' | 'repair' | 'complete'>('report');
 
   // Charger le rapport initial
   useEffect(() => {
@@ -201,7 +202,8 @@ const DataMigrationDashboard: React.FC = () => {
       setCleanupLoading(true);
       setError(null);
       
-      const results = await DashboardService.cleanTestData(auth.currentUser?.uid || '');
+      // Remplace l'appel inexistant par un nettoyage des doublons
+      const results = await DataMigrationService.cleanDuplicateConsultationsAndInvoices();
       setCleanupStats(results);
       
       setSuccess('Nettoyage terminé avec succès');

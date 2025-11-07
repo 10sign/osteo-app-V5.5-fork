@@ -8,6 +8,7 @@ interface FieldHistoryEntry {
   source: 'consultation' | 'patient';
   consultationNumber?: number;
   isIdentical?: boolean;
+  updatedAt?: string | Date;
 }
 
 interface FieldHistoryProps {
@@ -29,12 +30,23 @@ export const FieldHistory: React.FC<FieldHistoryProps> = ({
   const displayValue = currentValue || emptyMessage;
   const isEmpty = !currentValue || currentValue.trim() === '';
 
-  const formatDate = (date: Date): string => {
+  const formatDate = (date?: Date): string => {
+    if (!date || isNaN(date.getTime())) {
+      return 'Date invalide';
+    }
     try {
       return format(date, 'dd/MM/yyyy');
     } catch (error) {
       return 'Date invalide';
     }
+  };
+
+  const getEntryDate = (entry: FieldHistoryEntry): Date | undefined => {
+    if (entry.date) return entry.date;
+    if (entry.updatedAt) {
+      return typeof entry.updatedAt === 'string' ? new Date(entry.updatedAt) : entry.updatedAt;
+    }
+    return undefined;
   };
 
   const getSourceLabel = (source: 'consultation' | 'patient', consultationNumber?: number): string => {
@@ -63,7 +75,7 @@ export const FieldHistory: React.FC<FieldHistoryProps> = ({
         )}
       </div>
 
-      <div className={`text-gray-700 whitespace-pre-wrap ${isEmpty ? 'italic text-gray-500' : 'font-medium'}`}>
+      <div className={`text-gray-700 whitespace-pre-wrap break-words ${isEmpty ? 'italic text-gray-500' : 'font-medium'}`}>
         {displayValue}
       </div>
 
@@ -93,10 +105,10 @@ export const FieldHistory: React.FC<FieldHistoryProps> = ({
                       {getSourceLabel(entry.source, entry.consultationNumber)}
                     </span>
                     <span className="text-xs text-gray-500">
-                      {formatDate(entry.date)}
+                      {formatDate(getEntryDate(entry))}
                     </span>
                   </div>
-                  <div className={`text-sm whitespace-pre-wrap ${
+                  <div className={`text-sm whitespace-pre-wrap break-words ${
                     entryIsEmpty
                       ? 'italic text-gray-400'
                       : isLatest

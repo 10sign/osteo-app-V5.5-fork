@@ -1,20 +1,20 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, X as XIcon, User, Calendar, Trash2, CheckCircle, Upload } from 'lucide-react';
+import { X, Plus, X as XIcon, Trash2, CheckCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { doc, setDoc } from 'firebase/firestore';
-import { db, auth } from '../../firebase/config';
+import { auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import { Patient, PatientFormData, TreatmentHistoryEntry } from '../../types';
-import { validatePatientData } from '../../utils/validation';
+// Removed unused validatePatientData import
 import { ConsultationService } from '../../services/consultationService';
 import { InvoiceService } from '../../services/invoiceService';
 import AutoResizeTextarea from '../ui/AutoResizeTextarea';
 import AutoCapitalizeInput from '../ui/AutoCapitalizeInput';
 import { patientCache } from '../../utils/patientCache';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
-import { DocumentMetadata } from '../../utils/documentStorage';
-import { saveFormData, getFormData, clearFormData } from '../../utils/sessionPersistence';
+import { DocumentMetadata, createFolderStructure } from '../../utils/documentStorage';
+import { saveFormData, clearFormData } from '../../utils/sessionPersistence';
+import { PatientService } from '../../services/patientService';
 
 interface NewPatientModalProps {
   isOpen: boolean;
@@ -53,9 +53,9 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
   const [customTag, setCustomTag] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [treatmentHistory, setTreatmentHistory] = useState<TreatmentHistoryEntry[]>([]);
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>([]);
+  const [pastAppointments, _setPastAppointments] = useState<PastAppointment[]>([]);
   const [clickCount, setClickCount] = useState(0);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [hasFormData, setHasFormData] = useState(false);
@@ -76,7 +76,6 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
       lastName: '',
       dateOfBirth: '',
       profession: '',
-      gender: '', // Ensure gender starts empty, not pre-selected
       email: '',
       address: '',
       phone: '',
@@ -95,9 +94,10 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
     console.log('Setting empty form values:', emptyFormData);
     
     try {
-      Object.entries(emptyFormData).forEach(([key, value]) => {
-        setValue(key as any, value);
-      });
+      (Object.entries(emptyFormData) as [keyof PatientFormData, PatientFormData[keyof PatientFormData]][])
+        .forEach(([key, value]) => {
+          setValue(key, value as any);
+        });
     } catch (error) {
       console.error('Error setting empty form values:', error);
     }
@@ -160,7 +160,10 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         hasListData,
         isDirty,
         hasData,
-        formData: Object.keys(formData).filter(key => formData[key])
+        formData: (Object.keys(formData) as (keyof PatientFormData)[]).filter((key) => {
+          const v = formData[key];
+          return v !== undefined && v !== null && v !== '';
+        })
       });
       
       setHasFormData(hasData);
@@ -217,24 +220,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
     });
   };
 
-  // Gérer la fermeture avec vérification
-  const handleClose = () => {
-    if (!hasFormData) {
-      // Pas de données, fermer directement
-      clearFormData(FORM_ID);
-      reset();
-      setSelectedTags([]);
-        setTreatmentHistory([]);
-      setPatientDocuments([]);
-      setError(null);
-      setSuccess(null);
-      onClose();
-      return;
-    }
-
-    // Il y a des données, afficher la confirmation
-    setShowConfirmation(true);
-  };
+  // handleClose removed (unused in this component)
 
   // Confirmer la fermeture sans sauvegarder
   const handleConfirmClose = () => {
@@ -273,9 +259,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
     setClickCount(0);
   };
 
-  const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    // Cette fonction est conservée mais n'est plus utilisée
-  }, []);
+  // (supprimé) handleFileSelect inutilisé
 
   const handleAddTag = useCallback((tag: string) => {
     if (!selectedTags.includes(tag)) {
@@ -332,15 +316,14 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
     setProgress(20);
 
     try {
-      const patientId = crypto.randomUUID();
+      // L'ID patient sera fourni par le service HDS
+      let patientId: string;
       
 
-      // Extract address components from the full address
-      const addressParts = data.address.split(',').map(part => part.trim());
+      // Extract street from full address
       const street = data.address;
       
-      const patientData: Record<string, any> = {
-        id: patientId,
+      const patientPayload: Record<string, any> = {
         firstName: data.firstName.trim(),
         lastName: data.lastName.trim(),
         profession: data.profession || '',
@@ -370,29 +353,26 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         
         // Ensure this is NOT test data - explicitly set to false
         isTestData: false,
-        osteopathId: auth.currentUser.uid,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        osteopathId: auth.currentUser.uid
       };
 
       // Only add treatmentHistory if it has entries to avoid undefined
       if (treatmentHistory.length > 0) {
-        patientData.treatmentHistory = treatmentHistory;
+        patientPayload.treatmentHistory = treatmentHistory;
       }
 
       // Ajouter les documents si présents
       if (patientDocuments.length > 0) {
-        patientData.documents = patientDocuments;
+        patientPayload.documents = patientDocuments;
       }
 
       setProgress(60);
 
-      console.log('About to save patient to Firestore:', patientId, patientData);
+      console.log('About to create patient via PatientService with HDS compliance');
 
-      // Save to Firestore
-      await setDoc(doc(db, 'patients', patientId), patientData);
-      
-      console.log('Patient successfully saved to Firestore');
+      // Création HDS du patient (chiffrement + audit + métadonnées)
+      patientId = await PatientService.createPatient(patientPayload as any);
+      console.log('Patient successfully created via PatientService with ID:', patientId);
       
       setProgress(80);
 
@@ -408,7 +388,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         notes: data.notes || 'Consultation générée automatiquement lors de la création du patient.',
         duration: 60,
         price: 60,
-        status: 'completed' as 'draft' | 'completed' | 'cancelled',
+        status: 'completed' as const,
         examinations: [],
         prescriptions: [],
 
@@ -468,12 +448,13 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
           description: 'Première consultation',
           quantity: 1,
           unitPrice: 55,
+          taxRate: 0,
           amount: 55
         }],
         subtotal: 55,
         tax: 0,
         total: 55,
-        status: 'draft',
+        status: 'draft' as const,
         notes: 'Facture générée automatiquement pour la première consultation.',
         consultationId: initialConsultationId,
         createdAt: new Date().toISOString(),
@@ -483,7 +464,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
       await InvoiceService.createInvoice(invoiceData);
 
       // Update cache
-      patientCache.set(patientId, patientData as Patient);
+      patientCache.set(patientId, { id: patientId, ...patientPayload } as Patient);
 
       // Move documents from temp folder to patient's permanent folder
       if (patientDocuments.length > 0) {
@@ -526,11 +507,9 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         
         // Update patient data with corrected document paths
         if (updatedDocuments.length > 0) {
-          patientData.documents = updatedDocuments;
-          
-          // Update Firestore with corrected document paths
-          await setDoc(doc(db, 'patients', patientId), patientData);
-          console.log('Patient document paths updated in Firestore');
+          // Mettre à jour les documents via le service HDS
+          await PatientService.updatePatient(patientId, { documents: updatedDocuments });
+          console.log('Patient document paths updated via PatientService');
         }
       }
       setProgress(100);
@@ -545,7 +524,8 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
       // Clear saved form data
       clearFormData(FORM_ID);
       
-      console.log('Patient created with ID:', patientId, 'Data:', patientData);
+      // Log minimal info to aid diagnostics without referencing undefined variables
+      console.log('Patient created with ID:', patientId, 'Payload:', patientPayload);
       
       // Wait for Firestore to commit and then refresh the list
       setTimeout(() => {
@@ -1152,7 +1132,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                   type="submit"
                   form="newPatientForm"
                   disabled={isSubmitting || !isValid}
-                  loading={isSubmitting}
+                  isLoading={isSubmitting}
                 >
                   {isSubmitting ? 'Création...' : 'Créer le dossier'}
                 </Button>
@@ -1192,7 +1172,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                     </Button>
                     <Button
                       type="button"
-                      variant="destructive"
+                      variant="danger"
                       onClick={handleConfirmClose}
                     >
                       Fermer sans sauvegarder

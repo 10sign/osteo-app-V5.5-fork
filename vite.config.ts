@@ -6,8 +6,6 @@ export default defineConfig(({ command }) => ({
   plugins: [
     react({
       jsxRuntime: 'automatic',
-      fastRefresh: true,
-      strictMode: true,
     }),
     ...(command === 'build' ? [VitePWA({
       registerType: 'autoUpdate',
@@ -41,6 +39,8 @@ export default defineConfig(({ command }) => ({
     })] : [])
   ],
   server: {
+    port: 5175,
+    strictPort: true,
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',

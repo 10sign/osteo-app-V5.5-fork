@@ -103,7 +103,9 @@ export interface Patient {
   documentUrl?: string | null;
   isTestData?: boolean;
   nextAppointment?: string; // format: "YYYY-MM-DDThh:mm:ss"
-  documents?: PatientDocument[];
+  // Harmonisation: utiliser les métadonnées de documents communes
+  // pour aligner avec les consultations et les composants d'upload
+  documents?: DocumentMetadata[];
   pastAppointments?: PastAppointment[]; // Nouveau champ pour les rendez-vous passés
   
   // Champs pour le tri
@@ -290,6 +292,7 @@ export interface ConsultationFormData {
   patientId: string;
   patientName: string;
   date: Date | string;
+  appointmentId?: string;
   reason?: string;
   treatment?: string;
   notes?: string;

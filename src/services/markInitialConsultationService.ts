@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
+import { toDateSafe } from '../utils/dataCleaning';
 
 interface MarkResult {
   success: boolean;
@@ -96,8 +97,9 @@ export class MarkInitialConsultationService {
 
           result.consultationsMarked++;
 
-          const consultationDate = firstConsultationData.date?.toDate?.()
-            ? firstConsultationData.date.toDate().toLocaleDateString('fr-FR')
+          const d = toDateSafe(firstConsultationData.date);
+          const consultationDate = !isNaN(d.getTime())
+            ? d.toLocaleDateString('fr-FR')
             : 'Date inconnue';
 
           result.details.push({
@@ -110,18 +112,18 @@ export class MarkInitialConsultationService {
           console.log(`  ✅ Consultation ${consultationId} marquée comme initiale (date: ${consultationDate})`);
 
           // Journaliser dans les audit logs
-          await AuditLogger.log(
-            AuditEventType.DATA_MODIFICATION,
-            `consultations/${consultationId}`,
-            'mark_as_initial',
-            SensitivityLevel.LOW,
-            'success',
-            {
-              patientId,
-              patientName,
-              consultationDate
-            }
-          );
+      await AuditLogger.log(
+        AuditEventType.DATA_MODIFICATION,
+        `consultations/${consultationId}`,
+        'mark_as_initial',
+        SensitivityLevel.INTERNAL,
+        'success',
+        {
+          patientId,
+          patientName,
+          consultationDate
+        }
+      );
 
         } catch (error) {
           const errorMessage = `Patient ${patientDoc.id}: ${(error as Error).message}`;

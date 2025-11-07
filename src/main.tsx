@@ -3,9 +3,6 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import './styles/animatedGradient.css'; // Importation des styles d'animation
-import { initClarity } from './lib/clarityClient';
-import { initMatomoTagManager } from './lib/matomoTagManager';
-import { initGoogleAnalytics } from './lib/googleAnalytics';
 import { initPersistenceSystem } from './utils/sessionPersistence';
 import { runManualSync } from './scripts/manualSyncConsole';
 
@@ -15,14 +12,7 @@ if (typeof window !== 'undefined') {
   console.log('🔧 Script de synchronisation manuelle disponible. Utilisez: runManualSync("email@example.com")');
 }
 
-// Initialize Microsoft Clarity
-initClarity();
-
-// Initialize Matomo Tag Manager
-initMatomoTagManager();
-
-// Initialize Google Analytics
-initGoogleAnalytics();
+// Analytics supprimés: imports et initialisations retirés pour alléger le bundle
 
 // Initialize persistence system
 initPersistenceSystem();

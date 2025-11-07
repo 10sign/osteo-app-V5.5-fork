@@ -264,7 +264,7 @@ export class PatientService {
             AuditEventType.DATA_MODIFICATION,
             `patients/${patientId}/consultation_sync`,
             'auto_sync',
-            SensitivityLevel.LOW,
+            SensitivityLevel.INTERNAL,
             'failure',
             { error: (syncError as Error).message }
           );
@@ -333,8 +333,8 @@ export class PatientService {
       await AuditLogger.logPatientModification(
         patientId,
         'delete_cascade',
-        'started',
-        { patientName: `${patientData.firstName} ${patientData.lastName}` }
+        'success',
+        { phase: 'started', patientName: `${patientData.firstName} ${patientData.lastName}` }
       );
       
       // 1. Suppression des rendez-vous

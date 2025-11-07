@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Trash2, User, Calendar, AlertCircle } from 'lucide-react';
+import { X, Plus, Trash2 } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
@@ -55,8 +55,8 @@ const EditInvoiceModal: React.FC<EditInvoiceModalProps> = ({
   const { register, handleSubmit, formState: { errors, isValid }, reset, control, watch, setValue } = useForm<InvoiceFormData>({
     mode: 'onChange',
     defaultValues: {
-      items: [{ description: 'Consultation standard', quantity: 1, unitPrice: 60, amount: 60 }],
-      status: 'draft'
+      items: [{ id: crypto.randomUUID(), description: 'Consultation standard', quantity: 1, unitPrice: 60, amount: 60 }],
+      status: 'draft' as const
     }
   });
 
@@ -129,7 +129,7 @@ const EditInvoiceModal: React.FC<EditInvoiceModalProps> = ({
   };
 
   const addItem = () => {
-    append({ description: '', quantity: 1, unitPrice: 0, amount: 0 });
+    append({ id: crypto.randomUUID(), description: '', quantity: 1, unitPrice: 0, amount: 0 });
   };
 
   const removeItem = (index: number) => {

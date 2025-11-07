@@ -27,9 +27,10 @@ import AddUserModal from '../../components/admin/AddUserModal';
 import DataMigrationDashboard from '../../components/admin/DataMigrationDashboard';
 import SubstituteManagement from '../../components/admin/SubstituteManagement';
 import RetroactiveInvoiceGenerator from '../../components/admin/RetroactiveInvoiceGenerator';
-import { trackEvent } from '../../lib/clarityClient';
-import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
-import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
+// Analytics supprimés: retirer les imports et utiliser des stubs locaux
+const trackEvent = (..._args: any[]) => {};
+const trackMatomoEvent = (..._args: any[]) => {};
+const trackGAEvent = (..._args: any[]) => {};
 import { collection, query, getDocs, getCountFromServer } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import EncryptionDiagnostic from '../../components/ui/EncryptionDiagnostic';

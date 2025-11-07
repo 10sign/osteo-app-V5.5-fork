@@ -12,6 +12,8 @@ interface FieldHistoryEntry {
   source: 'consultation' | 'patient';
   consultationNumber?: number;
   isIdentical?: boolean;
+  // Optionnel pour compatibilité avec certains tests qui enregistrent l'horodatage
+  updatedAt?: Date;
 }
 
 type ClinicalField =

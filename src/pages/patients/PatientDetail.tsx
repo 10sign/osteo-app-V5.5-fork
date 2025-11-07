@@ -21,8 +21,6 @@ import {
   CreditCard,
   Info,
   RefreshCw,
-  Pill,
-  AlertTriangle,
   Image as ImageIcon
 } from 'lucide-react';
 import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
@@ -38,7 +36,7 @@ import NewConsultationModal from '../../components/modals/NewConsultationModal';
 import EditConsultationModal from '../../components/modals/EditConsultationModal';
 import ViewConsultationModal from '../../components/modals/ViewConsultationModal';
 import DeleteConsultationModal from '../../components/modals/DeleteConsultationModal';
-import { Patient, Consultation, Invoice } from '../../types';
+import { Patient, Consultation, Invoice, ConsultationFormData } from '../../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { HDSCompliance } from '../../utils/hdsCompliance';
@@ -47,9 +45,10 @@ import { PatientService } from '../../services/patientService';
 import { ConsultationService } from '../../services/consultationService';
 import { InvoiceService } from '../../services/invoiceService';
 import { patientCache } from '../../utils/patientCache';
-import { trackEvent } from '../../lib/clarityClient';
-import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
-import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
+// Analytics supprimés: retirer les imports et utiliser des stubs locaux
+const trackEvent = (..._args: any[]) => {};
+const trackMatomoEvent = (..._args: any[]) => {};
+const trackGAEvent = (..._args: any[]) => {};
 import FieldHistory from '../../components/patient/FieldHistory';
 import { buildFieldHistory } from '../../utils/fieldHistoryBuilder';
 
@@ -180,10 +179,9 @@ const PatientDetail: React.FC = () => {
           // Créer une consultation rétroactive
           const creationDate = patientData.createdAt ? new Date(patientData.createdAt) : new Date();
           
-          const consultationData = {
+          const consultationData: ConsultationFormData = {
             patientId: id,
             patientName: `${decryptedData.firstName} ${decryptedData.lastName}`,
-            osteopathId: auth.currentUser.uid,
             date: creationDate,
             reason: decryptedData.consultationReason || 'Première consultation',
             treatment: decryptedData.osteopathicTreatment || 'Évaluation initiale et anamnèse',
@@ -344,13 +342,7 @@ const PatientDetail: React.FC = () => {
     return sortedConsultations[0];
   }, [consultations]);
 
-  // Get the initial consultation (created automatically when patient was created)
-  const getInitialConsultation = useCallback(() => {
-    if (consultations.length === 0) return null;
-
-    // Find the consultation with isInitialConsultation flag set to true
-    return consultations.find(c => c.isInitialConsultation === true) || null;
-  }, [consultations]);
+  // Removed unused getInitialConsultation helper
 
   // Load invoices
   const loadInvoices = useCallback(async () => {
@@ -361,7 +353,8 @@ const PatientDetail: React.FC = () => {
       const q = query(
         invoicesRef,
         where('patientId', '==', id),
-        where('osteopathId', '==', auth.currentUser.uid)
+        // Guard against null currentUser
+        where('osteopathId', '==', auth.currentUser?.uid ?? '')
       );
 
       const snapshot = await getDocs(q);
@@ -372,20 +365,23 @@ const PatientDetail: React.FC = () => {
         
         // Validation des données
         if (data.number && data.patientName && data.issueDate && data.total !== undefined) {
+          const createdAtStr = data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt || new Date().toISOString();
+          const updatedAtStr = data.updatedAt?.toDate?.()?.toISOString?.() || data.updatedAt || createdAtStr;
           invoicesData.push({
             id: doc.id,
             number: data.number,
             patientId: data.patientId || '',
-            patientName: data.patientName,
+            practitionerId: data.practitionerId || data.osteopathId || (auth.currentUser?.uid ?? ''),
             issueDate: data.issueDate,
             dueDate: data.dueDate || '',
-            total: data.total,
-            status: data.status || 'draft',
             items: data.items || [],
             subtotal: data.subtotal || 0,
             tax: data.tax || 0,
+            total: data.total,
+            status: data.status || 'draft',
             notes: data.notes || '',
-            osteopathId: data.osteopathId
+            createdAt: createdAtStr,
+            updatedAt: updatedAtStr
           });
         }
       });
@@ -512,7 +508,7 @@ const PatientDetail: React.FC = () => {
     }
   };
 
-  const handleDocumentSuccess = (documentUrl: string) => {
+  const handleDocumentSuccess = () => {
     setIsAddDocumentModalOpen(false);
     // Reload patient data to show new document
     loadPatientData();
@@ -1112,19 +1108,19 @@ const PatientDetail: React.FC = () => {
                     {latestConsultation.reason && (
                       <div>
                         <div className="text-sm text-gray-500">Raison</div>
-                        <div className="text-gray-700">{latestConsultation.reason}</div>
+                        <div className="text-gray-700 whitespace-pre-wrap break-words">{latestConsultation.reason}</div>
                       </div>
                     )}
                     {latestConsultation.treatment && (
                       <div>
                         <div className="text-sm text-gray-500">Traitement</div>
-                        <div className="text-gray-700 whitespace-pre-wrap">{latestConsultation.treatment}</div>
+                        <div className="text-gray-700 whitespace-pre-wrap break-words">{latestConsultation.treatment}</div>
                       </div>
                     )}
                     {latestConsultation.notes && (
                       <div>
                         <div className="text-sm text-gray-500">Notes</div>
-                        <div className="text-gray-700 whitespace-pre-wrap">{latestConsultation.notes}</div>
+                        <div className="text-gray-700 whitespace-pre-wrap break-words">{latestConsultation.notes}</div>
                       </div>
                     )}
                     <div className="flex items-center justify-between pt-2 border-t border-gray-200">
@@ -1572,7 +1568,7 @@ const PatientDetail: React.FC = () => {
                       {consultation.notes && cleanDecryptedField(consultation.notes, false, '') && (
                         <div>
                           <h5 className="mb-1 text-sm font-medium text-gray-700">Note sur le patient</h5>
-                          <p className="text-gray-900 whitespace-pre-wrap">
+                          <p className="text-gray-900 whitespace-pre-wrap break-words">
                             {cleanDecryptedField(consultation.notes, false, '')}
                           </p>
                         </div>
@@ -1582,7 +1578,7 @@ const PatientDetail: React.FC = () => {
                         {consultation.consultationReason && (
                           <div>
                             <h5 className="mb-1 text-xs font-medium text-gray-500 uppercase">Motif détaillé</h5>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
                               {cleanDecryptedField(consultation.consultationReason, false, '-')}
                             </p>
                           </div>
@@ -1590,7 +1586,7 @@ const PatientDetail: React.FC = () => {
                         {consultation.currentTreatment && (
                           <div>
                             <h5 className="mb-1 text-xs font-medium text-gray-500 uppercase">Traitement en cours</h5>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
                               {cleanDecryptedField(consultation.currentTreatment, false, '-')}
                             </p>
                           </div>
@@ -1598,7 +1594,7 @@ const PatientDetail: React.FC = () => {
                         {consultation.medicalAntecedents && (
                           <div>
                             <h5 className="mb-1 text-xs font-medium text-gray-500 uppercase">Antécédents</h5>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
                               {cleanDecryptedField(consultation.medicalAntecedents, false, '-')}
                             </p>
                           </div>
@@ -1606,7 +1602,7 @@ const PatientDetail: React.FC = () => {
                         {consultation.osteopathicTreatment && (
                           <div>
                             <h5 className="mb-1 text-xs font-medium text-gray-500 uppercase">Traitement ostéopathique</h5>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
                               {cleanDecryptedField(consultation.osteopathicTreatment, false, '-')}
                             </p>
                           </div>
@@ -1618,11 +1614,11 @@ const PatientDetail: React.FC = () => {
                         <div className="pt-4 border-t">
                           <h5 className="mb-3 text-sm font-medium text-gray-700">Documents de la consultation</h5>
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                            {consultation.documents.map((document, docIndex) => (
+                            {consultation.documents.map((docMeta, docIndex) => (
                               <div key={docIndex} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
                                 <div className="flex items-center space-x-3">
                                   <div className="flex-shrink-0">
-                                    {document.type?.startsWith('image/') ? (
+                                    {docMeta.type?.startsWith('image/') ? (
                                       <ImageIcon size={20} className="text-blue-500" />
                                     ) : (
                                       <FileText size={20} className="text-gray-500" />
@@ -1630,11 +1626,11 @@ const PatientDetail: React.FC = () => {
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <h6 className="text-sm font-medium text-gray-900 truncate">
-                                      {document.originalName || document.name}
+                                      {docMeta.originalName || docMeta.name}
                                     </h6>
                                     <p className="text-xs text-gray-500">
-                                      {document.size ? `${(document.size / (1024 * 1024)).toFixed(2)} MB` : 'Taille inconnue'}
-                                      {document.category && ` • ${document.category}`}
+                                      {docMeta.size ? `${(docMeta.size / (1024 * 1024)).toFixed(2)} MB` : 'Taille inconnue'}
+                                      {docMeta.category && ` • ${docMeta.category}`}
                                     </p>
                                   </div>
                                 </div>
@@ -1642,7 +1638,7 @@ const PatientDetail: React.FC = () => {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => window.open(document.url, '_blank')}
+                                    onClick={() => window.open(docMeta.url, '_blank')}
                                     leftIcon={<Eye size={12} />}
                                     className="text-xs"
                                   >
@@ -1653,8 +1649,8 @@ const PatientDetail: React.FC = () => {
                                     size="sm"
                                     onClick={() => {
                                       const link = document.createElement('a');
-                                      link.href = document.url;
-                                      link.download = document.originalName || document.name;
+                                      link.href = docMeta.url;
+                                      link.download = docMeta.originalName || docMeta.name;
                                       link.click();
                                     }}
                                     leftIcon={<Download size={12} />}

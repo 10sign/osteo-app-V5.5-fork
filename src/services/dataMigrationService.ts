@@ -7,18 +7,16 @@ import {
   getDoc, 
   updateDoc, 
   deleteDoc,
-  writeBatch,
+  addDoc,
   Timestamp 
 } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
-import { HDSCompliance } from '../utils/hdsCompliance';
 import { AppointmentService } from './appointmentService';
-import { ConsultationService } from './consultationService';
-import { InvoiceService } from './invoiceService';
-import { trackEvent } from '../lib/clarityClient';
-import { trackEvent as trackMatomoEvent } from '../lib/matomoTagManager';
-import { trackEvent as trackGAEvent } from '../lib/googleAnalytics';
+// Analytics supprimés: retirer les imports et utiliser des stubs locaux
+const trackEvent = (..._args: any[]) => {};
+const trackMatomoEvent = (..._args: any[]) => {};
+const trackGAEvent = (..._args: any[]) => {};
 
 /**
  * Service pour la migration des données de test vers des données réelles
@@ -45,7 +43,8 @@ export class DataMigrationService {
         'all',
         'migrate_test_data',
         SensitivityLevel.HIGHLY_SENSITIVE,
-        'started'
+        'success',
+        { phase: 'started' }
       );
       
       // Tracking analytics
@@ -407,9 +406,10 @@ export class DataMigrationService {
           );
           
           const consultationsSnapshot = await getDocs(consultationsQuery);
-          const consultations = consultationsSnapshot.docs.map(doc => ({
+          type ConsultationRecord = { id: string; date?: any; [key: string]: any };
+          const consultations: ConsultationRecord[] = consultationsSnapshot.docs.map(doc => ({
             id: doc.id,
-            ...doc.data()
+            ...(doc.data() as any)
           }));
           
           // Garder seulement la consultation la plus récente
@@ -462,16 +462,25 @@ export class DataMigrationService {
           );
           
           const invoicesSnapshot = await getDocs(invoicesQuery);
-          const invoices = invoicesSnapshot.docs.map(doc => ({
+          type InvoiceRecord = { id: string; issueDate?: any; [key: string]: any };
+          const invoices: InvoiceRecord[] = invoicesSnapshot.docs.map(doc => ({
             id: doc.id,
-            ...doc.data()
+            ...(doc.data() as any)
           }));
           
           // Garder seulement la facture la plus récente
           if (invoices.length > 1) {
             invoices.sort((a, b) => {
-              const dateA = new Date(a.issueDate);
-              const dateB = new Date(b.issueDate);
+              const toDateSafe = (val: any): Date => {
+                if (!val) return new Date(0);
+                // Firestore Timestamp support
+                if (val?.toDate && typeof val.toDate === 'function') {
+                  try { return val.toDate(); } catch { return new Date(0); }
+                }
+                try { return new Date(val as string); } catch { return new Date(0); }
+              };
+              const dateA = toDateSafe(a.issueDate);
+              const dateB = toDateSafe(b.issueDate);
               return dateB.getTime() - dateA.getTime();
             });
             
@@ -608,7 +617,8 @@ export class DataMigrationService {
         'all',
         'verify_integrity',
         SensitivityLevel.INTERNAL,
-        'started'
+        'success',
+        { phase: 'started' }
       );
       
       // Résultats de la vérification
@@ -756,7 +766,8 @@ export class DataMigrationService {
         'all',
         'repair_references',
         SensitivityLevel.HIGHLY_SENSITIVE,
-        'started'
+        'success',
+        { phase: 'started' }
       );
       
       // Résultats de la réparation
@@ -887,7 +898,8 @@ export class DataMigrationService {
         'all',
         'migration_report',
         SensitivityLevel.INTERNAL,
-        'started'
+        'success',
+        { phase: 'started' }
       );
       
       // Résultats du rapport
