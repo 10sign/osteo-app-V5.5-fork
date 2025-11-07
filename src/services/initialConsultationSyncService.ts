@@ -6,10 +6,12 @@
  */
 
 import { collection, query, where, orderBy, limit, getDocs, doc, Timestamp, getDoc, addDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db, auth } from '../firebase/config';
 import { HDSCompliance } from '../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import { toDateSafe } from '../utils/dataCleaning';
+import { ConsultationService } from './consultationService';
+import { ConsultationFormData } from '../types';
 
 interface SyncResult {
   success: boolean;
@@ -64,12 +66,76 @@ export class InitialConsultationSyncService {
       console.log(`🔄 Synchronisation automatique de la consultation initiale pour le patient ${patientId}`);
 
       // 1. Rechercher la consultation initiale du patient
-      const consultationId = await this.findInitialConsultation(patientId, osteopathId);
+      let consultationId = await this.findInitialConsultation(patientId, osteopathId);
 
+      // 1bis. Si aucune consultation initiale n'existe, la créer automatiquement
       if (!consultationId) {
-        console.log('  ℹ️  Aucune consultation initiale trouvée pour ce patient');
-        result.success = true; // Ce n'est pas une erreur
-        return result;
+        console.log('  ℹ️  Aucune consultation initiale trouvée — création automatique');
+
+        // Construire les données de consultation à partir du dossier patient
+        const now = new Date();
+        const patientName = `${patientData.firstName || ''} ${patientData.lastName || ''}`.trim();
+
+        const newConsultation: ConsultationFormData = {
+          patientId,
+          patientName: patientName || 'Patient',
+          date: now,
+          reason: (patientData as any).consultationReason || 'Première consultation',
+          treatment: (patientData as any).osteopathicTreatment || 'Évaluation initiale et anamnèse',
+          notes: (patientData as any).notes || 'Consultation initiale créée automatiquement depuis le dossier patient.',
+          duration: 60,
+          price: 55,
+          status: 'completed',
+          examinations: [],
+          prescriptions: [],
+
+          // Snapshot identité du patient
+          patientFirstName: patientData.firstName || '',
+          patientLastName: patientData.lastName || '',
+          patientDateOfBirth: patientData.dateOfBirth || '',
+          patientGender: patientData.gender || '',
+          patientPhone: patientData.phone || '',
+          patientEmail: patientData.email || '',
+          patientProfession: patientData.profession || '',
+          patientAddress: typeof patientData.address === 'string' ? (patientData.address || '') : (patientData.address?.street || ''),
+          patientInsurance: typeof patientData.insurance === 'string' ? (patientData.insurance || '') : (patientData.insurance?.provider || ''),
+          patientInsuranceNumber: (patientData as any).insuranceNumber || '',
+
+          // Champs cliniques du dossier patient
+          currentTreatment: (patientData as any).currentTreatment || '',
+          consultationReason: (patientData as any).consultationReason || '',
+          medicalAntecedents: (patientData as any).medicalAntecedents || '',
+          medicalHistory: (patientData as any).medicalHistory || '',
+          osteopathicTreatment: (patientData as any).osteopathicTreatment || '',
+          symptoms: Array.isArray(patientData.tags) ? patientData.tags : [],
+          treatmentHistory: [],
+
+          // Flag initiale
+          isInitialConsultation: true
+        };
+
+        // Créer la consultation via le service dédié (HDS + métadonnées)
+        const createdId = await ConsultationService.createConsultation(newConsultation);
+        consultationId = createdId;
+        result.consultationId = createdId;
+        result.success = true;
+        result.fieldsUpdated = Object.keys(newConsultation);
+
+        // Journaliser la création automatique
+        await AuditLogger.log(
+          AuditEventType.DATA_MODIFICATION,
+          `consultations/${createdId}`,
+          'auto_create_initial_from_patient',
+          SensitivityLevel.SENSITIVE,
+          'success',
+          {
+            patientId,
+            source: 'patient_update',
+            fieldsUpdated: result.fieldsUpdated
+          }
+        );
+
+        // Une fois créée, poursuivre la logique de préparation des champs (pour s'assurer de la mise à jour si includeEmpty=false)
       }
 
       console.log(`  📋 Consultation initiale trouvée: ${consultationId}`);

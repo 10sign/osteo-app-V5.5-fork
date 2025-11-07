@@ -118,7 +118,7 @@ const DeletePatientModal: React.FC<DeletePatientModalProps> = ({
                     </p>
                     <ul className="list-disc list-inside mt-2 text-sm text-gray-700 space-y-1">
                       <li>Dossier patient complet</li>
-                      <li>Tous les rendez-vous passés et futurs</li>
+                      <li>Tous les rendez-vous du patient</li>
                       <li>Toutes les consultations et leur historique</li>
                       <li>Toutes les factures liées au patient</li>
                       <li>Tous les documents et fichiers associés</li>

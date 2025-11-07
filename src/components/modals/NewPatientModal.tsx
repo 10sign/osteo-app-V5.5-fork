@@ -22,11 +22,6 @@ interface NewPatientModalProps {
   onSuccess: () => void;
 }
 
-interface PastAppointment {
-  date: string;
-  time: string;
-  notes: string;
-}
 
 const COMMON_PATHOLOGIES = [
   'Lombalgie',
@@ -55,7 +50,6 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
   const [success, setSuccess] = useState<string | null>(null);
   const [treatmentHistory, setTreatmentHistory] = useState<TreatmentHistoryEntry[]>([]);
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>([]);
-  const [pastAppointments, _setPastAppointments] = useState<PastAppointment[]>([]);
   const [_clickCount, setClickCount] = useState(0);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [hasFormData, setHasFormData] = useState(false);
@@ -580,7 +574,6 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
       value && value !== '' && value !== undefined && value !== null
     );
     const hasListData = selectedTags.length > 0 || 
-                        pastAppointments.length > 0 || 
                         treatmentHistory.length > 0 ||
                         patientDocuments.length > 0;
     const currentlyHasChanges = hasFormData || hasListData || isDirty;

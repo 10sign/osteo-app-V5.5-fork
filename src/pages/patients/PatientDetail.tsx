@@ -1445,30 +1445,7 @@ const PatientDetail: React.FC = () => {
               </div>
             )}
 
-            {/* Past Appointments */}
-            {patient.pastAppointments && patient.pastAppointments.length > 0 && (
-              <div className="p-6 bg-white shadow rounded-xl lg:col-span-2">
-                <h3 className="mb-4 text-lg font-medium text-gray-900">Rendez-vous passés</h3>
-                <div className="space-y-3">
-                  {patient.pastAppointments.map((appointment, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-                      <div className="flex items-center">
-                        <History size={16} className="mr-3 text-gray-400" />
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {formatDate(appointment.date.split('T')[0])} à {appointment.date.split('T')[1]?.slice(0, 5)}
-                          </div>
-                          {appointment.notes && (
-                            <div className="text-sm text-gray-500">{appointment.notes}</div>
-                          )}
-                        </div>
-                      </div>
-                      <span className="text-xs text-gray-400">Historique</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Section Rendez-vous passés supprimée conformément aux nouvelles règles */}
           </div>
         )}
 

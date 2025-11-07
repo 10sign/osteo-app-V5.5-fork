@@ -29,7 +29,6 @@ Contient les **données actuelles** du dossier patient :
   ├── tags: array
   ├── documents: array
   ├── treatmentHistory: array
-  ├── pastAppointments: array
   ├── nextAppointment: string
   ├── osteopathId: string
   ├── createdAt: string

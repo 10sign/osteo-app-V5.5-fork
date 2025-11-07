@@ -191,6 +191,52 @@ export class PatientService {
         'success'
       );
       
+      // ✅ SYNCHRONISATION AUTOMATIQUE DE LA CONSULTATION INITIALE (non bloquante)
+      // Crée/synchronise la consultation initiale immédiatement après la création du patient
+      try {
+        const patientRef = doc(db, this.COLLECTION_NAME, patientId);
+        const createdSnap = await getDoc(patientRef);
+        const createdData = createdSnap.data();
+
+        const decryptedPatientData = HDSCompliance.decryptDataForDisplay(
+          createdData,
+          this.COLLECTION_NAME,
+          auth.currentUser.uid
+        );
+
+        const syncResult = await InitialConsultationSyncService.syncInitialConsultationForPatient(
+          patientId,
+          { ...decryptedPatientData, id: patientId },
+          effectiveOsteopathId,
+          { includeEmpty: false }
+        );
+
+        if (syncResult.success) {
+          console.log('✅ Consultation initiale créée/synchronisée automatiquement après création du patient');
+        } else {
+          console.warn('⚠️ Synchronisation automatique de la consultation initiale échouée (non bloquant):', syncResult.error);
+        }
+
+        await AuditLogger.log(
+          AuditEventType.DATA_MODIFICATION,
+          `patients/${patientId}/consultation_sync`,
+          'auto_sync_on_create',
+          SensitivityLevel.INTERNAL,
+          syncResult.success ? 'success' : 'failure',
+          { error: syncResult.error, consultationId: syncResult.consultationId }
+        );
+      } catch (syncError) {
+        console.warn('⚠️ Erreur lors de la synchronisation automatique initiale (non bloquant):', syncError);
+        await AuditLogger.log(
+          AuditEventType.DATA_MODIFICATION,
+          `patients/${patientId}/consultation_sync`,
+          'auto_sync_on_create',
+          SensitivityLevel.INTERNAL,
+          'failure',
+          { error: (syncError as Error).message }
+        );
+      }
+
       return patientId;
       
     } catch (error) {

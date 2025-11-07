@@ -106,7 +106,6 @@ export interface Patient {
   // Harmonisation: utiliser les métadonnées de documents communes
   // pour aligner avec les consultations et les composants d'upload
   documents?: DocumentMetadata[];
-  pastAppointments?: PastAppointment[]; // Nouveau champ pour les rendez-vous passés
   
   // Champs pour le tri
   createdAtDate?: Date; // Champ calculé pour le tri
@@ -120,12 +119,6 @@ export interface Patient {
   osteopathicTreatment?: string; // Traitement ostéopathique
 }
 
-// Past appointment type
-export interface PastAppointment {
-  date: string; // format: "YYYY-MM-DDThh:mm:ss"
-  notes?: string;
-  isHistorical: boolean;
-}
 
 // Nouvel interface pour l'historique des traitements
 export interface TreatmentHistoryEntry {
