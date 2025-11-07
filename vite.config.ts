@@ -9,6 +9,12 @@ export default defineConfig(({ command }) => ({
     }),
     ...(command === 'build' ? [VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        // Force the new service worker to take control immediately
+        clientsClaim: true,
+        skipWaiting: true,
+        cleanupOutdatedCaches: true
+      },
       includeAssets: ['logo.svg', 'mask-icon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'OstheoApp - Gestion de cabinet',
