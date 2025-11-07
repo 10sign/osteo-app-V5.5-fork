@@ -103,7 +103,17 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
       examinations: [],
       prescriptions: [],
       date: preselectedDate || new Date().toISOString().split('T')[0],
-      time: preselectedTime || '09:00'
+      time: preselectedTime || '09:00',
+      // ✅ IMPORTANT: Définir les champs cliniques par défaut pour éviter l'état undefined
+      // Cela garantit que la validation ne nécessite pas une seconde tentative
+      currentTreatment: '',
+      consultationReason: '',
+      medicalAntecedents: '',
+      medicalHistory: '',
+      osteopathicTreatment: '',
+      // Ce champ est stocké sous forme de chaîne dans le formulaire puis
+      // transformé en tableau lors de la soumission
+      symptoms: ''
     }
   });
 
