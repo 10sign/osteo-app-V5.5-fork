@@ -45,7 +45,6 @@ const SyncConsultations: React.FC = () => {
       fields: Array<{ field: string; patientValue: any; consultationValue: any }>;
     }>;
   } | null>(null);
-  const [isBackingUp, setIsBackingUp] = useState(false);
 
   const handleSync = async () => {
     setIsRunning(true);
@@ -154,60 +153,7 @@ const SyncConsultations: React.FC = () => {
     }
   };
 
-  const handleBackup = async () => {
-    setIsBackingUp(true);
-    try {
-      const osteopathId = await resolveOsteopathIdByEmail(email);
-      const { collection, query, where, getDocs } = await import('firebase/firestore');
-      const { db } = await import('../../firebase/config');
-      const { HDSCompliance } = await import('../../utils/hdsCompliance');
-
-      const consultationsRef = collection(db, 'consultations');
-      const q = query(
-        consultationsRef,
-        where('osteopathId', '==', osteopathId),
-        where('isInitialConsultation', '==', true)
-      );
-      const snapshot = await getDocs(q);
-
-      const backups: any[] = [];
-      snapshot.forEach(docSnap => {
-        const raw = docSnap.data();
-        const decrypted = HDSCompliance.decryptDataForDisplay(raw, 'consultations', osteopathId);
-        backups.push({
-          id: docSnap.id,
-          patientId: decrypted.patientId || raw.patientId,
-          isInitialConsultation: decrypted.isInitialConsultation ?? raw.isInitialConsultation ?? true,
-          date: decrypted.date || raw.date || null,
-          data: decrypted
-        });
-      });
-
-      const payload = {
-        osteopathId,
-        email: email.trim().toLowerCase(),
-        count: backups.length,
-        consultations: backups
-      };
-
-      const content = JSON.stringify(payload, null, 2);
-      const blob = new Blob([content], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const fname = `backup_consultations_initiales_${email.trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, '_')}.json`;
-      a.href = url;
-      a.download = fname;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('❌ Erreur lors du backup JSON:', error);
-      alert(`Erreur lors du backup: ${(error as Error).message}`);
-    } finally {
-      setIsBackingUp(false);
-    }
-  };
+  
 
   return (
     <div className="min-h-screen bg-gray-50">

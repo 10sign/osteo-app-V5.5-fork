@@ -5,7 +5,7 @@
  * avec les données du dossier patient à chaque modification du patient.
  */
 
-import { collection, query, where, orderBy, limit, getDocs, doc, updateDoc, Timestamp, getDoc, addDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, getDocs, doc, Timestamp, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { HDSCompliance } from '../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';

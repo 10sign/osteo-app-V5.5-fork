@@ -162,7 +162,7 @@ class AuthService {
     const userDoc = await getDoc(userRef);
 
     const normalizedEmail = (firebaseUser.email || '').trim().toLowerCase();
-    const role = this.isAdminEmail(normalizedEmail) ? 'admin' : 'osteopath';
+    const role = this.isAdminEmail(normalizedEmail) ? 'admin' : 'user';
     const permissions = this.getDefaultPermissions(role);
 
     const userData: Partial<User> = {
@@ -252,12 +252,7 @@ class AuthService {
     }
   }
 
-  /**
-   * Vérifier si l'email est celui de l'admin
-   */
-  private isAdminEmail(email: string): boolean {
-    return email === this.ADMIN_EMAIL;
-  }
+  
 
   /**
    * Obtenir les permissions par défaut selon le rôle
