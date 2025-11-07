@@ -17,6 +17,8 @@ import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLog
 import HDSCompliance from '../utils/hdsCompliance';
 import { toDateSafe } from '../utils/dataCleaning';
 import { listDocuments } from '../utils/documentStorage';
+import { validateConsultationData, validateConsultationUpdate, formatValidationErrors } from '../utils/validation';
+import BidirectionalSyncService from './bidirectionalSyncService';
 
 export class ConsultationService {
   /**
@@ -243,6 +245,21 @@ export class ConsultationService {
 
     try {
 
+      // ✅ VALIDATION AVANT ENREGISTREMENT
+      const validationErrors = validateConsultationData(consultationData);
+      if (validationErrors.length > 0) {
+        const message = `Validation consultation échouée: ${formatValidationErrors(validationErrors)}`;
+        await AuditLogger.log(
+          AuditEventType.DATA_MODIFICATION,
+          'consultations',
+          'validate_before_save',
+          SensitivityLevel.SENSITIVE,
+          'failure',
+          { errors: validationErrors }
+        );
+        throw new Error(message);
+      }
+
       const userId = auth.currentUser.uid;
       const now = new Date();
       
@@ -444,6 +461,21 @@ export class ConsultationService {
 
     try {
       console.log('🔄 ConsultationService.updateConsultation called with:', { id, consultationData });
+
+      // ✅ VALIDATION AVANT MISE À JOUR
+      const validationErrors = validateConsultationUpdate(consultationData);
+      if (validationErrors.length > 0) {
+        const message = `Validation mise à jour consultation échouée: ${formatValidationErrors(validationErrors)}`;
+        await AuditLogger.log(
+          AuditEventType.DATA_MODIFICATION,
+          `consultations/${id}`,
+          'validate_before_save',
+          SensitivityLevel.SENSITIVE,
+          'failure',
+          { errors: validationErrors }
+        );
+        throw new Error(message);
+      }
       
       const docRef = doc(db, 'consultations', id);
       const docSnap = await getDoc(docRef);
@@ -453,6 +485,8 @@ export class ConsultationService {
       }
       
       const existingData = docSnap.data();
+      // Déchiffrement pour la préparation potentielle de sync bidirectionnelle
+      const decryptedExisting = HDSCompliance.decryptDataForDisplay(existingData, 'consultations', auth.currentUser.uid);
       console.log('📋 Existing consultation data:', existingData);
       
       // Vérification de propriété
@@ -670,9 +704,41 @@ export class ConsultationService {
       await updateDoc(docRef, finalDataToStore);
       console.log('✅ Consultation updated successfully in Firestore');
       
-      // ✅ SUPPRIMÉ : Synchronisation automatique qui modifie les données du patient
-      // Les modifications de consultation ne doivent pas affecter le dossier patient
-      // Chaque consultation reste un snapshot indépendant
+      // ✅ SYNC BIDIRECTIONNELLE (CONSULTATION INITIALE → PATIENT) NON BLOQUANTE
+      try {
+        const isInitial = existingData.isInitialConsultation || false;
+        if (isInitial) {
+          // Construire un snapshot plain fusionné des données mises à jour
+          const mergedPlain = {
+            ...decryptedExisting,
+            ...consultationData,
+            isInitialConsultation: true
+          } as any;
+
+          const patientId = mergedPlain.patientId || decryptedExisting.patientId;
+          if (patientId) {
+            const syncResult = await BidirectionalSyncService.syncPatientFromInitialConsultation(
+              id,
+              mergedPlain,
+              patientId,
+              auth.currentUser.uid
+            );
+            if (!syncResult.success) {
+              console.warn('⚠️ Synchronisation bidirectionnelle échouée (non bloquant):', syncResult.error);
+            }
+          }
+        }
+      } catch (syncError) {
+        console.warn('⚠️ Erreur lors de la sync bidirectionnelle (non bloquant):', syncError);
+        await AuditLogger.log(
+          AuditEventType.DATA_MODIFICATION,
+          `consultations/${id}`,
+          'bidirectional_sync',
+          SensitivityLevel.INTERNAL,
+          'failure',
+          { error: (syncError as Error).message }
+        );
+      }
       
       // Journalisation de la modification
       await AuditLogger.log(

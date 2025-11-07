@@ -2,6 +2,7 @@ import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, dele
 import { db, auth } from '../firebase/config';
 import { Patient } from '../types';
 import { HDSCompliance } from '../utils/hdsCompliance';
+import { validatePatientUpdate } from '../utils/validation';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import { ConsultationService } from './consultationService';
 import { getEffectiveOsteopathId } from '../utils/substituteAuth';
@@ -127,6 +128,27 @@ export class PatientService {
     }
     
     try {
+      // ✅ VALIDATION MINIMALE AVANT ENREGISTREMENT (champs essentiels)
+      const coreErrors: string[] = [];
+      if (!patientData.firstName || !patientData.firstName.trim()) coreErrors.push('firstName manquant');
+      if (!patientData.lastName || !patientData.lastName.trim()) coreErrors.push('lastName manquant');
+      if (!patientData.dateOfBirth) coreErrors.push('dateOfBirth manquant');
+      if (!patientData.gender) coreErrors.push('gender manquant');
+      if (!patientData.email || !patientData.email.trim()) coreErrors.push('email manquant');
+      if (!patientData.address || typeof patientData.address !== 'object' || !patientData.address.street) coreErrors.push('address.street manquant');
+
+      if (coreErrors.length > 0) {
+        const message = `Validation patient échouée: ${coreErrors.join('; ')}`;
+        await AuditLogger.log(
+          AuditEventType.DATA_MODIFICATION,
+          this.COLLECTION_NAME,
+          'validate_before_save',
+          SensitivityLevel.HIGHLY_SENSITIVE,
+          'failure',
+          { errors: coreErrors }
+        );
+        throw new Error(message);
+      }
       // Déterminer l'ostéopathe effectif (titulaire ou remplaçant)
       // Utiliser un fallback robuste sur l'UID courant si l'ID effectif est indisponible
       const effectiveOsteopathId = (await getEffectiveOsteopathId(auth.currentUser)) ?? auth.currentUser.uid;
@@ -206,6 +228,63 @@ export class PatientService {
 
       if (patientData.osteopathId !== auth.currentUser.uid && !this.isAdmin()) {
         throw new Error('Vous n\'avez pas les droits pour modifier ce patient');
+      }
+
+      // ✅ VALIDATION AVANT SAUVEGARDE (mise à jour)
+      try {
+        // Déchiffrement pour comparer et valider
+        const decryptedExisting = HDSCompliance.decryptDataForDisplay(patientData, this.COLLECTION_NAME, auth.currentUser.uid) as any;
+
+        // Vérifier qu'il y a bien un changement
+        const hasChanges = validatePatientUpdate(decryptedExisting, updates as any);
+        if (!hasChanges) {
+          await AuditLogger.log(
+            AuditEventType.DATA_MODIFICATION,
+            `${this.COLLECTION_NAME}/${patientId}`,
+            'update_noop',
+            SensitivityLevel.HIGHLY_SENSITIVE,
+            'success'
+          );
+          return; // Rien à faire
+        }
+
+        // Validations ciblées sur les champs fournis
+        const errors: string[] = [];
+        if (typeof updates.email === 'string') {
+          const email = updates.email.trim();
+          if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            errors.push('email invalide');
+          }
+        }
+        if (typeof updates.phone === 'string') {
+          const phone = updates.phone.trim();
+          if (phone && !/^(?:(?:\+|00)33|0)\s*[1-9](?:[\s.-]*\d{2}){4}$/.test(phone)) {
+            errors.push('phone invalide');
+          }
+        }
+        if (updates.dateOfBirth) {
+          const birthDate = new Date(updates.dateOfBirth as any);
+          const today = new Date();
+          if (birthDate > today) {
+            errors.push('dateOfBirth dans le futur');
+          }
+        }
+
+        if (errors.length > 0) {
+          const message = `Validation mise à jour patient échouée: ${errors.join('; ')}`;
+          await AuditLogger.log(
+            AuditEventType.DATA_MODIFICATION,
+            `${this.COLLECTION_NAME}/${patientId}`,
+            'validate_before_save',
+            SensitivityLevel.HIGHLY_SENSITIVE,
+            'failure',
+            { errors }
+          );
+          throw new Error(message);
+        }
+      } catch (validationError) {
+        if (validationError instanceof Error) throw validationError;
+        throw new Error('Validation mise à jour patient échouée');
       }
 
       // Préparation des mises à jour

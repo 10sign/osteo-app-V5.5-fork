@@ -1,4 +1,4 @@
-import { PatientFormData } from '../types';
+import { PatientFormData, ConsultationFormData } from '../types';
 
 export interface ValidationError {
   field: string;
@@ -99,4 +99,114 @@ export function validateAppointmentTime(time: string, date: string): boolean {
   // Validate time is within working hours (8:00-18:00)
   const [hours] = time.split(':').map(Number);
   return hours >= 8 && hours < 18;
+}
+
+// ==========================
+// Consultation validations
+// ==========================
+
+export function validateConsultationData(data: ConsultationFormData): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  // Required base fields
+  if (!data.patientId || typeof data.patientId !== 'string') {
+    errors.push({ field: 'patientId', message: 'Le patient est requis' });
+  }
+
+  // Date must be provided and valid
+  if (!data.date) {
+    errors.push({ field: 'date', message: 'La date de consultation est requise' });
+  } else {
+    const dateVal = data.date instanceof Date ? data.date : new Date(data.date);
+    if (isNaN(dateVal.getTime())) {
+      errors.push({ field: 'date', message: 'Date de consultation invalide' });
+    }
+  }
+
+  // Duration and price should be positive numbers
+  if (typeof data.duration !== 'number' || data.duration <= 0) {
+    errors.push({ field: 'duration', message: 'La durée doit être un nombre positif' });
+  }
+  if (typeof data.price !== 'number' || data.price < 0) {
+    errors.push({ field: 'price', message: 'Le prix doit être un nombre non négatif' });
+  }
+
+  // Status must be one of allowed
+  const allowedStatus = ['draft', 'completed', 'cancelled'] as const;
+  if (!allowedStatus.includes(data.status)) {
+    errors.push({ field: 'status', message: 'Statut de consultation invalide' });
+  }
+
+  // Clinical fields presence for integrity (allow empty strings but ensure defined)
+  const requiredClinicalFields: (keyof ConsultationFormData)[] = [
+    'currentTreatment',
+    'consultationReason',
+    'medicalAntecedents',
+    'medicalHistory',
+    'osteopathicTreatment',
+    'symptoms'
+  ];
+  for (const field of requiredClinicalFields) {
+    if ((data as any)[field] === undefined) {
+      errors.push({ field: String(field), message: `Le champ clinique "${String(field)}" doit être défini` });
+    }
+  }
+
+  // Arrays must be arrays
+  if (data.examinations && !Array.isArray(data.examinations)) {
+    errors.push({ field: 'examinations', message: 'La liste des examens doit être un tableau' });
+  }
+  if (data.prescriptions && !Array.isArray(data.prescriptions)) {
+    errors.push({ field: 'prescriptions', message: 'La liste des prescriptions doit être un tableau' });
+  }
+  if (data.symptoms && !Array.isArray(data.symptoms)) {
+    errors.push({ field: 'symptoms', message: 'Les symptômes doivent être un tableau' });
+  }
+
+  return errors;
+}
+
+export function validateConsultationUpdate(data: Partial<ConsultationFormData>): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  // If date provided, must be valid
+  if (data.date !== undefined) {
+    const dateVal = data.date instanceof Date ? data.date : new Date(data.date as any);
+    if (isNaN(dateVal.getTime())) {
+      errors.push({ field: 'date', message: 'Date de consultation invalide' });
+    }
+  }
+
+  // Duration and price must be valid if provided
+  if (data.duration !== undefined && (typeof data.duration !== 'number' || data.duration <= 0)) {
+    errors.push({ field: 'duration', message: 'La durée doit être un nombre positif' });
+  }
+  if (data.price !== undefined && (typeof data.price !== 'number' || data.price < 0)) {
+    errors.push({ field: 'price', message: 'Le prix doit être un nombre non négatif' });
+  }
+
+  // Status must be valid if provided
+  if (data.status !== undefined) {
+    const allowedStatus = ['draft', 'completed', 'cancelled'] as const;
+    if (!allowedStatus.includes(data.status)) {
+      errors.push({ field: 'status', message: 'Statut de consultation invalide' });
+    }
+  }
+
+  // Array fields validations if provided
+  if (data.examinations !== undefined && !Array.isArray(data.examinations)) {
+    errors.push({ field: 'examinations', message: 'La liste des examens doit être un tableau' });
+  }
+  if (data.prescriptions !== undefined && !Array.isArray(data.prescriptions)) {
+    errors.push({ field: 'prescriptions', message: 'La liste des prescriptions doit être un tableau' });
+  }
+  if (data.symptoms !== undefined && !Array.isArray(data.symptoms)) {
+    errors.push({ field: 'symptoms', message: 'Les symptômes doivent être un tableau' });
+  }
+
+  return errors;
+}
+
+export function formatValidationErrors(errors: ValidationError[]): string {
+  return errors.map(e => `${e.field}: ${e.message}`).join('; ');
 }
