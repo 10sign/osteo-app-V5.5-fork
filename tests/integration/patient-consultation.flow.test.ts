@@ -1,4 +1,4 @@
-import { describe, test } from '@jest/globals';
+import { describe, test } from 'vitest';
 
 describe('Integration: patient and consultation flow', () => {
   test.skip('creates patient, creates initial consultation, updates consultation and mirrors to patient', () => {

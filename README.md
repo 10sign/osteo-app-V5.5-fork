@@ -111,6 +111,22 @@ En cas de problème :
 ## 📝 Documentation
 
 Toutes les modifications sont documentées et les logs sont conservés pour le debugging. Le système maintient la compatibilité avec l'architecture existante.
+
+### Champs obligatoires du dossier patient
+
+Lors de la création d’un nouveau dossier patient, seuls les champs suivants sont obligatoires:
+
+- Prénom (`firstName`)
+- Nom (`lastName`)
+- Date de naissance (`dateOfBirth`)
+- Sexe (`gender`)
+
+Les autres champs, y compris l’email et l’adresse postale, sont facultatifs. Si fournis, certains formats sont vérifiés:
+
+- Email: doit respecter un format standard `xx@yy.zz`
+- Téléphone: format français accepté `^(?:(?:\+|00)33|0)\s*[1-9](?:[\s.-]*\d{2}){4}$`
+
+Cette règle est appliquée côté service (`PatientService.createPatient`) et alignée avec l’interface de création (« Nouveau dossier patient »).
 ## Intégration TestSprite (MCP) avec Trae AI
 
 Pour utiliser TestSprite (agent de tests AI) dans votre environnement Trae AI, configurez la clé API et l’activation MCP :

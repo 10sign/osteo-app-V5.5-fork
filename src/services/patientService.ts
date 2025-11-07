@@ -1,10 +1,9 @@
-import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { Patient } from '../types';
 import { HDSCompliance } from '../utils/hdsCompliance';
 import { validatePatientUpdate } from '../utils/validation';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
-import { ConsultationService } from './consultationService';
 import { getEffectiveOsteopathId } from '../utils/substituteAuth';
 import { InitialConsultationSyncService } from './initialConsultationSyncService';
 
@@ -134,8 +133,20 @@ export class PatientService {
       if (!patientData.lastName || !patientData.lastName.trim()) coreErrors.push('lastName manquant');
       if (!patientData.dateOfBirth) coreErrors.push('dateOfBirth manquant');
       if (!patientData.gender) coreErrors.push('gender manquant');
-      if (!patientData.email || !patientData.email.trim()) coreErrors.push('email manquant');
-      if (!patientData.address || typeof patientData.address !== 'object' || !patientData.address.street) coreErrors.push('address.street manquant');
+
+      // Champs optionnels (email, téléphone, adresse) : valider le format uniquement si fournis
+      if (typeof patientData.email === 'string') {
+        const email = patientData.email.trim();
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          coreErrors.push('email invalide');
+        }
+      }
+      if (typeof patientData.phone === 'string') {
+        const phone = patientData.phone.trim();
+        if (phone && !/^(?:(?:\+|00)33|0)\s*[1-9](?:[\s.-]*\d{2}){4}$/.test(phone)) {
+          coreErrors.push('phone invalide');
+        }
+      }
 
       if (coreErrors.length > 0) {
         const message = `Validation patient échouée: ${coreErrors.join('; ')}`;

@@ -73,9 +73,10 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
     
     try {
       // 1. Créer l'utilisateur dans Firebase Auth
+      const normalizedEmail = formData.email.trim().toLowerCase();
       const userCredential = await createUserWithEmailAndPassword(
         auth,
-        formData.email,
+        normalizedEmail,
         formData.password
       );
       
@@ -84,15 +85,15 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
       // 2. Créer le profil utilisateur dans Firestore
       const userData = {
         uid: userId,
-        email: formData.email,
+        email: normalizedEmail,
         firstName: formData.firstName,
         lastName: formData.lastName,
         displayName: `${formData.firstName} ${formData.lastName}`,
         role: formData.role,
-        isActive: formData.isActive,
+        isActive: true,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
-        createdBy: 'admin', // Marquer comme créé par admin pour les permissions
+        createdBy: 'admin',
         permissions: formData.role === 'admin' 
           ? ['users:read', 'users:write', 'users:delete', 'system:config', 'logs:read', 'analytics:read']
           : ['profile:read', 'profile:write', 'data:read', 'data:write'],
@@ -118,7 +119,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
         'success',
         {
           newUserId: userId,
-          email: formData.email,
+          email: normalizedEmail,
           role: formData.role
         }
       );
@@ -164,7 +165,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
         SensitivityLevel.SENSITIVE,
         'failure',
         {
-          email: formData.email,
+          email: formData.email.trim().toLowerCase(),
           error: error.message
         }
       );

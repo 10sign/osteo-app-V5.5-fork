@@ -5,7 +5,12 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
+    // Vérifie si l'utilisateur connecté correspond à un email spécifique
+    function isSpecificUser(email) {
+      return isAuthenticated() && request.auth.token.email.lower() == email.lower();
+    }
+
     function isAdmin() {
       return isAuthenticated() && 
         request.auth.token.email.lower() == 'grondin.stephane@gmail.com';
@@ -115,7 +120,7 @@ service cloud.firestore {
         allow write, delete: if isAdmin() || isOwner(get(/databases/$(database)/documents/patients/$(patientId)));
       }
     }
-    
+
     // Collection consultations - Accès strictement contrôlé
     match /consultations/{consultationId} {
       allow read: if isAdmin() || isOwner(resource) || isSpecificUser('julie.boddaert@hotmail.fr');
@@ -127,11 +132,25 @@ service cloud.firestore {
                      hasHDSMetadata(request.resource.data);
       
       // Mise à jour avec validation HDS
-      allow update: if isAuthenticated() && 
-                     (isOwner(resource) || isSpecificUser('julie.boddaert@hotmail.fr')) && 
-                     isValidHDSUpdate(resource.data, request.resource.data);
+      allow update: if isAuthenticated() && (
+                     (
+                       isOwner(resource) ||
+                       isSpecificUser('julie.boddaert@hotmail.fr') ||
+                       isAdmin()
+                     ) && (
+                       // Autoriser l'admin même si updatedBy != request.auth.uid
+                       isValidHDSUpdate(resource.data, request.resource.data) || isAdmin()
+                     )
+                   );
       
       allow delete: if isAdmin() || isOwner(resource) || isSpecificUser('julie.boddaert@hotmail.fr');
+    }
+
+    // Collection consultation_backups - Admin uniquement
+    match /consultation_backups/{backupId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
     }
     
     // Collection appointments - Accès strictement contrôlé

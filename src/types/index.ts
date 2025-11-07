@@ -83,14 +83,14 @@ export interface Patient {
   profession?: string;
   gender: 'male' | 'female' | 'other';
   dateOfBirth: string; // format: "YYYY-MM-DD"
-  email: string; // Now required
+  email?: string; // Optional
   phone?: string;
-  address: {
-    street: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    country: string;
+  address?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    country?: string;
   };
   insurance?: Insurance;
   medicalHistory?: string;
@@ -141,10 +141,10 @@ export interface PatientFormData {
   lastName: string;
   dateOfBirth: string;
   gender: 'male' | 'female' | 'other';
-  email: string; // Now required
+  email?: string; // Optional
   phone?: string;
   profession?: string;
-  address: string; // Now required
+  address?: string; // Optional
   city?: string;
   state?: string;
   zipCode?: string;

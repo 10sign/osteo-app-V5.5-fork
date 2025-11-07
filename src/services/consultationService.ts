@@ -268,7 +268,6 @@ export class ConsultationService {
       // Extraire les documents avant le traitement HDS
       const documents = consultationData.documents || [];
       console.log('🔵 ÉTAPE 2: Documents extraits:', documents.length, 'document(s)');
-      const { documents: _, ...dataWithoutDocuments } = consultationData;
 
       // ✅ DEBUG: Log du champ notes avant chiffrement
       console.log('🔍 CREATE CONSULTATION - notes field:', {

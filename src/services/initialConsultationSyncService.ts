@@ -5,10 +5,11 @@
  * avec les données du dossier patient à chaque modification du patient.
  */
 
-import { collection, query, where, orderBy, limit, getDocs, doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, getDocs, doc, updateDoc, Timestamp, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { HDSCompliance } from '../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
+import { toDateSafe } from '../utils/dataCleaning';
 
 interface SyncResult {
   success: boolean;
@@ -51,7 +52,8 @@ export class InitialConsultationSyncService {
   static async syncInitialConsultationForPatient(
     patientId: string,
     patientData: PatientData,
-    osteopathId: string
+    osteopathId: string,
+    options?: { includeEmpty?: boolean }
   ): Promise<SyncResult> {
     const result: SyncResult = {
       success: false,
@@ -73,8 +75,8 @@ export class InitialConsultationSyncService {
       console.log(`  📋 Consultation initiale trouvée: ${consultationId}`);
       result.consultationId = consultationId;
 
-      // 2. Préparer les champs à écraser avec les données du patient
-      const fieldsToUpdate = this.prepareFieldsToUpdate(patientData);
+      // 2. Préparer les champs à mettre à jour avec les données du patient
+      const fieldsToUpdate = this.prepareFieldsToUpdate(patientData, options?.includeEmpty === true);
 
       console.log(`  🔍 DEBUG - Données patient reçues:`, {
         currentTreatment: patientData.currentTreatment,
@@ -99,22 +101,35 @@ export class InitialConsultationSyncService {
 
       // 3. Ajouter la date de mise à jour
       fieldsToUpdate.updatedAt = Timestamp.fromDate(new Date());
+      // 3bis. S'assurer que la consultation ciblée est marquée comme initiale
+      // Ceci corrige les anciens dossiers où le flag n'avait pas été posé
+      fieldsToUpdate.isInitialConsultation = true;
 
-      // 4. Chiffrer les données avec HDS
-      const encryptedUpdates = HDSCompliance.prepareDataForStorage(
-        fieldsToUpdate,
-        'consultations',
-        osteopathId
-      );
-
-      // 5. Filtrer les valeurs undefined/null
-      const cleanedUpdates = Object.fromEntries(
-        Object.entries(encryptedUpdates).filter(([_, value]) => value !== undefined && value !== null)
-      );
-
-      // 6. Mettre à jour la consultation dans Firestore
+      // 4–6. Mettre à jour la consultation dans Firestore avec conformité HDS et métadonnées correctes
       const consultationRef = doc(db, 'consultations', consultationId);
-      await updateDoc(consultationRef, cleanedUpdates);
+
+      // Sauvegarde avant mise à jour pour rollback
+      try {
+        const snap = await getDoc(consultationRef);
+        if (snap.exists()) {
+          const existingData = snap.data();
+          const decryptedBefore = HDSCompliance.decryptDataForDisplay(existingData, 'consultations', osteopathId);
+          await addDoc(collection(db, 'consultation_backups'), {
+            consultationId,
+            patientId,
+            osteopathId,
+            timestamp: Timestamp.fromDate(new Date()),
+            mode: options?.includeEmpty ? 'mirror_exact' : 'copy_non_empty',
+            before: decryptedBefore,
+            plannedUpdates: fieldsToUpdate
+          });
+        }
+      } catch (backupErr) {
+        console.warn('⚠️ Échec de la sauvegarde pré-mise à jour (non bloquant):', backupErr);
+      }
+
+      // Utiliser l'utilitaire HDS pour garantir updatedBy = utilisateur courant et chiffrement correct
+      await HDSCompliance.updateCompliantData('consultations', consultationId, fieldsToUpdate);
 
       console.log('  ✅ Consultation initiale synchronisée avec succès');
       result.success = true;
@@ -129,7 +144,8 @@ export class InitialConsultationSyncService {
         {
           patientId,
           fieldsUpdated: result.fieldsUpdated,
-          source: 'patient_update'
+          source: 'patient_update',
+          mode: options?.includeEmpty ? 'mirror_exact' : 'copy_non_empty'
         }
       );
 
@@ -161,7 +177,7 @@ export class InitialConsultationSyncService {
    * Trouve la consultation initiale d'un patient
    * Recherche d'abord par le flag isInitialConsultation, puis par la date la plus ancienne
    */
-  private static async findInitialConsultation(
+  static async findInitialConsultation(
     patientId: string,
     osteopathId: string
   ): Promise<string | null> {
@@ -210,7 +226,7 @@ export class InitialConsultationSyncService {
    * ✅ CORRECTION: Copie SEULEMENT les champs NON VIDES du dossier patient
    * Ne copie PAS les chaînes vides pour ne pas écraser des données existantes dans la consultation
    */
-  private static prepareFieldsToUpdate(patientData: PatientData): Record<string, any> {
+  private static prepareFieldsToUpdate(patientData: PatientData, includeEmpty: boolean = false): Record<string, any> {
     const fieldsToUpdate: Record<string, any> = {};
 
     // Champs d'identité du patient (snapshot) - Toujours copier
@@ -236,26 +252,34 @@ export class InitialConsultationSyncService {
       fieldsToUpdate.patientProfession = patientData.profession;
     }
 
-    // Traiter l'adresse - Copier seulement si non vide
-    if (patientData.address) {
+    // Traiter l'adresse
+    if (patientData.address !== undefined || includeEmpty) {
       const addressString = typeof patientData.address === 'string'
-        ? patientData.address
-        : patientData.address.street || '';
-      if (addressString && addressString.trim() !== '') {
+        ? (patientData.address as string)
+        : (patientData.address?.street || '');
+      if (includeEmpty) {
+        fieldsToUpdate.patientAddress = addressString || '';
+      } else if (addressString && addressString.trim() !== '') {
         fieldsToUpdate.patientAddress = addressString;
       }
     }
 
-    // Traiter l'assurance - Copier seulement si non vide
-    if (patientData.insurance) {
+    // Traiter l'assurance
+    if (patientData.insurance !== undefined || includeEmpty) {
       const insuranceString = typeof patientData.insurance === 'string'
-        ? patientData.insurance
-        : patientData.insurance.provider || '';
-      if (insuranceString && insuranceString.trim() !== '') {
+        ? (patientData.insurance as string)
+        : (patientData.insurance?.provider || '');
+      if (includeEmpty) {
+        fieldsToUpdate.patientInsurance = insuranceString || '';
+      } else if (insuranceString && insuranceString.trim() !== '') {
         fieldsToUpdate.patientInsurance = insuranceString;
       }
     }
-    if (patientData.insuranceNumber && patientData.insuranceNumber.trim() !== '') {
+    if (includeEmpty) {
+      if (patientData.insuranceNumber !== undefined && patientData.insuranceNumber !== null) {
+        fieldsToUpdate.patientInsuranceNumber = patientData.insuranceNumber || '';
+      }
+    } else if (patientData.insuranceNumber && patientData.insuranceNumber.trim() !== '') {
       fieldsToUpdate.patientInsuranceNumber = patientData.insuranceNumber;
     }
 
@@ -263,31 +287,38 @@ export class InitialConsultationSyncService {
     // Copier SEULEMENT les champs qui ont une valeur non vide dans le dossier patient
     // Ne PAS copier les champs vides pour éviter d'écraser des données existantes
 
-    if (patientData.currentTreatment && patientData.currentTreatment.trim() !== '') {
-      fieldsToUpdate.currentTreatment = patientData.currentTreatment;
-    }
-    if (patientData.consultationReason && patientData.consultationReason.trim() !== '') {
-      fieldsToUpdate.consultationReason = patientData.consultationReason;
-    }
-    if (patientData.medicalAntecedents && patientData.medicalAntecedents.trim() !== '') {
-      fieldsToUpdate.medicalAntecedents = patientData.medicalAntecedents;
-    }
-    if (patientData.medicalHistory && patientData.medicalHistory.trim() !== '') {
-      fieldsToUpdate.medicalHistory = patientData.medicalHistory;
-    }
-    if (patientData.osteopathicTreatment && patientData.osteopathicTreatment.trim() !== '') {
-      fieldsToUpdate.osteopathicTreatment = patientData.osteopathicTreatment;
-    }
+    const copyField = (key: keyof PatientData, target: string) => {
+      const val = (patientData as any)[key];
+      if (includeEmpty) {
+        if (val !== undefined && val !== null) {
+          fieldsToUpdate[target] = val;
+        }
+      } else {
+        if (typeof val === 'string') {
+          if (val && val.trim() !== '') fieldsToUpdate[target] = val;
+        } else if (Array.isArray(val)) {
+          if (val.length > 0) fieldsToUpdate[target] = val;
+        }
+      }
+    };
 
-    // Symptômes (depuis les tags du patient) - Copier seulement si non vide
-    if (patientData.tags && Array.isArray(patientData.tags) && patientData.tags.length > 0) {
+    copyField('currentTreatment', 'currentTreatment');
+    copyField('consultationReason', 'consultationReason');
+    copyField('medicalAntecedents', 'medicalAntecedents');
+    copyField('medicalHistory', 'medicalHistory');
+    copyField('osteopathicTreatment', 'osteopathicTreatment');
+
+    // Symptômes (depuis les tags)
+    if (includeEmpty) {
+      if (patientData.tags !== undefined && patientData.tags !== null) {
+        fieldsToUpdate.symptoms = patientData.tags || [];
+      }
+    } else if (patientData.tags && Array.isArray(patientData.tags) && patientData.tags.length > 0) {
       fieldsToUpdate.symptoms = patientData.tags;
     }
 
-    // Note sur le patient - Copier seulement si non vide
-    if (patientData.notes && patientData.notes.trim() !== '') {
-      fieldsToUpdate.notes = patientData.notes;
-    }
+    // Notes
+    copyField('notes', 'notes');
 
     return fieldsToUpdate;
   }
@@ -359,7 +390,8 @@ export class InitialConsultationSyncService {
           const syncResult = await this.syncInitialConsultationForPatient(
             patientId,
             decryptedPatientData,
-            osteopathId
+            osteopathId,
+            { includeEmpty: false }
           );
 
           result.patientsProcessed++;
@@ -392,6 +424,120 @@ export class InitialConsultationSyncService {
 
     } catch (error) {
       console.error('❌ Erreur critique lors de la synchronisation rétroactive:', error);
+      result.success = false;
+      result.errors.push(`Erreur critique: ${(error as Error).message}`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Synchronise rétroactivement uniquement les patients créés avant une heure de coupure
+   * Exemple d'usage: "tous les anciens patients avant 11h aujourd'hui"
+   *
+   * @param osteopathId - ID de l'ostéopathe
+   * @param cutoff - Date/heure limite locale
+   */
+  static async syncAllInitialConsultationsBefore(
+    osteopathId: string,
+    cutoff: Date
+  ): Promise<{
+    success: boolean;
+    patientsProcessed: number;
+    consultationsUpdated: number;
+    errors: string[];
+    details: Array<{
+      patientId: string;
+      patientName: string;
+      consultationId: string;
+      fieldsUpdated: string[];
+    }>;
+  }> {
+    const result = {
+      success: true,
+      patientsProcessed: 0,
+      consultationsUpdated: 0,
+      errors: [] as string[],
+      details: [] as Array<{
+        patientId: string;
+        patientName: string;
+        consultationId: string;
+        fieldsUpdated: string[];
+      }>
+    };
+
+    try {
+      console.log('🔄 Synchronisation rétroactive AVEC FILTRE temporel...');
+      console.log('👤 Ostéopathe:', osteopathId);
+      console.log('⏱️ Coupure:', cutoff.toString());
+
+      const patientsRef = collection(db, 'patients');
+      const patientsQuery = query(patientsRef, where('osteopathId', '==', osteopathId));
+      const patientsSnapshot = await getDocs(patientsQuery);
+
+      console.log(`📊 ${patientsSnapshot.size} patient(s) trouvé(s) (avant filtrage)`);
+
+      for (const patientDoc of patientsSnapshot.docs) {
+        try {
+          const raw = patientDoc.data();
+          const createdAtDate = toDateSafe(raw.createdAt, new Date(0));
+          const isBefore = createdAtDate.getTime() <= cutoff.getTime();
+
+          if (!isBefore) {
+            // Ignorer les patients créés après la coupure
+            continue;
+          }
+
+          const patientId = patientDoc.id;
+
+          // Déchiffrer pour préparer la sync
+          const decryptedPatientData = HDSCompliance.decryptDataForDisplay(
+            raw,
+            'patients',
+            osteopathId
+          ) as PatientData;
+          decryptedPatientData.id = patientId;
+
+          const patientName = `${decryptedPatientData.firstName || ''} ${decryptedPatientData.lastName || ''}`.trim();
+          console.log(`\n👤 Traitement du patient: ${patientName} (créé: ${createdAtDate.toISOString()})`);
+
+          const syncResult = await this.syncInitialConsultationForPatient(
+            patientId,
+            decryptedPatientData,
+            osteopathId,
+            { includeEmpty: false }
+          );
+
+          result.patientsProcessed++;
+
+          if (syncResult.success && syncResult.consultationId && syncResult.fieldsUpdated.length > 0) {
+            result.consultationsUpdated++;
+            result.details.push({
+              patientId,
+              patientName,
+              consultationId: syncResult.consultationId,
+              fieldsUpdated: syncResult.fieldsUpdated
+            });
+          }
+
+          if (syncResult.error) {
+            result.errors.push(`Patient ${patientName} (${patientId}): ${syncResult.error}`);
+          }
+
+        } catch (error) {
+          console.error(`❌ Erreur lors du traitement du patient ${patientDoc.id}:`, error);
+          result.errors.push(`Patient ${patientDoc.id}: ${(error as Error).message}`);
+        }
+      }
+
+      console.log('\n✅ Synchronisation filtrée terminée');
+      console.log(`📊 Résumé:`);
+      console.log(`   - Patients traités (avant coupure): ${result.patientsProcessed}`);
+      console.log(`   - Consultations mises à jour: ${result.consultationsUpdated}`);
+      console.log(`   - Erreurs: ${result.errors.length}`);
+
+    } catch (error) {
+      console.error('❌ Erreur critique lors de la synchronisation filtrée:', error);
       result.success = false;
       result.errors.push(`Erreur critique: ${(error as Error).message}`);
     }

@@ -1,29 +1,29 @@
-import { jest, describe, test, expect } from '@jest/globals';
+import { describe, test, expect, vi } from 'vitest';
 
-jest.mock('../src/services/bidirectionalSyncService', () => ({
+vi.mock('../src/services/bidirectionalSyncService', () => ({
   __esModule: true,
   default: {
-    syncPatientFromInitialConsultation: jest.fn(async () => ({ success: true }))
+    syncPatientFromInitialConsultation: vi.fn(async () => ({ success: true }))
   }
 }));
 
-jest.mock('firebase/firestore', () => ({
-  doc: jest.fn(),
-  getDoc: jest.fn(async () => ({ exists: () => true, data: () => ({ isInitialConsultation: true, patientId: 'p1' }) })),
-  updateDoc: jest.fn(async () => {})
+vi.mock('firebase/firestore', () => ({
+  doc: vi.fn(),
+  getDoc: vi.fn(async () => ({ exists: () => true, data: () => ({ isInitialConsultation: true, patientId: 'p1' }) })),
+  updateDoc: vi.fn(async () => {})
 }));
 
-jest.mock('../src/utils/hdsCompliance', () => ({
+vi.mock('../src/utils/hdsCompliance', () => ({
   __esModule: true,
   default: {
-    decryptDataForDisplay: jest.fn(() => ({ isInitialConsultation: true, patientId: 'p1' }))
+    decryptDataForDisplay: vi.fn(() => ({ isInitialConsultation: true, patientId: 'p1' }))
   },
   HDSCompliance: {
-    decryptDataForDisplay: jest.fn(() => ({ isInitialConsultation: true, patientId: 'p1' }))
+    decryptDataForDisplay: vi.fn(() => ({ isInitialConsultation: true, patientId: 'p1' }))
   }
 }));
 
-jest.mock('../src/firebase/config', () => ({
+vi.mock('../src/firebase/config', () => ({
   auth: { currentUser: { uid: 'u1' } },
   db: {}
 }));

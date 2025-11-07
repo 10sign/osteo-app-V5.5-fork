@@ -161,12 +161,13 @@ class AuthService {
     const userRef = doc(db, 'users', firebaseUser.uid);
     const userDoc = await getDoc(userRef);
 
-    const role = this.isAdminEmail(firebaseUser.email!) ? 'admin' : 'osteopath';
+    const normalizedEmail = (firebaseUser.email || '').trim().toLowerCase();
+    const role = this.isAdminEmail(normalizedEmail) ? 'admin' : 'osteopath';
     const permissions = this.getDefaultPermissions(role);
 
     const userData: Partial<User> = {
       uid: firebaseUser.uid,
-      email: firebaseUser.email!,
+      email: normalizedEmail,
       displayName: firebaseUser.displayName || '',
       role,
       permissions,
@@ -175,22 +176,20 @@ class AuthService {
     };
 
     if (userDoc.exists()) {
-      // Mettre à jour l'utilisateur existant
       await updateDoc(userRef, {
         lastLogin: userData.lastLogin,
         isActive: true
       });
-      
       const existingData = userDoc.data();
-      return {
-        ...existingData,
-        ...userData
-      } as User;
+      return { ...existingData, ...userData } as User;
     } else {
-      // Créer un nouvel utilisateur
       await setDoc(userRef, userData);
       return userData as User;
     }
+  }
+
+  private isAdminEmail(email: string): boolean {
+    return email.trim().toLowerCase() === this.ADMIN_EMAIL.toLowerCase();
   }
 
   /**

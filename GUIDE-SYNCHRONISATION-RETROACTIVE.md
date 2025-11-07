@@ -7,9 +7,10 @@ Copier automatiquement les données cliniques des **anciens dossiers patients** 
 ## ✅ Ce qui a été corrigé
 
 ### 1. **Service de synchronisation** (`InitialConsultationSyncService`)
-- ✅ Copie maintenant **seulement les champs NON VIDES** du dossier patient
-- ✅ Ne remplace **PAS** les données existantes avec des chaînes vides
-- ✅ Préserve les données déjà présentes dans la consultation initiale
+- ✅ Par défaut, copie **seulement les champs NON VIDES** du dossier patient
+- ✅ Ne remplace **PAS** les données existantes avec des chaînes vides (mode standard)
+- ✅ Nouveau: **Mode miroir exact** pour la correction rétroactive — copie aussi les champs vides afin d'uniformiser strictement avec le dossier patient
+- ✅ Dans ce mode, une sauvegarde est créée avant mise à jour pour permettre un rollback
 - ✅ Logs détaillés pour suivre chaque étape de la synchronisation
 
 ### 2. **Script manuel** (`manualSyncConsole.ts`)
@@ -102,8 +103,8 @@ Copier automatiquement les données cliniques des **anciens dossiers patients** 
 ## ⚠️ Règles importantes
 
 1. **Copie unidirectionnelle** : Dossier Patient → Consultation Initiale (pas l'inverse)
-2. **Copie sélective** : Seulement les champs NON VIDES sont copiés
-3. **Pas d'écrasement** : Les chaînes vides ne remplacent pas les données existantes
+2. **Copie sélective (mode standard)** : Seulement les champs NON VIDES sont copiés
+3. **Mode miroir exact (rétroactif)** : Les champs vides sont aussi copiés pour assurer une égalité parfaite
 4. **Rétroactif** : Ne traite que les anciens dossiers (les nouveaux fonctionnent déjà automatiquement)
 5. **Idempotent** : Peut être exécuté plusieurs fois sans danger
 
@@ -171,3 +172,15 @@ Après la synchronisation, chaque ancien dossier patient aura sa consultation in
 - **Consultation Initiale** (copie au moment T)
 
 Les nouveaux patients continueront à fonctionner automatiquement comme avant.
+### Vérifications automatiques et corrections
+
+Sur la même page `/admin/sync-consultations`, une section "Vérifications automatiques" permet de:
+
+- Détecter les écarts entre consultations initiales et dossiers patients
+- Afficher un résumé des divergences
+- Appliquer une correction automatique (mode miroir exact) si souhaité
+
+Lors de la correction automatique, une sauvegarde de la consultation est stockée avant mise à jour dans `consultation_backups`.
+### Rollback d'une correction rétroactive
+- Chaque mise à jour rétroactive crée une entrée de sauvegarde dans `consultation_backups`
+- Pour restaurer, rechercher l'entrée correspondante et réécrire les données `before` dans la consultation

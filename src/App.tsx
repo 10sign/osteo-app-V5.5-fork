@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 // Analytics supprimés: imports retirés pour alléger le bundle
@@ -41,6 +41,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import { useAuth } from './context/AuthContext';
 
 // Exposer des scripts utiles dans la console pour debug
+// Dans le bloc: if (typeof window !== 'undefined') { ... }
 if (typeof window !== 'undefined') {
   // Script de synchronisation
   (window as any).syncJulieConsultations = async () => {
@@ -285,7 +286,7 @@ function App() {
 }
 
 function AppRoutes() {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
 
   if (loading) {
     return <LoadingScreen />;

@@ -8,10 +8,11 @@ import {
   Users,
   FileText,
   Clock,
-  Info
+  Info,
+  Search,
+  Wrench
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
-import { runManualSync } from '../../scripts/manualSyncConsole';
 
 interface SyncResult {
   success: boolean;
@@ -31,6 +32,20 @@ const SyncConsultations: React.FC = () => {
     patientsProcessed: number;
     total: number;
   } | null>(null);
+  const [limitBeforeEleven, setLimitBeforeEleven] = useState(true);
+  const [isChecking, setIsChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState<{
+    success: boolean;
+    patientsChecked: number;
+    divergentPatients: number;
+    divergences: Array<{
+      patientId: string;
+      patientName: string;
+      consultationId: string | null;
+      fields: Array<{ field: string; patientValue: any; consultationValue: any }>;
+    }>;
+  } | null>(null);
+  const [isBackingUp, setIsBackingUp] = useState(false);
 
   const handleSync = async () => {
     setIsRunning(true);
@@ -40,29 +55,33 @@ const SyncConsultations: React.FC = () => {
     try {
       console.log('🚀 Lancement de la synchronisation pour:', email);
 
-      // ✅ CORRECTION: Appeler directement le service de synchronisation rétroactive
       const { InitialConsultationSyncService } = await import('../../services/initialConsultationSyncService');
-      const { auth } = await import('../../firebase/config');
       const { collection, query, where, getDocs } = await import('firebase/firestore');
       const { db } = await import('../../firebase/config');
 
-      // Trouver l'ostéopathe par email
+      // Trouver l'ostéopathe par email (normalisé)
+      const normalizedEmail = email.trim().toLowerCase();
       const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('email', '==', email));
+      const q = query(usersRef, where('email', '==', normalizedEmail));
       const snapshot = await getDocs(q);
 
       if (snapshot.empty) {
-        throw new Error(`Aucun utilisateur trouvé avec l'email: ${email}`);
+        throw new Error(`Aucun utilisateur trouvé avec l'email: ${normalizedEmail}`);
       }
 
       const osteopathId = snapshot.docs[0].id;
       console.log('✅ Ostéopathe trouvé:', osteopathId);
 
-      // Lancer la synchronisation rétroactive
-      const syncResult = await InitialConsultationSyncService.syncAllInitialConsultationsRetroactive(osteopathId);
+      let syncResult;
+      if (limitBeforeEleven) {
+        const now = new Date();
+        const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 11, 0, 0, 0);
+        syncResult = await InitialConsultationSyncService.syncAllInitialConsultationsBefore(osteopathId, cutoff);
+      } else {
+        syncResult = await InitialConsultationSyncService.syncAllInitialConsultationsRetroactive(osteopathId);
+      }
 
       console.log('📊 Résultat de la synchronisation:', syncResult);
-
       setResult({
         success: syncResult.success,
         patientsProcessed: syncResult.patientsProcessed,
@@ -86,6 +105,108 @@ const SyncConsultations: React.FC = () => {
     setResult(null);
     setShowConfirmation(false);
     setProgress(null);
+    setCheckResult(null);
+  };
+
+  const resolveOsteopathIdByEmail = async (inputEmail: string): Promise<string> => {
+    const { collection, query, where, getDocs } = await import('firebase/firestore');
+    const { db } = await import('../../firebase/config');
+    const usersRef = collection(db, 'users');
+    const normalizedEmail = inputEmail.trim().toLowerCase();
+    const q = query(usersRef, where('email', '==', normalizedEmail));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) {
+      throw new Error(`Aucun utilisateur trouvé avec l'email: ${normalizedEmail}`);
+    }
+    return snapshot.docs[0].id;
+  };
+
+  const handleCheck = async () => {
+    setIsChecking(true);
+    setCheckResult(null);
+    try {
+      const osteopathId = await resolveOsteopathIdByEmail(email);
+      const { InitialConsultationIntegrityService } = await import('../../services/initialConsultationIntegrityService');
+      const res = await InitialConsultationIntegrityService.checkDivergencesForOsteopath(osteopathId);
+      setCheckResult(res);
+    } catch (error) {
+      console.error('❌ Erreur lors de la vérification:', error);
+      setCheckResult({ success: false, patientsChecked: 0, divergentPatients: 0, divergences: [] });
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const handleAutoCorrect = async () => {
+    setIsRunning(true);
+    try {
+      const osteopathId = await resolveOsteopathIdByEmail(email);
+      const { InitialConsultationIntegrityService } = await import('../../services/initialConsultationIntegrityService');
+      const res = await InitialConsultationIntegrityService.applyCorrectionsForOsteopath(osteopathId);
+      // Refresh check after correction
+      const check = await InitialConsultationIntegrityService.checkDivergencesForOsteopath(osteopathId);
+      setCheckResult(check);
+      setResult({ success: res.success, patientsProcessed: 0, consultationsUpdated: res.updatedConsultations, errors: res.errors });
+    } catch (error) {
+      console.error('❌ Erreur lors de la correction automatique:', error);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const handleBackup = async () => {
+    setIsBackingUp(true);
+    try {
+      const osteopathId = await resolveOsteopathIdByEmail(email);
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const { db } = await import('../../firebase/config');
+      const { HDSCompliance } = await import('../../utils/hdsCompliance');
+
+      const consultationsRef = collection(db, 'consultations');
+      const q = query(
+        consultationsRef,
+        where('osteopathId', '==', osteopathId),
+        where('isInitialConsultation', '==', true)
+      );
+      const snapshot = await getDocs(q);
+
+      const backups: any[] = [];
+      snapshot.forEach(docSnap => {
+        const raw = docSnap.data();
+        const decrypted = HDSCompliance.decryptDataForDisplay(raw, 'consultations', osteopathId);
+        backups.push({
+          id: docSnap.id,
+          patientId: decrypted.patientId || raw.patientId,
+          isInitialConsultation: decrypted.isInitialConsultation ?? raw.isInitialConsultation ?? true,
+          date: decrypted.date || raw.date || null,
+          data: decrypted
+        });
+      });
+
+      const payload = {
+        osteopathId,
+        email: email.trim().toLowerCase(),
+        count: backups.length,
+        consultations: backups
+      };
+
+      const content = JSON.stringify(payload, null, 2);
+      const blob = new Blob([content], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const fname = `backup_consultations_initiales_${email.trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, '_')}.json`;
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('❌ Erreur lors du backup JSON:', error);
+      alert(`Erreur lors du backup: ${(error as Error).message}`);
+    } finally {
+      setIsBackingUp(false);
+    }
   };
 
   return (
@@ -205,6 +326,18 @@ const SyncConsultations: React.FC = () => {
                   <Info size={14} className="inline mr-1" />
                   Entrez l'adresse email de l'ostéopathe dont vous souhaitez synchroniser les consultations
                 </p>
+                <div className="mt-4 flex items-center">
+                  <input
+                    id="limitBeforeEleven"
+                    type="checkbox"
+                    checked={limitBeforeEleven}
+                    onChange={(e) => setLimitBeforeEleven(e.target.checked)}
+                    className="mr-2"
+                  />
+                  <label htmlFor="limitBeforeEleven" className="text-sm text-gray-700">
+                    Limiter aux patients créés avant 11h aujourd'hui
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -232,6 +365,89 @@ const SyncConsultations: React.FC = () => {
                 >
                   Lancer la synchronisation
                 </Button>
+              </div>
+            </div>
+
+            {/* Vérifications automatiques */}
+            <div className="bg-white rounded-lg shadow-sm border mt-6">
+              <div className="p-6 border-b">
+                <div className="flex items-center">
+                  <div className="bg-green-100 text-green-600 rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                    ✓
+                  </div>
+                  <h2 className="text-lg font-semibold text-gray-900">Vérifications automatiques</h2>
+                </div>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-gray-600">
+                  Détectez les écarts entre les consultations initiales et les dossiers patients, puis appliquez des corrections automatiques si nécessaire.
+                </p>
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={handleCheck}
+                    leftIcon={<Search size={16} />}
+                    disabled={!email || !email.includes('@') || isChecking}
+                    isLoading={isChecking}
+                  >
+                    Lancer la vérification
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={handleAutoCorrect}
+                    leftIcon={<Wrench size={16} />}
+                    disabled={!checkResult || isRunning}
+                    isLoading={isRunning}
+                  >
+                    Corriger automatiquement
+                  </Button>
+                </div>
+
+                {checkResult && (
+                  <div className="mt-4">
+                    <div className="p-4 border rounded-lg bg-gray-50">
+                      <div className="flex items-start">
+                        {(checkResult.divergentPatients > 0) ? (
+                          <AlertTriangle className="text-amber-600 mr-3" size={20} />
+                        ) : (
+                          <CheckCircle className="text-green-600 mr-3" size={20} />
+                        )}
+                        <div className="text-sm">
+                          <p className="font-medium text-gray-900">
+                            {checkResult.divergentPatients > 0
+                              ? `${checkResult.divergentPatients} patient(s) présentent des écarts`
+                              : 'Aucun écart détecté — tout est synchronisé'}
+                          </p>
+                          <p className="text-gray-700 mt-1">
+                            Patients analysés: {checkResult.patientsChecked}
+                          </p>
+                        </div>
+                      </div>
+
+                      {checkResult.divergences.length > 0 && (
+                        <div className="mt-3">
+                          <div className="text-xs text-gray-600 mb-2">Aperçu des divergences (top 10):</div>
+                          <ul className="space-y-2">
+                            {checkResult.divergences.slice(0, 10).map((d) => (
+                              <li key={`${d.patientId}-${d.consultationId || 'none'}`} className="p-2 bg-white border rounded">
+                                <div className="font-medium text-gray-900">{d.patientName || d.patientId}</div>
+                                <div className="text-xs text-gray-600">Consultation: {d.consultationId || 'Aucune'}</div>
+                                <div className="mt-1 text-xs text-gray-700">
+                                  {d.fields.slice(0, 5).map(f => (
+                                    <span key={f.field} className="inline-block mr-2">
+                                      {f.field}
+                                    </span>
+                                  ))}
+                                  {d.fields.length > 5 && <span className="text-gray-500">…</span>}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </>

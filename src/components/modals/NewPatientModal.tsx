@@ -56,7 +56,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
   const [treatmentHistory, setTreatmentHistory] = useState<TreatmentHistoryEntry[]>([]);
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>([]);
   const [pastAppointments, _setPastAppointments] = useState<PastAppointment[]>([]);
-  const [clickCount, setClickCount] = useState(0);
+  const [_clickCount, setClickCount] = useState(0);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [hasFormData, setHasFormData] = useState(false);
 
