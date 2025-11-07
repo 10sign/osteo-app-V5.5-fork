@@ -127,13 +127,18 @@ export class PatientService {
     }
     
     try {
+      // Déterminer l'ostéopathe effectif (titulaire ou remplaçant)
+      // Utiliser un fallback robuste sur l'UID courant si l'ID effectif est indisponible
+      const effectiveOsteopathId = (await getEffectiveOsteopathId(auth.currentUser)) ?? auth.currentUser.uid;
+      
       // Génération d'un ID unique
       const patientId = crypto.randomUUID();
       
       // Préparation des données avec métadonnées
       const dataWithMetadata = {
         ...patientData,
-        osteopathId: auth.currentUser.uid,
+        // IMPORTANT: pour un remplaçant, stocker l’ID du titulaire
+        osteopathId: effectiveOsteopathId,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         createdBy: auth.currentUser.uid

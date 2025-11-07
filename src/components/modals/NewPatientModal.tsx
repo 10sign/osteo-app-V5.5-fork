@@ -430,8 +430,13 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         isInitialConsultation: initialConsultationData.isInitialConsultation
       });
 
-      const initialConsultationId = await ConsultationService.createConsultation(initialConsultationData);
-      console.log('✅ Consultation automatique créée avec snapshot complet des données patient - ID:', initialConsultationId);
+      let initialConsultationId: string | null = null;
+      try {
+        initialConsultationId = await ConsultationService.createConsultation(initialConsultationData);
+        console.log('✅ Consultation automatique créée avec snapshot complet des données patient - ID:', initialConsultationId);
+      } catch (err) {
+        console.warn('⚠️ Échec création consultation automatique (non bloquant):', err);
+      }
 
       // Créer automatiquement une facture liée à cette consultation
       const invoiceNumber = `F-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getHours()).padStart(2, '0')}${String(new Date().getMinutes()).padStart(2, '0')}`;
@@ -456,12 +461,16 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         total: 55,
         status: 'draft' as const,
         notes: 'Facture générée automatiquement pour la première consultation.',
-        consultationId: initialConsultationId,
+        consultationId: initialConsultationId || undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
-
-      await InvoiceService.createInvoice(invoiceData);
+      try {
+        await InvoiceService.createInvoice(invoiceData);
+        console.log('✅ Facture automatique créée');
+      } catch (err) {
+        console.warn('⚠️ Échec création facture automatique (non bloquant):', err);
+      }
 
       // Update cache
       patientCache.set(patientId, { id: patientId, ...patientPayload } as Patient);

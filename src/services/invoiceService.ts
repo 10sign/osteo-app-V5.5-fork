@@ -13,6 +13,7 @@ import {
 import { db, auth } from '../firebase/config';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import { HDSCompliance } from '../utils/hdsCompliance';
+import { getEffectiveOsteopathId } from '../utils/substituteAuth';
 
 /**
  * Service pour la gestion des factures avec intégrité référentielle
@@ -27,13 +28,17 @@ export class InvoiceService {
     }
 
     try {
+      // Déterminer l'ID ostéo effectif (prend en charge les remplaçants)
+      const resolvedEffectiveId = await getEffectiveOsteopathId(auth.currentUser);
+      const effectiveOsteopathId = resolvedEffectiveId || auth.currentUser.uid;
+
       // Vérifier s'il existe déjà une facture pour cette consultation spécifique
       if (invoiceData.consultationId) {
         const existingInvoicesRef = collection(db, 'invoices');
         const existingQuery = query(
           existingInvoicesRef,
           where('consultationId', '==', invoiceData.consultationId),
-          where('osteopathId', '==', auth.currentUser.uid)
+          where('osteopathId', '==', effectiveOsteopathId)
         );
         
         const existingSnapshot = await getDocs(existingQuery);
@@ -64,16 +69,17 @@ export class InvoiceService {
       const invoiceWithMetadata = {
         ...invoiceData,
         status: status,
-        osteopathId: userId,
+        osteopathId: effectiveOsteopathId,
         createdAt: timestamp,
         updatedAt: timestamp,
         createdBy: userId
       };
       
-      // 3. Ajouter la facture à la collection invoices
+      // 3. Ajouter la facture à la collection invoices avec métadonnées HDS
       const invoiceRef = collection(db, 'invoices');
-      const docRef = await addDoc(invoiceRef, invoiceWithMetadata);
-      const invoiceId = docRef.id;
+      const newDocRef = doc(invoiceRef);
+      const invoiceId = newDocRef.id;
+      await HDSCompliance.saveCompliantData('invoices', invoiceId, invoiceWithMetadata);
       
       // 4. Journaliser l'action
       await AuditLogger.log(
