@@ -12,7 +12,8 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
-import { HDSCompliance } from '../utils/hdsCompliance';
+import HDSCompliance from '../utils/hdsCompliance';
+import { toDateSafe } from '../utils/dataCleaning';
 
 /**
  * Service pour la gestion des rendez-vous avec synchronisation bidirectionnelle
@@ -47,13 +48,14 @@ export class AppointmentService {
         createdBy: userId
       };
       
-      // 3. Ajouter le rendez-vous à la collection appointments
-      const appointmentRef = collection(db, 'appointments');
-      const docRef = await addDoc(appointmentRef, appointmentWithMetadata);
-      const appointmentId = docRef.id;
+      // 3. Ajouter le rendez-vous à la collection appointments (avec HDS)
+      const appointmentsRef = collection(db, 'appointments');
+      const newDocRef = doc(appointmentsRef);
+      const appointmentId = newDocRef.id;
+      await HDSCompliance.saveCompliantData('appointments', appointmentId, appointmentWithMetadata);
       
       // 4. Mettre à jour le dossier patient avec le prochain rendez-vous
-      const appointmentDate = appointmentData.date; // Fixed: removed .toDate() call
+      const appointmentDate = toDateSafe(appointmentData.date);
       const now = new Date();
       
       // Ne mettre à jour que si le rendez-vous est dans le futur
@@ -69,7 +71,7 @@ export class AppointmentService {
           
           await updateDoc(patientRef, {
             nextAppointment: formattedDate,
-            updatedAt: timestamp
+            updatedAt: new Date().toISOString()
           });
           
           console.log(`✅ Patient ${appointmentData.patientId} updated with next appointment: ${formattedDate}`);
@@ -145,8 +147,8 @@ export class AppointmentService {
         updatedAt: Timestamp.now()
       };
       
-      // 5. Mettre à jour le rendez-vous
-      await updateDoc(appointmentRef, updatesWithMetadata);
+      // 5. Mettre à jour le rendez-vous (avec HDS)
+      await HDSCompliance.updateCompliantData('appointments', appointmentId, updatesWithMetadata);
       
       // 6. Synchroniser avec le dossier patient si la date a changé
       if (updates.date || updates.patientId) {
@@ -275,7 +277,7 @@ export class AppointmentService {
         'appointments',
         'delete_all',
         SensitivityLevel.HIGHLY_SENSITIVE,
-        'started'
+        'success'
       );
       
       // Récupérer tous les rendez-vous de l'utilisateur
@@ -380,56 +382,58 @@ export class AppointmentService {
         return;
       }
       
-      // 1. Récupérer toutes les consultations futures du patient (non annulées et non terminées)
-      const consultationsRef = collection(db, 'consultations');
+      // 1. Récupérer tous les rendez-vous futurs du patient (non annulés et non terminés)
+      const appointmentsRef = collection(db, 'appointments');
       const now = new Date();
       
       const q = query(
-        consultationsRef,
+        appointmentsRef,
         where('patientId', '==', patientId),
         where('osteopathId', '==', auth.currentUser.uid)
       );
       
       const snapshot = await getDocs(q);
       
-      // 2. Filtrer et trier les consultations futures (non terminées et non annulées)
-      const futureConsultations = snapshot.docs
+      // 2. Filtrer et trier les rendez-vous futurs (non terminés et non annulés)
+      const futureAppointments = snapshot.docs
         .map(doc => {
           const data = doc.data();
           return {
             ...data,
             id: doc.id,
-            dateObj: data.date?.toDate ? data.date.toDate() : new Date(data.date)
+            dateObj: toDateSafe(data.date),
+            // Ensure status exists for type safety in filters below
+            status: (data as any).status || 'scheduled'
           };
         })
-        .filter(consultation => {
-          // Filtrer les consultations futures qui ne sont ni annulées ni terminées
-          return consultation.dateObj > now && 
-                 consultation.status !== 'cancelled' && 
-                 consultation.status !== 'completed';
+        .filter(appointment => {
+          // Filtrer les rendez-vous futurs qui ne sont ni annulés ni terminés
+          return appointment.dateObj > now && 
+                 appointment.status !== 'cancelled' && 
+                 appointment.status !== 'completed';
         })
         .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
       
       // 3. Mettre à jour le dossier patient
-      if (futureConsultations.length > 0) {
-        // Prochaine consultation trouvée
-        const nextConsultation = futureConsultations[0];
-        const formattedDate = nextConsultation.dateObj.toISOString().substring(0, 16) + ":00";
+      if (futureAppointments.length > 0) {
+        // Prochain rendez-vous trouvé
+        const nextAppointment = futureAppointments[0];
+        const formattedDate = nextAppointment.dateObj.toISOString().substring(0, 16) + ":00";
         
         await updateDoc(patientRef, {
           nextAppointment: formattedDate,
-          updatedAt: Timestamp.now()
+          updatedAt: new Date().toISOString()
         });
         
-        console.log(`✅ Patient ${patientId} updated with next consultation: ${formattedDate}`);
+        console.log(`✅ Patient ${patientId} updated with next appointment: ${formattedDate}`);
       } else {
-        // Aucune consultation future, effacer le champ nextAppointment
+        // Aucun rendez-vous futur, effacer le champ nextAppointment
         await updateDoc(patientRef, {
           nextAppointment: null,
-          updatedAt: Timestamp.now()
+          updatedAt: new Date().toISOString()
         });
         
-        console.log(`✅ Patient ${patientId} updated with no next consultation`);
+        console.log(`✅ Patient ${patientId} updated with no next appointment`);
       }
       
     } catch (error) {
@@ -559,13 +563,14 @@ export class AppointmentService {
         updatedAt: Timestamp.now()
       };
       
-      // 5. Ajouter la consultation
-      const consultationRef = collection(db, 'consultations');
-      const docRef = await addDoc(consultationRef, consultationWithMetadata);
-      const consultationId = docRef.id;
+      // 5. Ajouter la consultation (avec HDS)
+      const consultationsRef = collection(db, 'consultations');
+      const newConsultationRef = doc(consultationsRef);
+      const consultationId = newConsultationRef.id;
+      await HDSCompliance.saveCompliantData('consultations', consultationId, consultationWithMetadata);
       
       // 6. Mettre à jour le statut du rendez-vous
-      await updateDoc(appointmentRef, {
+      await HDSCompliance.updateCompliantData('appointments', appointmentId, {
         status: 'completed',
         consultationId,
         updatedAt: Timestamp.now()
@@ -750,9 +755,11 @@ export class AppointmentService {
             isHistorical: true
           };
           
-          // Ajouter le rendez-vous
-          const appointmentRef = collection(db, 'appointments');
-          await addDoc(appointmentRef, {
+          // Ajouter le rendez-vous (avec HDS)
+          const appointmentsRef = collection(db, 'appointments');
+          const newAppointmentRef = doc(appointmentsRef);
+          const newAppointmentId = newAppointmentRef.id;
+          await HDSCompliance.saveCompliantData('appointments', newAppointmentId, {
             ...appointmentData,
             osteopathId: auth.currentUser.uid,
             createdAt: Timestamp.now(),

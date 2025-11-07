@@ -1,11 +1,9 @@
-import { collection, query, where, getDocs, deleteDoc, doc, Timestamp, orderBy, limit, getCountFromServer } from 'firebase/firestore';
+import { collection, query, where, getDocs, getCountFromServer } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import { HDSCompliance } from '../utils/hdsCompliance';
-import { trackEvent } from '../lib/clarityClient';
-import { trackEvent as trackMatomoEvent } from '../lib/matomoTagManager';
-import { trackEvent as trackGAEvent } from '../lib/googleAnalytics';
 import { getEffectiveOsteopathId } from '../utils/substituteAuth';
+import { toDateSafe } from '../utils/dataCleaning';
 
 /**
  * Service pour la gestion du tableau de bord
@@ -57,20 +55,7 @@ export class DashboardService {
         { effectiveOsteopathId }
       );
       
-      // Track dashboard stats loaded
-      trackEvent("dashboard_stats_loaded", {
-        patient_count: patientCount,
-        today_appointments: todayAppointments,
-        pending_invoices: pendingInvoices
-      });
-      
-      trackMatomoEvent('Dashboard', 'Stats Loaded');
-      
-      trackGAEvent('dashboard_stats_loaded', {
-        patient_count: patientCount,
-        today_appointments: todayAppointments,
-        pending_invoices: pendingInvoices
-      });
+      // Analytics supprimés: pas de tracking des stats chargées
       
       return {
         patientCount,
@@ -94,10 +79,7 @@ export class DashboardService {
         { error: (error as Error).message }
       );
       
-      // Track error
-      trackEvent("dashboard_stats_error", { error: (error as Error).message });
-      trackMatomoEvent('Error', 'Dashboard Stats', (error as Error).message);
-      trackGAEvent('dashboard_stats_error', { error_message: (error as Error).message });
+      // Analytics supprimés: pas de tracking d'erreur
       
       throw error;
     }
@@ -148,30 +130,14 @@ export class DashboardService {
       
       const snapshot = await getDocs(q);
       
-      // Filtrer manuellement par date
+      // Filtrer manuellement par date (conversion unifiée)
       const todayConsultations = snapshot.docs.filter(doc => {
         const data = doc.data();
-        let consultationDate: Date;
-        
-        // Gestion robuste des formats de date
-        if (data.date?.toDate) {
-          consultationDate = data.date.toDate();
-        } else if (data.date?.seconds) {
-          consultationDate = new Date(data.date.seconds * 1000);
-        } else if (typeof data.date === 'string') {
-          consultationDate = new Date(data.date);
-        } else if (data.date instanceof Date) {
-          consultationDate = data.date;
-        } else {
-          console.warn('Invalid date format in consultation:', doc.id, data.date);
-          return false;
-        }
-        
+        const consultationDate = toDateSafe(data.date);
         if (isNaN(consultationDate.getTime())) {
           console.warn('Invalid date value in consultation:', doc.id, data.date);
           return false;
         }
-        
         return consultationDate >= today && consultationDate < tomorrow;
       });
       
@@ -379,12 +345,12 @@ export class DashboardService {
         // Filtrer manuellement pour les consultations d'aujourd'hui
         const todayConsultations = consultationsSnapshot.docs
           .filter(doc => {
-            const consultationDate = doc.data().date?.toDate ? doc.data().date.toDate() : new Date(doc.data().date);
+            const consultationDate = toDateSafe(doc.data().date);
             return consultationDate >= now && consultationDate <= endOfDay;
           })
           .sort((a, b) => {
-            const dateA = a.data().date?.toDate ? a.data().date.toDate() : new Date(a.data().date);
-            const dateB = b.data().date?.toDate ? b.data().date.toDate() : new Date(b.data().date);
+            const dateA = toDateSafe(a.data().date);
+            const dateB = toDateSafe(b.data().date);
             return dateA.getTime() - dateB.getTime();
           })
           .slice(0, 3);
@@ -399,7 +365,7 @@ export class DashboardService {
             userId
           );
           
-          const consultationDate = consultation.date?.toDate ? consultation.date.toDate() : new Date(consultation.date);
+          const consultationDate = toDateSafe(consultation.date);
           
           notifications.push({
             id: doc.id,
@@ -564,8 +530,9 @@ export class DashboardService {
           results.appointments.real++;
         }
         
-        // Vérifier si le rendez-vous est passé ou à venir
-        const appointmentDate = appointmentData.date.toDate();
+        // Vérifier si le rendez-vous est passé ou à venir (conversion robuste)
+        const rawDate = appointmentData.date;
+        const appointmentDate = toDateSafe(rawDate);
         if (appointmentDate > now) {
           results.appointments.upcoming++;
         } else {

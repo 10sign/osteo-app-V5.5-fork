@@ -5,6 +5,7 @@ import { HDSCompliance } from '../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import { ConsultationService } from './consultationService';
 import { getEffectiveOsteopathId } from '../utils/substituteAuth';
+import { InitialConsultationSyncService } from './initialConsultationSyncService';
 
 /**
  * Service pour la gestion des patients conforme HDS
@@ -173,40 +174,48 @@ export class PatientService {
   
   /**
    * Met à jour un patient avec chiffrement
+   *
+   * @param patientId - ID du patient à mettre à jour
+   * @param updates - Données à mettre à jour
+   * @param skipConsultationSync - Si true, désactive la synchronisation automatique de la consultation initiale
    */
-  static async updatePatient(patientId: string, updates: Partial<Patient>): Promise<void> {
+  static async updatePatient(
+    patientId: string,
+    updates: Partial<Patient>,
+    skipConsultationSync: boolean = false
+  ): Promise<void> {
     if (!auth.currentUser) {
       throw new Error('Utilisateur non authentifié');
     }
-    
+
     try {
       // Vérification de la propriété
       const patientRef = doc(db, this.COLLECTION_NAME, patientId);
       const patientSnap = await getDoc(patientRef);
-      
+
       if (!patientSnap.exists()) {
         throw new Error('Patient non trouvé');
       }
-      
+
       const patientData = patientSnap.data();
-      
+
       if (patientData.osteopathId !== auth.currentUser.uid && !this.isAdmin()) {
         throw new Error('Vous n\'avez pas les droits pour modifier ce patient');
       }
-      
+
       // Préparation des mises à jour
       const updatesWithMetadata = {
         ...updates,
         updatedAt: new Date().toISOString()
       };
-      
+
       // Mise à jour avec chiffrement HDS
       await HDSCompliance.updateCompliantData(
         this.COLLECTION_NAME,
         patientId,
         updatesWithMetadata
       );
-      
+
       // Journalisation de la modification
       await AuditLogger.logPatientModification(
         patientId,
@@ -214,10 +223,57 @@ export class PatientService {
         'success',
         { fields: Object.keys(updates) }
       );
-      
+
+      // ✅ SYNCHRONISATION AUTOMATIQUE DE LA CONSULTATION INITIALE
+      // Après la mise à jour du patient, synchroniser automatiquement sa consultation initiale
+      // avec les nouvelles données du dossier patient
+      if (!skipConsultationSync) {
+        try {
+          console.log(`🔄 Déclenchement de la synchronisation automatique pour le patient ${patientId}`);
+
+          // Récupérer les données complètes du patient (mises à jour + existantes)
+          const updatedPatientSnap = await getDoc(patientRef);
+          const updatedPatientData = updatedPatientSnap.data();
+
+          // Déchiffrer les données pour la synchronisation
+          const decryptedPatientData = HDSCompliance.decryptDataForDisplay(
+            updatedPatientData,
+            this.COLLECTION_NAME,
+            auth.currentUser.uid
+          );
+
+          // Synchroniser la consultation initiale
+          const syncResult = await InitialConsultationSyncService.syncInitialConsultationForPatient(
+            patientId,
+            { ...decryptedPatientData, id: patientId },
+            auth.currentUser.uid
+          );
+
+          if (syncResult.success && syncResult.fieldsUpdated.length > 0) {
+            console.log(`✅ Consultation initiale synchronisée: ${syncResult.fieldsUpdated.length} champs mis à jour`);
+          } else if (syncResult.error) {
+            console.warn(`⚠️ Erreur lors de la synchronisation automatique (non bloquant): ${syncResult.error}`);
+          }
+
+        } catch (syncError) {
+          // La synchronisation ne doit pas bloquer la mise à jour du patient
+          console.warn('⚠️ Erreur lors de la synchronisation automatique de la consultation initiale (non bloquant):', syncError);
+
+          // Journaliser l'erreur mais ne pas la propager
+          await AuditLogger.log(
+            AuditEventType.DATA_MODIFICATION,
+            `patients/${patientId}/consultation_sync`,
+            'auto_sync',
+            SensitivityLevel.INTERNAL,
+            'failure',
+            { error: (syncError as Error).message }
+          );
+        }
+      }
+
     } catch (error) {
       console.error('❌ Failed to update patient:', error);
-      
+
       // Journalisation de l'erreur
       await AuditLogger.logPatientModification(
         patientId,
@@ -225,7 +281,7 @@ export class PatientService {
         'failure',
         { error: (error as Error).message }
       );
-      
+
       throw error;
     }
   }
@@ -277,8 +333,8 @@ export class PatientService {
       await AuditLogger.logPatientModification(
         patientId,
         'delete_cascade',
-        'started',
-        { patientName: `${patientData.firstName} ${patientData.lastName}` }
+        'success',
+        { phase: 'started', patientName: `${patientData.firstName} ${patientData.lastName}` }
       );
       
       // 1. Suppression des rendez-vous

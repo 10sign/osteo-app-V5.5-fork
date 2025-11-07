@@ -108,44 +108,77 @@ export class HDSCompliance {
     collectionName: string, 
     userId: string
   ): any {
-    if (!this.isEnabled() || !data) return data;
+    if (!data) return data;
     
     // Clone des données
     const processedData = { ...data };
-    
+
+    // ✅ AJOUT: Liste des champs cliniques qui doivent TOUJOURS être sauvegardés même s'ils sont vides
+    const clinicalFields = [
+      'currentTreatment',
+      'consultationReason',
+      'medicalAntecedents',
+      'medicalHistory',
+      'osteopathicTreatment',
+      'notes',
+      'reason',
+      'treatment'
+    ];
+
+    // ✅ CORRECTION: Initialiser les champs cliniques vides AVANT le filtrage
+    // Ceci garantit qu'ils seront inclus dans fieldsToEncrypt
+    if (collectionName === 'consultations') {
+      clinicalFields.forEach(field => {
+        if (processedData[field] === undefined || processedData[field] === null || processedData[field] === '') {
+          processedData[field] = ''; // Initialiser avec chaîne vide
+        }
+      });
+    }
+
     // Récupération des champs sensibles pour cette collection
     const sensitiveFields = SENSITIVE_FIELDS[collectionName] || [];
-    const fieldsToEncrypt = sensitiveFields.filter(field => 
-      processedData[field] !== undefined && 
+    const fieldsToEncrypt = sensitiveFields.filter(field =>
+      processedData[field] !== undefined &&
       processedData[field] !== null &&
       !isEncrypted(processedData[field])
     );
-    
-    // Chiffrement des champs sensibles
-    fieldsToEncrypt.forEach(field => {
-      try {
-        // ✅ CORRECTION: Ne pas skip les valeurs vides pour les champs cliniques
-        // Les champs cliniques doivent être sauvegardés même s'ils sont vides
-        if (processedData[field] === null || processedData[field] === undefined) {
-          return; // Skip only null/undefined values
+
+    // Chiffrement des champs sensibles (uniquement si HDS activé)
+    if (this.isEnabled()) {
+      fieldsToEncrypt.forEach(field => {
+        try {
+          // Chiffrer toutes les valeurs (y compris les chaînes vides initialisées)
+          const value = processedData[field];
+
+          // Gestion spéciale pour les objets complexes comme address
+          if (field === 'address' && typeof value === 'object') {
+            processedData[field] = encryptData(value, userId);
+          } else {
+            // Chiffrer la valeur (convertir en string, même vide)
+            const valueToEncrypt = String(value || '');
+            processedData[field] = encryptData(valueToEncrypt, userId);
+
+            // Log pour le champ notes spécifiquement
+            if (field === 'notes') {
+              console.log(`🔍 HDS - Chiffrement du champ notes:`, {
+                originalValue: value,
+                valueToEncrypt: valueToEncrypt,
+                encrypted: processedData[field]
+              });
+            }
+
+            // Log pour les champs cliniques vides
+            if (clinicalFields.includes(field) && valueToEncrypt === '') {
+              console.log(`✅ Champ clinique vide chiffré: ${field}`);
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Failed to encrypt field ${field}:`, error);
+          // Marquer le champ comme ayant une erreur de chiffrement
+          processedData[field] = `[ENCRYPTION_ERROR]:${processedData[field]}`;
         }
-        
-        // Gestion spéciale pour les objets complexes comme address
-        if (field === 'address' && typeof processedData[field] === 'object') {
-          // Chiffrer l'objet address complet
-          processedData[field] = encryptData(processedData[field], userId);
-        } else {
-          // ✅ CORRECTION: Sauvegarder même les valeurs vides pour les champs cliniques
-          const valueToEncrypt = String(processedData[field] || '').trim();
-          // Toujours chiffrer, même si vide (pour les champs cliniques)
-          processedData[field] = encryptData(valueToEncrypt, userId);
-        }
-      } catch (error) {
-        console.error(`❌ Failed to encrypt field ${field}:`, error);
-        // Marquer le champ comme ayant une erreur de chiffrement
-        processedData[field] = `[ENCRYPTION_ERROR]:${processedData[field]}`;
-      }
-    });
+      });
+    }
     
     // Pseudonymisation si nécessaire
     const pseudoFields = PSEUDONYMIZED_FIELDS[collectionName] || [];
@@ -169,7 +202,7 @@ export class HDSCompliance {
     // Ajout des métadonnées HDS
     processedData._hds = {
       version: hdsConfig.complianceVersion,
-      encryptedFields: fieldsToEncrypt,
+      encryptedFields: this.isEnabled() ? fieldsToEncrypt : [],
       pseudonymizedFields: pseudoFields,
       lastUpdated: new Date().toISOString(),
       updatedBy: userId
@@ -186,7 +219,9 @@ export class HDSCompliance {
     collectionName: string, 
     userId: string
   ): any {
-    if (!this.isEnabled() || !data) return data;
+    // Même si le mode HDS est désactivé, tenter de déchiffrer les champs
+    // qui semblent chiffrés afin d'afficher des données lisibles.
+    if (!data) return data;
     
     // Debug: Log pour diagnostiquer les problèmes de déchiffrement
     if (import.meta.env.DEV) {
@@ -485,13 +520,17 @@ export class HDSCompliance {
       // Traitement des champs à mettre à jour
       Object.entries(updates).forEach(([key, value]) => {
         try {
-          if (sensitiveFields.includes(key) && value !== undefined && !isEncrypted(value)) {
+          const isSensitive = sensitiveFields.includes(key);
+          const isAddressObject = key === 'address' && value !== null && typeof value === 'object';
+          const isStringValue = typeof value === 'string';
+
+          if (this.isEnabled() && isSensitive && value !== undefined && (isAddressObject || (isStringValue && !isEncrypted(value as string)))) {
             // Gestion spéciale pour les objets complexes comme address
-            if (key === 'address' && typeof value === 'object') {
+            if (isAddressObject) {
               updatesWithEncryption[key] = encryptData(value, userId);
             } else {
-              // Chiffrement des champs sensibles
-              updatesWithEncryption[key] = encryptData(value, userId);
+              // Chiffrement des champs sensibles (valeur string)
+              updatesWithEncryption[key] = encryptData(value as string, userId);
             }
           } else {
             // Conservation des autres champs tels quels

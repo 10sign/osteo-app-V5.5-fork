@@ -1,8 +1,8 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getAuth, setPersistence, browserLocalPersistence, multiFactor } from "firebase/auth";
-import { getFirestore, enableIndexedDbPersistence, setLogLevel, CACHE_SIZE_UNLIMITED } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { getAuth, setPersistence, browserLocalPersistence, connectAuthEmulator } from "firebase/auth";
+import { getFirestore, enableMultiTabIndexedDbPersistence, setLogLevel, CACHE_SIZE_UNLIMITED, connectFirestoreEmulator } from "firebase/firestore";
+import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { enableCryptoEngine, initializeEncryption } from "../utils/encryption";
 
@@ -33,6 +33,10 @@ const hdsConfig = {
 // Initialisation de Firebase
 const app = initializeApp(firebaseConfig);
 
+const isDev = import.meta.env.DEV;
+const useProduction = Boolean(import.meta.env.VITE_FIREBASE_USE_PRODUCTION);
+const useEmulator = Boolean(import.meta.env.VITE_FIREBASE_USE_EMULATOR);
+
 // Journalisation détaillée en développement
 if (import.meta.env.DEV) {
   setLogLevel('debug');
@@ -41,26 +45,47 @@ if (import.meta.env.DEV) {
 }
 
 // Initialisation des services
-const analytics = getAnalytics(app);
+// Analytics uniquement en production pour éviter des erreurs réseau locales
+let analytics: ReturnType<typeof getAnalytics> | undefined;
+try {
+  if (!isDev || useProduction) {
+    analytics = getAnalytics(app);
+  }
+} catch (err) {
+  console.warn('⚠️ Analytics non initialisé en environnement local:', err);
+}
+
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// IMPORTANT: Enable persistence IMMEDIATELY after Firestore initialization
-// This must be done before any other Firestore operations
-enableIndexedDbPersistence(db, {
-  synchronizeTabs: true,
-  forceOwnership: false
-})
-  .catch((err) => {
-    if (err.code === 'failed-precondition') {
+// IMPORTANT: Enable multi-tab persistence right after Firestore initialization
+// Use the supported API; options like "synchronizeTabs" are not part of the type
+enableMultiTabIndexedDbPersistence(db)
+  .catch((err: any) => {
+    if (err?.code === 'failed-precondition') {
       console.warn('⚠️ Multiple tabs open, persistence can only be enabled in one tab at a time.');
-    } else if (err.code === 'unimplemented') {
+    } else if (err?.code === 'unimplemented') {
       console.warn('⚠️ The current browser doesn\'t support persistence.');
+    } else {
+      console.warn('⚠️ Could not enable Firestore persistence:', err);
     }
   });
 
 const storage = getStorage(app);
 const functions = getFunctions(app, 'europe-west1'); // Région européenne pour conformité RGPD
+
+// Configuration des émulateurs Firebase en développement
+if (isDev && !useProduction && useEmulator) {
+  try {
+    connectFirestoreEmulator(db, 'localhost', 8080);
+    connectAuthEmulator(auth, 'http://localhost:9099');
+    connectStorageEmulator(storage, 'localhost', 9199);
+    connectFunctionsEmulator(functions, "localhost", 5001);
+    console.log('🔧 Connected to Firebase emulators (Firestore/Auth/Storage/Functions)');
+  } catch (error) {
+    console.warn('⚠️ Could not connect to Firebase emulators:', error);
+  }
+}
 
 // Configuration de l'émulateur Functions en développement
 if (import.meta.env.DEV && !import.meta.env.VITE_FIREBASE_USE_PRODUCTION) {
@@ -116,6 +141,7 @@ console.log("🔑 Authentication service ready");
 console.log("💾 Firestore service ready");
 console.log("📦 Storage service ready");
 console.log("⚡ Functions service ready");
+console.log("📊 Analytics:", analytics ? "ENABLED" : "DISABLED (dev)");
 console.log("🏛️ HDS compliance mode:", hdsConfig.enabled ? "ENABLED" : "DISABLED");
 
 export { app, analytics, auth, db, storage, functions, hdsConfig };

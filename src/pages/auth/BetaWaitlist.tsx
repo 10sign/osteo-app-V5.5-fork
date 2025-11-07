@@ -4,9 +4,10 @@ import { useForm } from 'react-hook-form';
 import { ArrowLeft, UserPlus, Star, Clock, Users, CheckCircle, User, Building, MessageCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { WaitlistFormData, WaitlistService, SubmissionState } from '../../services/waitlistService';
-import { trackEvent } from '../../lib/clarityClient';
-import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
-import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
+// Analytics supprimés: retirer les imports et utiliser des stubs locaux
+const trackEvent = (..._args: any[]) => {};
+const trackMatomoEvent = (..._args: any[]) => {};
+const trackGAEvent = (..._args: any[]) => {};
 
 const BetaWaitlist: React.FC = () => {
   const [submissionState, setSubmissionState] = useState<SubmissionState>({

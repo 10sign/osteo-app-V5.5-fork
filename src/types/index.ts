@@ -103,7 +103,9 @@ export interface Patient {
   documentUrl?: string | null;
   isTestData?: boolean;
   nextAppointment?: string; // format: "YYYY-MM-DDThh:mm:ss"
-  documents?: PatientDocument[];
+  // Harmonisation: utiliser les métadonnées de documents communes
+  // pour aligner avec les consultations et les composants d'upload
+  documents?: DocumentMetadata[];
   pastAppointments?: PastAppointment[]; // Nouveau champ pour les rendez-vous passés
   
   // Champs pour le tri
@@ -276,15 +278,21 @@ export interface Consultation {
   osteopathicTreatment: string;
   symptoms: string[];
   treatmentHistory?: TreatmentHistoryEntry[];
-  
+
   // Documents de la consultation
   documents?: DocumentMetadata[];
+
+  // Flag pour identifier la consultation initiale créée automatiquement lors de la création du dossier patient
+  // Cette consultation est la seule à être pré-remplie automatiquement avec les données du dossier patient
+  // Les consultations manuelles, même avec des dates plus anciennes, auront ce flag à false
+  isInitialConsultation?: boolean;
 }
 
 export interface ConsultationFormData {
   patientId: string;
   patientName: string;
   date: Date | string;
+  appointmentId?: string;
   reason?: string;
   treatment?: string;
   notes?: string;
@@ -314,7 +322,10 @@ export interface ConsultationFormData {
   osteopathicTreatment: string;
   symptoms: string[];
   treatmentHistory?: TreatmentHistoryEntry[];
-  
+
   // Documents de consultation
   documents?: DocumentMetadata[];
+
+  // Flag pour identifier la consultation initiale créée automatiquement lors de la création du dossier patient
+  isInitialConsultation?: boolean;
 }

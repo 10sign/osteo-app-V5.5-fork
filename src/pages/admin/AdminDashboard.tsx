@@ -27,14 +27,18 @@ import AddUserModal from '../../components/admin/AddUserModal';
 import DataMigrationDashboard from '../../components/admin/DataMigrationDashboard';
 import SubstituteManagement from '../../components/admin/SubstituteManagement';
 import RetroactiveInvoiceGenerator from '../../components/admin/RetroactiveInvoiceGenerator';
-import { trackEvent } from '../../lib/clarityClient';
-import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
-import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
+// Analytics supprimés: retirer les imports et utiliser des stubs locaux
+const trackEvent = (..._args: any[]) => {};
+const trackMatomoEvent = (..._args: any[]) => {};
+const trackGAEvent = (..._args: any[]) => {};
 import { collection, query, getDocs, getCountFromServer } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import EncryptionDiagnostic from '../../components/ui/EncryptionDiagnostic';
 import DataRepairTool from '../../components/ui/DataRepairTool';
 import { DataMigrationService } from '../../services/dataMigrationService';
+import InitialConsultationFlagPanel from '../../components/admin/InitialConsultationFlagPanel';
+import MarkInitialConsultationsPanel from '../../components/admin/MarkInitialConsultationsPanel';
+import SyncAllPatientsPanel from '../../components/admin/SyncAllPatientsPanel';
 
 const AdminDashboard: React.FC = () => {
   const { user, logout, hasPermission } = useAuth();
@@ -55,6 +59,7 @@ const AdminDashboard: React.FC = () => {
   const [showEncryptionDiagnostic, setShowEncryptionDiagnostic] = useState(false);
   const [showDataRepairTool, setShowDataRepairTool] = useState(false);
   const [showRetroactiveInvoiceGenerator, setShowRetroactiveInvoiceGenerator] = useState(false);
+  const [showFirstConsultationSync, setShowFirstConsultationSync] = useState(false);
 
   useEffect(() => {
     // Charger les statistiques
@@ -283,6 +288,12 @@ const AdminDashboard: React.FC = () => {
           
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              {/* Panneau de synchronisation des consultations à venir */}
+              <SyncAllPatientsPanel />
+
+              {/* Panneau de marquage des premières consultations */}
+              <MarkInitialConsultationsPanel />
+
               {/* Outil de génération rétroactive de factures */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
@@ -302,6 +313,28 @@ const AdminDashboard: React.FC = () => {
                 </Button>
               </div>
               
+              {/* Synchronisation des premières consultations */}
+              <div className="bg-gradient-to-r from-blue-50 to-primary-50 rounded-lg shadow-md border-2 border-primary-200 p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                  <RefreshCw size={24} className="mr-3 text-primary-600" />
+                  Synchronisation des Consultations
+                </h3>
+                <p className="text-sm text-gray-700 mb-2">
+                  Interface simplifiée pour synchroniser les premières consultations avec les données du dossier patient.
+                </p>
+                <p className="text-sm text-gray-600 mb-4">
+                  Aucune compétence technique requise - Interface guidée en 3 étapes simples.
+                </p>
+                <Button
+                  variant="primary"
+                  onClick={() => navigate('/admin/sync-consultations')}
+                  leftIcon={<RefreshCw size={16} />}
+                  size="lg"
+                >
+                  Ouvrir l'interface de synchronisation
+                </Button>
+              </div>
+
               {/* Outil de nettoyage des doublons de patients */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
@@ -561,7 +594,10 @@ const AdminDashboard: React.FC = () => {
           )}
 
           {activeTab === 'migration' && hasPermission('system:config') && (
-            <DataMigrationDashboard />
+            <div className="space-y-6">
+              <DataMigrationDashboard />
+              <InitialConsultationFlagPanel />
+            </div>
           )}
 
           {activeTab === 'config' && hasPermission('system:config') && (
@@ -600,13 +636,146 @@ const AdminDashboard: React.FC = () => {
       {/* Modal de génération rétroactive de factures */}
       {showRetroactiveInvoiceGenerator && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <RetroactiveInvoiceGenerator 
+          <RetroactiveInvoiceGenerator
             onClose={() => setShowRetroactiveInvoiceGenerator(false)}
             onSuccess={() => {
               setShowRetroactiveInvoiceGenerator(false);
               loadStats(); // Refresh stats after successful generation
             }}
           />
+        </div>
+      )}
+
+      {/* Modal de synchronisation des premières consultations */}
+      {showFirstConsultationSync && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <FirstConsultationSyncModal
+            onClose={() => setShowFirstConsultationSync(false)}
+            onSuccess={() => {
+              setShowFirstConsultationSync(false);
+              setSuccess('Premières consultations synchronisées avec succès.');
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Composant modal pour la synchronisation des premières consultations
+const FirstConsultationSyncModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = ({ onClose, onSuccess }) => {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<{
+    success: boolean;
+    patientsProcessed: number;
+    consultationsUpdated: number;
+    errors: string[];
+  } | null>(null);
+
+  const runSync = async () => {
+    setRunning(true);
+    try {
+      // Synchroniser spécifiquement pour Julie Boddaert
+      const { syncForOsteopathByEmail } = await import('../../scripts/syncFirstConsultationWithPatient');
+      const syncResult = await syncForOsteopathByEmail('julie.boddaert@hotmail.fr');
+      setResult(syncResult);
+      if (syncResult.success) {
+        setTimeout(() => {
+          onSuccess();
+        }, 3000);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la synchronisation:', error);
+      setResult({
+        success: false,
+        patientsProcessed: 0,
+        consultationsUpdated: 0,
+        errors: [(error as Error).message]
+      });
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+      <h2 className="text-2xl font-bold mb-4">Synchronisation pour Julie Boddaert</h2>
+
+      {!result && !running && (
+        <>
+          <p className="text-gray-600 mb-4">
+            Cette opération va <strong>ÉCRASER</strong> les premières consultations de <strong>Julie Boddaert (julie.boddaert@hotmail.fr)</strong> avec les données cliniques
+            de ses dossiers patients (motif de consultation, antécédents, traitement, etc.).
+          </p>
+          <p className="text-sm text-red-600 font-medium mb-6">
+            ⚠️ ATTENTION: Les données existantes dans les premières consultations seront REMPLACÉES par celles du dossier patient.
+          </p>
+          <div className="flex justify-end space-x-3">
+            <Button variant="outline" onClick={onClose} disabled={running}>
+              Annuler
+            </Button>
+            <Button onClick={runSync} disabled={running}>
+              Lancer la synchronisation
+            </Button>
+          </div>
+        </>
+      )}
+
+      {running && (
+        <div className="text-center py-8">
+          <RefreshCw className="animate-spin mx-auto mb-4 text-primary-600" size={48} />
+          <p className="text-lg font-medium">Synchronisation en cours...</p>
+          <p className="text-sm text-gray-500 mt-2">Veuillez patienter</p>
+        </div>
+      )}
+
+      {result && (
+        <div className="py-4">
+          {result.success ? (
+            <>
+              <div className="flex items-center justify-center mb-4">
+                <CheckCircle className="text-green-600" size={48} />
+              </div>
+              <h3 className="text-lg font-semibold text-center mb-4">Synchronisation terminée</h3>
+              <div className="space-y-2 text-sm">
+                <p><strong>Patients traités :</strong> {result.patientsProcessed}</p>
+                <p><strong>Consultations mises à jour :</strong> {result.consultationsUpdated}</p>
+                {result.errors.length > 0 && (
+                  <>
+                    <p className="text-red-600 mt-4"><strong>Erreurs ({result.errors.length}) :</strong></p>
+                    <ul className="list-disc list-inside text-red-600 text-xs max-h-40 overflow-y-auto">
+                      {result.errors.map((error, index) => (
+                        <li key={index}>{error}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+              <div className="flex justify-end mt-6">
+                <Button onClick={onClose}>Fermer</Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-center mb-4">
+                <AlertTriangle className="text-red-600" size={48} />
+              </div>
+              <h3 className="text-lg font-semibold text-center mb-4 text-red-600">Erreur</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Une erreur s'est produite lors de la synchronisation.
+              </p>
+              {result.errors.length > 0 && (
+                <ul className="list-disc list-inside text-red-600 text-sm">
+                  {result.errors.map((error, index) => (
+                    <li key={index}>{error}</li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex justify-end mt-6">
+                <Button onClick={onClose}>Fermer</Button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

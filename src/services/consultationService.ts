@@ -15,6 +15,7 @@ import { db, auth } from '../firebase/config';
 import { Consultation, ConsultationFormData } from '../types';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import HDSCompliance from '../utils/hdsCompliance';
+import { toDateSafe } from '../utils/dataCleaning';
 import { listDocuments } from '../utils/documentStorage';
 
 export class ConsultationService {
@@ -46,9 +47,9 @@ export class ConsultationService {
         consultations.push({
           id: docSnapshot.id,
           ...decryptedData,
-          date: data.date?.toDate?.() || new Date(data.date),
-          createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
-          updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)
+          date: toDateSafe(data.date),
+          createdAt: toDateSafe(data.createdAt),
+          updatedAt: toDateSafe(data.updatedAt)
         } as Consultation);
       }
       
@@ -183,25 +184,26 @@ export class ConsultationService {
       
       // Déchiffrement des données sensibles pour l'affichage
       const decryptedData = HDSCompliance.decryptDataForDisplay(data, 'consultations', auth.currentUser.uid);
-      
+
+      // ✅ DEBUG: Log du champ notes après déchiffrement
+      console.log('🔍 GET CONSULTATION BY ID - notes field:', {
+        rawNotes: data.notes,
+        decryptedNotes: decryptedData.notes,
+        notesType: typeof decryptedData.notes,
+        notesLength: decryptedData.notes?.length
+      });
+
       const consultation: Consultation = {
         id: docSnap.id,
         ...decryptedData,
         date: data.date?.toDate?.() || new Date(data.date),
         createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
-        updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)
+        updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt),
+        // Documents are stored in Firestore, not in Storage
+        documents: data.documents || []
       } as Consultation;
-      
-      // Charger les documents depuis Firebase Storage
-      try {
-        const documentsFolder = `users/${auth.currentUser.uid}/consultations/${id}/documents`;
-        const documents = await listDocuments(documentsFolder);
-        consultation.documents = documents;
-        console.log('📄 Documents chargés pour la consultation:', documents.length);
-      } catch (docError) {
-        console.warn('⚠️ Erreur lors du chargement des documents:', docError);
-        consultation.documents = [];
-      }
+
+      console.log('📄 Documents chargés pour la consultation depuis Firestore:', consultation.documents?.length || 0);
       
       // Journalisation de l'accès aux données
       await AuditLogger.log(
@@ -244,25 +246,19 @@ export class ConsultationService {
       const userId = auth.currentUser.uid;
       const now = new Date();
       
-      console.log('🔍 Consultation data before HDS processing:', {
-        hasDocuments: !!consultationData.documents,
-        documentsCount: consultationData.documents?.length || 0,
-        documents: consultationData.documents
-      });
-
-      // ✅ DEBUG: Log des champs cliniques dans le service
-      console.log('🔍 Champs cliniques reçus par le service:', {
-        consultationReason: consultationData.consultationReason,
-        currentTreatment: consultationData.currentTreatment,
-        medicalAntecedents: consultationData.medicalAntecedents,
-        medicalHistory: consultationData.medicalHistory,
-        osteopathicTreatment: consultationData.osteopathicTreatment,
-        symptoms: consultationData.symptoms
-      });
+      console.log('🔵 ÉTAPE 1: Documents reçus:', consultationData.documents?.length || 0, 'document(s)');
 
       // Extraire les documents avant le traitement HDS
       const documents = consultationData.documents || [];
+      console.log('🔵 ÉTAPE 2: Documents extraits:', documents.length, 'document(s)');
       const { documents: _, ...dataWithoutDocuments } = consultationData;
+
+      // ✅ DEBUG: Log du champ notes avant chiffrement
+      console.log('🔍 CREATE CONSULTATION - notes field:', {
+        notes: consultationData.notes,
+        notesType: typeof consultationData.notes,
+        notesLength: consultationData.notes?.length
+      });
 
       // ✅ CORRECTION: Préparation des données avec chiffrement HDS (mapping explicite des champs cliniques)
       const dataToStore = HDSCompliance.prepareDataForStorage({
@@ -278,7 +274,7 @@ export class ConsultationService {
         examinations: consultationData.examinations,
         prescriptions: consultationData.prescriptions,
         appointmentId: consultationData.appointmentId,
-        
+
         // Champs d'identité patient (snapshot)
         patientFirstName: consultationData.patientFirstName,
         patientLastName: consultationData.patientLastName,
@@ -290,7 +286,7 @@ export class ConsultationService {
         patientAddress: consultationData.patientAddress,
         patientInsurance: consultationData.patientInsurance,
         patientInsuranceNumber: consultationData.patientInsuranceNumber,
-        
+
         // ✅ CORRECTION: Champs cliniques (mapping explicite)
         currentTreatment: consultationData.currentTreatment || '',
         consultationReason: consultationData.consultationReason || '',
@@ -299,7 +295,10 @@ export class ConsultationService {
         osteopathicTreatment: consultationData.osteopathicTreatment || '',
         symptoms: consultationData.symptoms || [],
         treatmentHistory: consultationData.treatmentHistory,
-        
+
+        // ✅ FLAG DE CONSULTATION INITIALE
+        isInitialConsultation: consultationData.isInitialConsultation || false,
+
         // Métadonnées
         osteopathId: userId,
         date: Timestamp.fromDate(new Date(consultationData.date)),
@@ -309,28 +308,53 @@ export class ConsultationService {
 
       // Ajouter les documents après le traitement HDS
       dataToStore.documents = documents;
+      console.log('🔵 ÉTAPE 3: Documents ajoutés:', dataToStore.documents?.length || 0, 'document(s)');
 
-      // 🔧 NOUVEAU : Nettoyer les champs undefined pour éviter l'erreur addDoc
-      const cleanedData = Object.fromEntries(
-        Object.entries(dataToStore).filter(([_, value]) => value !== undefined)
+      // ✅ FIX CRITIQUE: Nettoyer UNIQUEMENT les champs undefined/null
+      // IMPORTANT: Ne PAS supprimer les chaînes vides chiffrées (elles contiennent "U2FsdGVkX1...")
+      const cleanedData: any = Object.fromEntries(
+        Object.entries(dataToStore).filter(([key, value]) => {
+          // Exclure UNIQUEMENT undefined et null (garder les chaînes vides chiffrées)
+          if (value === undefined) {
+            console.log(`🚫 CREATE: BLOCKING undefined field: ${key}`);
+            return false;
+          }
+          if (value === null) {
+            console.log(`🚫 CREATE: BLOCKING null field: ${key}`);
+            return false;
+          }
+          // Garder les chaînes (même vides après chiffrement)
+          if (typeof value === 'string' && value.length > 0) {
+            return true;
+          }
+          // Garder tous les autres types valides (number, boolean, array, object, Timestamp)
+          return value !== undefined && value !== null;
+        })
       );
 
-      console.log('🔍 Consultation data after HDS processing:', {
-        hasDocuments: !!cleanedData.documents,
-        documentsCount: cleanedData.documents?.length || 0,
-        documents: cleanedData.documents
+      console.log('✅ CREATE: Champs cliniques après nettoyage:', {
+        currentTreatment: cleanedData.currentTreatment ? 'PRÉSENT (chiffré)' : 'ABSENT',
+        consultationReason: cleanedData.consultationReason ? 'PRÉSENT (chiffré)' : 'ABSENT',
+        medicalAntecedents: cleanedData.medicalAntecedents ? 'PRÉSENT (chiffré)' : 'ABSENT',
+        medicalHistory: cleanedData.medicalHistory ? 'PRÉSENT (chiffré)' : 'ABSENT',
+        osteopathicTreatment: cleanedData.osteopathicTreatment ? 'PRÉSENT (chiffré)' : 'ABSENT'
       });
 
-      // ✅ DEBUG: Log des champs cliniques après traitement HDS
-      console.log('🔍 Champs cliniques après HDS processing:', {
-        consultationReason: cleanedData.consultationReason,
-        currentTreatment: cleanedData.currentTreatment,
-        medicalAntecedents: cleanedData.medicalAntecedents,
-        medicalHistory: cleanedData.medicalHistory,
-        osteopathicTreatment: cleanedData.osteopathicTreatment,
-        symptoms: cleanedData.symptoms
+      // ✅ VALIDATION FINALE: Double vérification pour garantir qu'aucun champ undefined n'existe
+      const hasUndefinedFields = Object.entries(cleanedData).some(([key, value]) => {
+        if (value === undefined) {
+          console.error(`❌ ERREUR CRITIQUE (CREATE): Le champ ${key} contient undefined après filtrage!`);
+          return true;
+        }
+        return false;
       });
-      
+
+      if (hasUndefinedFields) {
+        throw new Error('Impossible de créer la consultation : des champs contiennent des valeurs undefined');
+      }
+
+      console.log('🔵 ÉTAPE 4: Documents à sauvegarder dans Firestore:', cleanedData.documents?.length || 0, 'document(s)');
+
       const docRef = await addDoc(collection(db, 'consultations'), cleanedData);
       const consultationId = docRef.id;
       
@@ -437,14 +461,24 @@ export class ConsultationService {
       }
       
       const userId = auth.currentUser.uid;
+
+      // ✅ DEBUG: Log du champ notes avant mise à jour
+      console.log('🔍 UPDATE CONSULTATION - notes field:', {
+        notes: consultationData.notes,
+        notesType: typeof consultationData.notes,
+        notesLength: consultationData.notes?.length,
+        notesIsDefined: consultationData.notes !== undefined
+      });
+
       // ✅ CORRECTION: Mapping explicite des champs pour la mise à jour
       const updateData: any = {
         updatedAt: Timestamp.fromDate(new Date())
       };
-      
-      // Mapper tous les champs possibles
+
+      // Mapper tous les champs possibles (uniquement ceux qui sont définis)
       if (consultationData.patientId !== undefined) updateData.patientId = consultationData.patientId;
       if (consultationData.patientName !== undefined) updateData.patientName = consultationData.patientName;
+      // ✅ FIX: reason et treatment sont optionnels, ne pas les ajouter s'ils sont undefined
       if (consultationData.reason !== undefined) updateData.reason = consultationData.reason;
       if (consultationData.treatment !== undefined) updateData.treatment = consultationData.treatment;
       if (consultationData.notes !== undefined) updateData.notes = consultationData.notes;
@@ -453,7 +487,10 @@ export class ConsultationService {
       if (consultationData.status !== undefined) updateData.status = consultationData.status;
       if (consultationData.examinations !== undefined) updateData.examinations = consultationData.examinations;
       if (consultationData.prescriptions !== undefined) updateData.prescriptions = consultationData.prescriptions;
-      if (consultationData.appointmentId !== undefined) updateData.appointmentId = consultationData.appointmentId;
+      // ✅ FIX: Ne pas ajouter appointmentId s'il est undefined
+      if (consultationData.appointmentId !== undefined && consultationData.appointmentId !== null) {
+        updateData.appointmentId = consultationData.appointmentId;
+      }
       
       // Champs d'identité patient
       if (consultationData.patientFirstName !== undefined) updateData.patientFirstName = consultationData.patientFirstName;
@@ -475,6 +512,10 @@ export class ConsultationService {
       if (consultationData.osteopathicTreatment !== undefined) updateData.osteopathicTreatment = consultationData.osteopathicTreatment;
       if (consultationData.symptoms !== undefined) updateData.symptoms = consultationData.symptoms;
       if (consultationData.treatmentHistory !== undefined) updateData.treatmentHistory = consultationData.treatmentHistory;
+
+      // Extraire les documents AVANT le traitement HDS (ils seront ajoutés après)
+      const documents = consultationData.documents !== undefined ? consultationData.documents : existingData.documents || [];
+      console.log('🔵 UPDATE: Documents extraits:', documents.length, 'document(s)');
       
       // Si la date est modifiée, la convertir en Timestamp
       if (consultationData.date) {
@@ -484,28 +525,46 @@ export class ConsultationService {
       }
       
       console.log('💾 Prepared update data:', updateData);
-      
-      // ✅ CORRECTION: Nettoyer les champs undefined pour éviter l'erreur updateDoc
+      console.log('🔍 Champs cliniques dans updateData AVANT nettoyage:', {
+        currentTreatment: updateData.currentTreatment,
+        consultationReason: updateData.consultationReason,
+        medicalAntecedents: updateData.medicalAntecedents,
+        medicalHistory: updateData.medicalHistory,
+        osteopathicTreatment: updateData.osteopathicTreatment
+      });
+
+      // ✅ CORRECTION: Nettoyer UNIQUEMENT undefined (garder les chaînes vides chiffrées)
       const cleanedUpdateData = Object.fromEntries(
-        Object.entries(updateData).filter(([_, value]) => value !== undefined)
+        Object.entries(updateData).filter(([key, value]) => {
+          if (value === undefined) {
+            console.log(`🚫 UPDATE: BLOCKING undefined field: ${key}`);
+            return false;
+          }
+          // Garder null, chaînes vides, et tous les autres types valides
+          return true;
+        })
       );
-      
+
       console.log('🧹 Cleaned update data:', cleanedUpdateData);
+      console.log('🔍 Champs cliniques dans cleanedUpdateData APRÈS nettoyage:', {
+        currentTreatment: cleanedUpdateData.currentTreatment,
+        consultationReason: cleanedUpdateData.consultationReason,
+        medicalAntecedents: cleanedUpdateData.medicalAntecedents,
+        medicalHistory: cleanedUpdateData.medicalHistory,
+        osteopathicTreatment: cleanedUpdateData.osteopathicTreatment
+      });
       
       // ✅ CORRECTION: Préparation des données avec chiffrement HDS (mapping explicite)
-      const dataToStore = HDSCompliance.prepareDataForStorage({
-        // Champs de base
+      const baseDataForStorage: any = {
+        // Champs de base (ne prendre que les champs définis)
         patientId: cleanedUpdateData.patientId || existingData.patientId,
         patientName: cleanedUpdateData.patientName || existingData.patientName,
-        reason: cleanedUpdateData.reason || existingData.reason,
-        treatment: cleanedUpdateData.treatment || existingData.treatment,
-        notes: cleanedUpdateData.notes || existingData.notes,
-        duration: cleanedUpdateData.duration || existingData.duration,
-        price: cleanedUpdateData.price || existingData.price,
+        notes: cleanedUpdateData.notes !== undefined ? cleanedUpdateData.notes : existingData.notes,
+        duration: cleanedUpdateData.duration !== undefined ? cleanedUpdateData.duration : existingData.duration,
+        price: cleanedUpdateData.price !== undefined ? cleanedUpdateData.price : existingData.price,
         status: cleanedUpdateData.status || existingData.status,
         examinations: cleanedUpdateData.examinations || existingData.examinations,
         prescriptions: cleanedUpdateData.prescriptions || existingData.prescriptions,
-        appointmentId: cleanedUpdateData.appointmentId || existingData.appointmentId,
         
         // Champs d'identité patient (snapshot)
         patientFirstName: cleanedUpdateData.patientFirstName || existingData.patientFirstName,
@@ -519,24 +578,96 @@ export class ConsultationService {
         patientInsurance: cleanedUpdateData.patientInsurance || existingData.patientInsurance,
         patientInsuranceNumber: cleanedUpdateData.patientInsuranceNumber || existingData.patientInsuranceNumber,
         
-        // ✅ CORRECTION: Champs cliniques (mapping explicite)
-        currentTreatment: cleanedUpdateData.currentTreatment || existingData.currentTreatment || '',
-        consultationReason: cleanedUpdateData.consultationReason || existingData.consultationReason || '',
-        medicalAntecedents: cleanedUpdateData.medicalAntecedents || existingData.medicalAntecedents || '',
-        medicalHistory: cleanedUpdateData.medicalHistory || existingData.medicalHistory || '',
-        osteopathicTreatment: cleanedUpdateData.osteopathicTreatment || existingData.osteopathicTreatment || '',
-        symptoms: cleanedUpdateData.symptoms || existingData.symptoms || [],
-        treatmentHistory: cleanedUpdateData.treatmentHistory || existingData.treatmentHistory || [],
-        
+        // ✅ CORRECTION: Champs cliniques (mapping explicite avec vérification stricte)
+        // Utiliser !== undefined pour permettre les valeurs vides (chaînes vides) lors de la modification
+        currentTreatment: cleanedUpdateData.currentTreatment !== undefined ? cleanedUpdateData.currentTreatment : (existingData.currentTreatment || ''),
+        consultationReason: cleanedUpdateData.consultationReason !== undefined ? cleanedUpdateData.consultationReason : (existingData.consultationReason || ''),
+        medicalAntecedents: cleanedUpdateData.medicalAntecedents !== undefined ? cleanedUpdateData.medicalAntecedents : (existingData.medicalAntecedents || ''),
+        medicalHistory: cleanedUpdateData.medicalHistory !== undefined ? cleanedUpdateData.medicalHistory : (existingData.medicalHistory || ''),
+        osteopathicTreatment: cleanedUpdateData.osteopathicTreatment !== undefined ? cleanedUpdateData.osteopathicTreatment : (existingData.osteopathicTreatment || ''),
+        symptoms: cleanedUpdateData.symptoms !== undefined ? cleanedUpdateData.symptoms : (existingData.symptoms || []),
+        treatmentHistory: cleanedUpdateData.treatmentHistory !== undefined ? cleanedUpdateData.treatmentHistory : (existingData.treatmentHistory || []),
+
+        // ✅ FLAG DE CONSULTATION INITIALE - Préserver le flag existant, ne jamais le modifier
+        isInitialConsultation: existingData.isInitialConsultation || false,
+
         // Métadonnées
         osteopathId: userId,
         date: cleanedUpdateData.date || existingData.date,
         createdAt: existingData.createdAt,
         updatedAt: cleanedUpdateData.updatedAt
-      }, 'consultations', userId);
-      console.log('🔐 Data prepared for storage:', dataToStore);
-      
-      await updateDoc(docRef, dataToStore);
+      };
+
+      // ✅ FIX CRITIQUE: Ajouter les champs optionnels seulement s'ils ont une valeur valide (non undefined/null)
+      // Utiliser une vérification stricte pour éviter d'ajouter des valeurs undefined à Firestore
+      const appointmentIdValue = cleanedUpdateData.appointmentId !== undefined ? cleanedUpdateData.appointmentId : existingData.appointmentId;
+      if (appointmentIdValue !== undefined && appointmentIdValue !== null) {
+        baseDataForStorage.appointmentId = appointmentIdValue;
+      }
+
+      const reasonValue = cleanedUpdateData.reason !== undefined ? cleanedUpdateData.reason : existingData.reason;
+      if (reasonValue !== undefined && reasonValue !== null) {
+        baseDataForStorage.reason = reasonValue;
+      }
+
+      const treatmentValue = cleanedUpdateData.treatment !== undefined ? cleanedUpdateData.treatment : existingData.treatment;
+      if (treatmentValue !== undefined && treatmentValue !== null) {
+        baseDataForStorage.treatment = treatmentValue;
+      }
+
+      const dataToStore = HDSCompliance.prepareDataForStorage(baseDataForStorage, 'consultations', userId);
+      console.log('🔐 Data prepared for storage (before filtering):', dataToStore);
+      console.log('🔍 Champs cliniques APRÈS chiffrement HDS:', {
+        currentTreatment: dataToStore.currentTreatment,
+        consultationReason: dataToStore.consultationReason,
+        medicalAntecedents: dataToStore.medicalAntecedents,
+        medicalHistory: dataToStore.medicalHistory,
+        osteopathicTreatment: dataToStore.osteopathicTreatment
+      });
+
+      // Ajouter les documents APRÈS le traitement HDS
+      dataToStore.documents = documents;
+      console.log('🔵 UPDATE: Documents ajoutés après HDS:', dataToStore.documents?.length || 0, 'document(s)');
+
+      // ✅ FIX CRITIQUE: Filtrer TOUS les champs undefined/null après le chiffrement HDS
+      // Ceci est ESSENTIEL car Firestore rejette les documents contenant des valeurs undefined
+      const finalDataToStore = Object.fromEntries(
+        Object.entries(dataToStore).filter(([key, value]) => {
+          // Exclure complètement les valeurs undefined et null
+          if (value === undefined) {
+            console.log(`🚫 BLOCKING undefined field: ${key}`);
+            return false;
+          }
+          if (value === null) {
+            console.log(`🚫 BLOCKING null field: ${key}`);
+            return false;
+          }
+          return true;
+        })
+      );
+
+      // ✅ VALIDATION FINALE: Double vérification pour garantir qu'aucun champ undefined n'existe
+      const hasUndefinedFields = Object.entries(finalDataToStore).some(([key, value]) => {
+        if (value === undefined) {
+          console.error(`❌ ERREUR CRITIQUE: Le champ ${key} contient undefined après filtrage!`);
+          return true;
+        }
+        return false;
+      });
+
+      if (hasUndefinedFields) {
+        throw new Error('Impossible de mettre à jour la consultation : des champs contiennent des valeurs undefined');
+      }
+      console.log('🔐 Final data for storage (after filtering undefined/null):', finalDataToStore);
+      console.log('🔍 Champs cliniques dans FINAL data:', {
+        currentTreatment: finalDataToStore.currentTreatment,
+        consultationReason: finalDataToStore.consultationReason,
+        medicalAntecedents: finalDataToStore.medicalAntecedents,
+        medicalHistory: finalDataToStore.medicalHistory,
+        osteopathicTreatment: finalDataToStore.osteopathicTreatment
+      });
+
+      await updateDoc(docRef, finalDataToStore);
       console.log('✅ Consultation updated successfully in Firestore');
       
       // ✅ SUPPRIMÉ : Synchronisation automatique qui modifie les données du patient
@@ -583,25 +714,25 @@ export class ConsultationService {
     try {
       const docRef = doc(db, 'consultations', id);
       const docSnap = await getDoc(docRef);
-      
+
       if (!docSnap.exists()) {
         throw new Error('Consultation non trouvée');
       }
-      
+
       const data = docSnap.data();
-      
+
       // Vérification de propriété
       if (data.osteopathId !== auth.currentUser.uid) {
         throw new Error('Accès non autorisé à cette consultation');
       }
-      
+
       // Récupérer le patientId avant suppression
       const patientId = data.patientId;
-      
+
       // 🔄 NOUVEAU : Supprimer la facture liée automatiquement
       try {
         const { InvoiceService } = await import('./invoiceService');
-        
+
         // Rechercher les factures liées à cette consultation
         const invoicesRef = collection(db, 'invoices');
         const invoiceQuery = query(
@@ -609,14 +740,14 @@ export class ConsultationService {
           where('consultationId', '==', id),
           where('osteopathId', '==', auth.currentUser.uid)
         );
-        
+
         const invoiceSnapshot = await getDocs(invoiceQuery);
-        
+
         // Supprimer toutes les factures liées à cette consultation
         for (const invoiceDoc of invoiceSnapshot.docs) {
           await InvoiceService.deleteInvoice(invoiceDoc.id);
           console.log('🗑️ Facture liée supprimée automatiquement:', invoiceDoc.id);
-          
+
           // Journalisation de la suppression de facture
           await AuditLogger.log(
             AuditEventType.DATA_DELETION,
@@ -627,7 +758,7 @@ export class ConsultationService {
             { consultationId: id, patientId }
           );
         }
-        
+
         if (invoiceSnapshot.docs.length > 0) {
           console.log(`✅ ${invoiceSnapshot.docs.length} facture(s) liée(s) supprimée(s) automatiquement`);
         }
@@ -636,13 +767,21 @@ export class ConsultationService {
         // Ne pas faire échouer la suppression de consultation si la facture échoue
         // La consultation doit être supprimée même si la facture pose problème
       }
-      
+
       // Supprimer la consultation
       await deleteDoc(docRef);
-      
-      // ✅ SUPPRIMÉ : Synchronisation automatique qui modifie les données du patient
-      // La suppression de consultation ne doit pas affecter le dossier patient
-      
+
+      // ✅ SYNCHRONISATION : Mettre à jour le champ nextAppointment du patient
+      // Après suppression d'une consultation, recalculer le prochain rendez-vous
+      try {
+        const { AppointmentService } = await import('./appointmentService');
+        await AppointmentService.syncPatientNextAppointment(patientId);
+        console.log('✅ Champ nextAppointment du patient mis à jour après suppression de la consultation');
+      } catch (syncError) {
+        console.warn('⚠️ Erreur lors de la synchronisation du nextAppointment:', syncError);
+        // Ne pas faire échouer la suppression si la synchronisation échoue
+      }
+
       // Journalisation de la suppression de consultation
       await AuditLogger.log(
         AuditEventType.DATA_DELETION,
@@ -652,10 +791,10 @@ export class ConsultationService {
         'success',
         { patientId }
       );
-      
+
     } catch (error) {
       console.error('❌ Erreur lors de la suppression de la consultation:', error);
-      
+
       // Journalisation de l'erreur
       await AuditLogger.log(
         AuditEventType.DATA_DELETION,
@@ -665,7 +804,7 @@ export class ConsultationService {
         'failure',
         { error: (error as Error).message }
       );
-      
+
       throw error;
     }
   }
@@ -704,7 +843,7 @@ export class ConsultationService {
       
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        const consultationDate = data.date?.toDate?.() || new Date(data.date);
+        const consultationDate = toDateSafe(data.date);
         
         total++;
         
@@ -724,7 +863,7 @@ export class ConsultationService {
         AuditEventType.DATA_ACCESS,
         'consultations/stats',
         'read_stats',
-        SensitivityLevel.LOW,
+        SensitivityLevel.INTERNAL,
         'success'
       );
       
@@ -743,7 +882,7 @@ export class ConsultationService {
         AuditEventType.DATA_ACCESS,
         'consultations/stats',
         'read_stats',
-        SensitivityLevel.LOW,
+        SensitivityLevel.INTERNAL,
         'failure',
         { error: (error as Error).message }
       );

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, Clock, FileText, User, Plus, Trash2, CheckCircle } from 'lucide-react';
+import { X, User, Plus, Trash2, CheckCircle } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { doc, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import AutoResizeTextarea from '../ui/AutoResizeTextarea';
@@ -43,30 +43,58 @@ interface ConsultationFormData {
   symptoms: string;
 }
 
+const COMMON_SYMPTOMS = [
+  'Lombalgie',
+  'Cervicalgie',
+  'Dorsalgie',
+  'Sciatique',
+  'Migraine',
+  'Vertiges',
+  'Entorse',
+  'Tendinite',
+  'Arthrose',
+  'Scoliose',
+  'Stress',
+  'Anxiété',
+  'Troubles digestifs',
+  'Troubles du sommeil'
+];
+
 const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
   consultationId,
-  preselectedPatientId,
+  preselectedPatientId: _preselectedPatientId,
   preselectedPatientName
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [success, _setSuccess] = useState<string | null>(null);
   const [consultationData, setConsultationData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
-  
+  const [_showConfirmationModal, _setShowConfirmationModal] = useState(false);
+  const [_pendingData, _setPendingData] = useState<ConsultationFormData | null>(null);
+
+  // État pour les données du patient (consultation initiale)
+  const [_patientData, _setPatientData] = useState<any>(null);
+  const [patientLastUpdated, setPatientLastUpdated] = useState<Date | null>(null);
+
+  // Avertissement pour les données corrompues
+  const [hasCorruptedData, setHasCorruptedData] = useState(false);
+
   // Gestion des documents
   const [consultationDocuments, setConsultationDocuments] = useState<DocumentMetadata[]>([]);
+  const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
+  const [customSymptom, setCustomSymptom] = useState('');
 
-  const { register, handleSubmit, formState: { errors, isValid }, reset, control } = useForm<ConsultationFormData>({
+  const { register, handleSubmit, formState: { errors, isValid }, reset, control, setValue } = useForm<ConsultationFormData>({
     mode: 'onChange',
     defaultValues: {
       duration: 60,
       price: 60,
-      status: 'completed',
+      status: 'completed' as const,
       examinations: [],
       prescriptions: []
     }
@@ -103,10 +131,34 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         
         const rawData = consultationDoc.data();
         console.log('📋 Raw consultation data:', rawData);
-        
+
         // Vérifier la propriété
         if (rawData.osteopathId !== auth.currentUser.uid) {
           throw new Error('Accès non autorisé à cette consultation');
+        }
+
+        // ✅ NOUVEAU: Si consultation initiale, charger les données du patient
+        let loadedPatientData = null;
+        if (rawData.isInitialConsultation && rawData.patientId) {
+          console.log('🔄 Consultation initiale détectée, chargement des données patient...');
+          try {
+            const patientRef = doc(db, 'patients', rawData.patientId);
+            const patientDoc = await getDoc(patientRef);
+
+            if (patientDoc.exists()) {
+              const rawPatientData = patientDoc.data();
+              loadedPatientData = HDSCompliance.decryptDataForDisplay(
+                rawPatientData,
+                'patients',
+                auth.currentUser.uid
+              );
+              _setPatientData(loadedPatientData);
+              setPatientLastUpdated(rawPatientData.updatedAt?.toDate() || null);
+              console.log('✅ Données patient chargées pour consultation initiale');
+            }
+          } catch (patientError) {
+            console.error('⚠️ Erreur lors du chargement des données patient:', patientError);
+          }
         }
         
         // Déchiffrer les données pour l'affichage avec gestion d'erreur robuste
@@ -125,6 +177,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         
         console.log('🔓 Decrypted consultation data:', decryptedData);
         
+        // ✅ Pour les consultations initiales, utiliser les données du patient comme source de vérité
         const consultation = {
           id: consultationDoc.id,
           ...decryptedData,
@@ -141,12 +194,20 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
           patientAddress: decryptedData.patientAddress || '',
           patientInsurance: decryptedData.patientInsurance || '',
           patientInsuranceNumber: decryptedData.patientInsuranceNumber || '',
-          currentTreatment: decryptedData.currentTreatment || '',
-          consultationReason: decryptedData.consultationReason || '',
-          medicalAntecedents: decryptedData.medicalAntecedents || '',
-          medicalHistory: decryptedData.medicalHistory || '',
-          osteopathicTreatment: decryptedData.osteopathicTreatment || '',
-          symptoms: decryptedData.symptoms || []
+
+          // ✅ Pour les consultations initiales, utiliser les données du dossier patient
+          currentTreatment: rawData.isInitialConsultation && loadedPatientData ?
+            (loadedPatientData.currentTreatment || '') : (decryptedData.currentTreatment || ''),
+          consultationReason: rawData.isInitialConsultation && loadedPatientData ?
+            (loadedPatientData.consultationReason || '') : (decryptedData.consultationReason || ''),
+          medicalAntecedents: rawData.isInitialConsultation && loadedPatientData ?
+            (loadedPatientData.medicalAntecedents || '') : (decryptedData.medicalAntecedents || ''),
+          medicalHistory: rawData.isInitialConsultation && loadedPatientData ?
+            (loadedPatientData.medicalHistory || '') : (decryptedData.medicalHistory || ''),
+          osteopathicTreatment: rawData.isInitialConsultation && loadedPatientData ?
+            (loadedPatientData.osteopathicTreatment || '') : (decryptedData.osteopathicTreatment || ''),
+          symptoms: rawData.isInitialConsultation && loadedPatientData ?
+            (loadedPatientData.tags || []) : (decryptedData.symptoms || [])
         };
 
         setConsultationData(consultation);
@@ -166,22 +227,18 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         
         // Nettoyer les champs pour l'édition avec protection contre les erreurs
         const cleanNotes = cleanDecryptedField(consultation.notes, true, '');
-        
+
         // Protection contre les erreurs de déchiffrement pour tous les champs cliniques
         const cleanClinicalFields = (field: any) => {
-          if (typeof field === 'string' && 
-              (field.includes('[DECODING_FAILED]') || 
-               field.includes('[DECRYPTION_ERROR') ||
-               field.includes('[ENCRYPTION_ERROR'))) {
-            return '';
+          const cleaned = cleanDecryptedField(field, true, '');
+          // Détecter si des données ont été corrompues
+          if (field && typeof field === 'string' && field !== cleaned &&
+              (field.includes('[DECODING_FAILED]') || field.includes('[DECRYPTION_ERROR'))) {
+            setHasCorruptedData(true);
           }
-          return field || '';
+          return cleaned;
         };
-        
-        console.log('🧹 Cleaned fields for editing:', {
-          notes: { original: consultation.notes, cleaned: cleanNotes }
-        });
-        
+
         reset({
           date: dateString,
           time: timeString,
@@ -193,13 +250,18 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
           prescriptions: consultation.prescriptions?.map((presc: string) => ({ value: presc })) || [],
 
           // Champs cliniques avec protection contre les erreurs de déchiffrement
-          currentTreatment: cleanClinicalFields(cleanDecryptedField(consultation.currentTreatment, true, '')),
-          consultationReason: cleanClinicalFields(cleanDecryptedField(consultation.consultationReason, true, '')),
-          medicalAntecedents: cleanClinicalFields(cleanDecryptedField(consultation.medicalAntecedents, true, '')),
-          medicalHistory: cleanClinicalFields(cleanDecryptedField(consultation.medicalHistory, true, '')),
-          osteopathicTreatment: cleanClinicalFields(cleanDecryptedField(consultation.osteopathicTreatment, true, '')),
+          currentTreatment: cleanClinicalFields(consultation.currentTreatment),
+          consultationReason: cleanClinicalFields(consultation.consultationReason),
+          medicalAntecedents: cleanClinicalFields(consultation.medicalAntecedents),
+          medicalHistory: cleanClinicalFields(consultation.medicalHistory),
+          osteopathicTreatment: cleanClinicalFields(consultation.osteopathicTreatment),
           symptoms: cleanClinicalFields(Array.isArray(consultation.symptoms) ? consultation.symptoms.join(', ') : (consultation.symptoms || ''))
         });
+
+        // Initialiser les symptômes sélectionnés
+        const symptomsArray = Array.isArray(consultation.symptoms) ? consultation.symptoms :
+                              (consultation.symptoms ? consultation.symptoms.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
+        setSelectedSymptoms(symptomsArray);
         
         console.log('📝 Form initialized with cleaned data');
       } catch (error) {
@@ -230,6 +292,12 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
       return;
     }
 
+    // ✅ Empêcher la modification des consultations initiales
+    if (consultationData?.isInitialConsultation) {
+      setError('Les consultations initiales sont en lecture seule. Veuillez modifier le dossier patient pour mettre à jour ces informations.');
+      return;
+    }
+
     console.log('📤 Submitting consultation update:', {
       consultationId,
       formData: data,
@@ -243,10 +311,8 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
       const consultationDate = new Date(`${data.date}T${data.time}`);
 
       // Préparer les données de mise à jour COMPLETES
-      const updateData = {
+      const updateData: any = {
         date: consultationDate,
-        reason: data.reason,
-        treatment: data.treatment,
         notes: data.notes,
         duration: data.duration,
         price: data.price,
@@ -280,9 +346,19 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         treatmentHistory: consultationData.treatmentHistory || [],
 
         // Inclure les documents
-        documents: consultationDocuments,
-        appointmentId: consultationData.appointmentId
+        documents: consultationDocuments
       };
+
+      // ✅ FIX: Ajouter les champs optionnels seulement s'ils existent et ne sont pas undefined/null
+      if (consultationData.appointmentId !== undefined && consultationData.appointmentId !== null) {
+        updateData.appointmentId = consultationData.appointmentId;
+      }
+      if (consultationData.reason !== undefined && consultationData.reason !== null) {
+        updateData.reason = consultationData.reason;
+      }
+      if (consultationData.treatment !== undefined && consultationData.treatment !== null) {
+        updateData.treatment = consultationData.treatment;
+      }
 
       console.log('💾 Prepared update data (complete):', updateData);
       
@@ -330,10 +406,11 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div key="edit-consultation-modal" className="fixed inset-0 z-50 flex items-center justify-center">
           <motion.div
+            key="edit-consultation-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -342,6 +419,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
           />
 
           <motion.div
+            key="edit-consultation-content"
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -363,7 +441,24 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                 message="Consultation modifiée avec succès. Toutes les informations saisies ont été sauvegardées."
                 isVisible={showSuccessBanner}
               />
-              
+
+              {hasCorruptedData && !consultationData?.isInitialConsultation && (
+                <div className="p-4 mb-4 border rounded-lg bg-orange-50 border-orange-200">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 mt-0.5 mr-3 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-orange-900">Données partiellement récupérées</h4>
+                      <p className="mt-1 text-sm text-orange-800">
+                        Certaines données de cette consultation n'ont pas pu être complètement récupérées en raison d'un ancien format de chiffrement.
+                        Les champs vides ont été nettoyés automatiquement. Vous pouvez maintenant les remplir à nouveau avec les bonnes informations.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {error && (
                 <div className="p-3 mb-4 text-sm border rounded-lg bg-error/5 border-error/20 text-error">
                   {error}
@@ -402,13 +497,14 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div>
                         <label htmlFor="date" className="block mb-1 text-sm font-medium text-gray-700">
-                          Date *
+                          Date * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                         </label>
                         <input
                           type="date"
                           id="date"
-                          className={`input w-full ${errors.date ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                          className={`input w-full ${errors.date ? 'border-error focus:border-error focus:ring-error' : ''} ${consultationData?.isInitialConsultation ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                           {...register('date', { required: 'Ce champ est requis' })}
+                          disabled={consultationData?.isInitialConsultation}
                         />
                         {errors.date && (
                           <p className="mt-1 text-sm text-error">{errors.date.message}</p>
@@ -417,13 +513,14 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                       <div>
                         <label htmlFor="time" className="block mb-1 text-sm font-medium text-gray-700">
-                          Heure *
+                          Heure * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                         </label>
                         <input
                           type="time"
                           id="time"
-                          className={`input w-full ${errors.time ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                          className={`input w-full ${errors.time ? 'border-error focus:border-error focus:ring-error' : ''} ${consultationData?.isInitialConsultation ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                           {...register('time', { required: 'Ce champ est requis' })}
+                          disabled={consultationData?.isInitialConsultation}
                         />
                         {errors.time && (
                           <p className="mt-1 text-sm text-error">{errors.time.message}</p>
@@ -434,12 +531,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                     <div>
                       <label htmlFor="status" className="block mb-1 text-sm font-medium text-gray-700">
-                        Statut *
+                        Statut * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                       </label>
                       <select
                         id="status"
-                        className={`input w-full ${errors.status ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                        className={`input w-full ${errors.status ? 'border-error focus:border-error focus:ring-error' : ''} ${consultationData?.isInitialConsultation ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                         {...register('status', { required: 'Ce champ est requis' })}
+                        disabled={consultationData?.isInitialConsultation}
                       >
                         <option value="completed">Effectué</option>
                         <option value="draft">En cours</option>
@@ -454,18 +552,44 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                     <div className="pt-6 mt-6 border-t col-span-full">
                       <h3 className="mb-4 text-lg font-medium text-gray-900">Données cliniques de la consultation</h3>
 
-                      {/* Motif de consultation détaillé */}
+                      {/* Bandeau d'information pour consultation initiale */}
+                      {consultationData?.isInitialConsultation && (
+                        <div className="p-4 mb-4 border rounded-lg bg-blue-50 border-blue-200">
+                          <div className="flex items-start">
+                            <svg className="w-5 h-5 mt-0.5 mr-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div className="flex-1">
+                              <h4 className="font-medium text-blue-900">✋ Consultation initiale en lecture seule</h4>
+                              <p className="mt-1 text-sm text-blue-700">
+                                Cette consultation initiale est automatiquement synchronisée avec le dossier patient.
+                                <strong> Tous les champs affichés sont en lecture seule</strong> et proviennent directement du dossier patient.
+                              </p>
+                              <p className="mt-2 text-sm text-blue-700">
+                                💡 Pour modifier ces informations, veuillez modifier directement le <strong>dossier patient</strong>.
+                              </p>
+                              {patientLastUpdated && (
+                                <p className="mt-2 text-xs text-blue-600">
+                                  📅 Dernière mise à jour du dossier patient : {patientLastUpdated.toLocaleDateString('fr-FR')} à {patientLastUpdated.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Motif de consultation */}
                       <div className="mb-4">
                         <label htmlFor="consultationReason" className="block mb-1 text-sm font-medium text-gray-700">
-                          Motif de consultation détaillé *
+                          Motif de consultation * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
                         </label>
                         <AutoResizeTextarea
                           id="consultationReason"
                           minRows={2}
-                          maxRows={4}
-                          className="w-full resize-none input"
+                          className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('consultationReason')}
                           placeholder="Détaillez le motif de consultation..."
+                          disabled={consultationData?.isInitialConsultation}
                         />
                         {errors.consultationReason && (
                           <p className="mt-1 text-sm text-error">{errors.consultationReason.message}</p>
@@ -475,15 +599,15 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Traitement effectué */}
                       <div className="mb-4">
                         <label htmlFor="currentTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                          Traitement effectué du patient *
+                          Traitement effectué * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
                         </label>
                         <AutoResizeTextarea
                           id="currentTreatment"
                           minRows={2}
-                          maxRows={4}
-                          className="w-full resize-none input"
+                          className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('currentTreatment')}
                           placeholder="Traitements médicamenteux ou thérapies en cours..."
+                          disabled={consultationData?.isInitialConsultation}
                         />
                         {errors.currentTreatment && (
                           <p className="mt-1 text-sm text-error">{errors.currentTreatment.message}</p>
@@ -493,175 +617,269 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Antécédents médicaux */}
                       <div className="mb-4">
                         <label htmlFor="medicalAntecedents" className="block mb-1 text-sm font-medium text-gray-700">
-                          Antécédents médicaux
+                          Antécédents médicaux {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
                         </label>
                         <AutoResizeTextarea
                           id="medicalAntecedents"
                           minRows={3}
-                          maxRows={6}
-                          className="w-full resize-none input"
+                          className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('medicalAntecedents')}
                           placeholder="Antécédents médicaux significatifs..."
+                          disabled={consultationData?.isInitialConsultation}
                         />
                       </div>
 
-                      {/* Historique médical */}
+                      {/* Historique médical général */}
                       <div className="mb-4">
                         <label htmlFor="medicalHistory" className="block mb-1 text-sm font-medium text-gray-700">
-                          Historique médical
+                          Historique médical général {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
                         </label>
                         <AutoResizeTextarea
                           id="medicalHistory"
                           minRows={3}
-                          maxRows={6}
-                          className="w-full resize-none input"
+                          className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('medicalHistory')}
                           placeholder="Historique médical général..."
+                          disabled={consultationData?.isInitialConsultation}
                         />
                       </div>
 
                       {/* Traitement ostéopathique */}
                       <div className="mb-4">
                         <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                          Traitement ostéopathique
+                          Traitement ostéopathique {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
                         </label>
                         <AutoResizeTextarea
                           id="osteopathicTreatment"
                           minRows={3}
-                          maxRows={6}
-                          className="w-full resize-none input"
+                          className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                           {...register('osteopathicTreatment')}
                           placeholder="Décrivez le traitement ostéopathique..."
+                          disabled={consultationData?.isInitialConsultation}
                         />
                       </div>
 
-                      {/* Symptômes */}
+                      {/* Symptômes / Syndromes */}
                       <div className="mb-4">
-                        <label htmlFor="symptoms" className="block mb-1 text-sm font-medium text-gray-700">
-                          Symptômes
+                        <label className="block mb-2 text-sm font-medium text-gray-700">
+                          Symptômes / Syndromes {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
                         </label>
-                        <input
-                          type="text"
-                          id="symptoms"
-                          className="w-full input"
-                          {...register('symptoms')}
-                          placeholder="Symptômes séparés par des virgules..."
-                        />
-                        <p className="mt-1 text-xs text-gray-500">
-                          Séparez les symptômes par des virgules (ex: Lombalgie, Cervicalgie, Fatigue)
-                        </p>
+                        <div className="space-y-3">
+                          {selectedSymptoms.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {selectedSymptoms.map((symptom, index) => (
+                                <span
+                                  key={index}
+                                  className="inline-flex items-center px-3 py-1 text-sm rounded-full bg-primary-50 text-primary-700 border border-primary-200"
+                                >
+                                  {symptom}
+                                  {!consultationData?.isInitialConsultation && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const updated = selectedSymptoms.filter((_, i) => i !== index);
+                                        setSelectedSymptoms(updated);
+                                        setValue('symptoms', updated.join(', '));
+                                      }}
+                                      className="ml-2 text-primary-500 hover:text-primary-700"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {!consultationData?.isInitialConsultation && (
+                            <>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={customSymptom}
+                                  onChange={(e) => setCustomSymptom(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      if (customSymptom.trim() && !selectedSymptoms.includes(customSymptom.trim())) {
+                                        const updated = [...selectedSymptoms, customSymptom.trim()];
+                                        setSelectedSymptoms(updated);
+                                        setValue('symptoms', updated.join(', '));
+                                        setCustomSymptom('');
+                                      }
+                                    }
+                                  }}
+                                  className="flex-1 input"
+                                  placeholder="Ajouter un symptôme personnalisé..."
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (customSymptom.trim() && !selectedSymptoms.includes(customSymptom.trim())) {
+                                      const updated = [...selectedSymptoms, customSymptom.trim()];
+                                  setSelectedSymptoms(updated);
+                                  setValue('symptoms', updated.join(', '));
+                                  setCustomSymptom('');
+                                }
+                              }}
+                              disabled={!customSymptom.trim()}
+                            >
+                              Ajouter
+                            </Button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {COMMON_SYMPTOMS.map((symptom) => (
+                              <button
+                                key={symptom}
+                                type="button"
+                                onClick={() => {
+                                  if (!selectedSymptoms.includes(symptom)) {
+                                    const updated = [...selectedSymptoms, symptom];
+                                    setSelectedSymptoms(updated);
+                                    setValue('symptoms', updated.join(', '));
+                                  }
+                                }}
+                                disabled={selectedSymptoms.includes(symptom)}
+                                className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                                  selectedSymptoms.includes(symptom)
+                                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                }`}
+                              >
+                                {symptom}
+                              </button>
+                            ))}
+                          </div>
+                            </>
+                          )}
+                        </div>
+                        <input type="hidden" {...register('symptoms')} />
                       </div>
                     </div>
 
-                    {/* Examens demandés */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Examens demandés
-                        </label>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => appendExamination({ value: '' })}
-                          leftIcon={<Plus size={14} />}
-                        >
-                          Ajouter
-                        </Button>
-                      </div>
-                      
-                      {examinationFields.length > 0 ? (
-                        <div className="space-y-2">
-                          {examinationFields.map((field, index) => (
-                            <div key={field.id} className="flex items-center space-x-2">
-                              <AutoResizeTextarea
-                                minRows={1}
-                                maxRows={3}
-                                className="flex-1 input"
-                                placeholder="Ex: Radiographie lombaire..."
-                                {...register(`examinations.${index}.value`)}
-                              />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeExamination(index)}
-                              >
-                                <Trash2 size={14} />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-sm italic text-gray-500">
-                          Aucun examen demandé
-                        </div>
-                      )}
-                    </div>
+                    {/* Documents médicaux (Examens + Prescriptions) */}
+                    <div className="space-y-4">
+                      <h3 className="text-base font-medium text-gray-900">Documents médicaux</h3>
 
-                    {/* Prescriptions */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Prescriptions
-                        </label>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => appendPrescription({ value: '' })}
-                          leftIcon={<Plus size={14} />}
-                        >
-                          Ajouter
-                        </Button>
+                      {/* Examens demandés */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Examens / Imageries demandés {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
+                          </label>
+                          {!consultationData?.isInitialConsultation && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => appendExamination({ value: '' })}
+                              leftIcon={<Plus size={14} />}
+                            >
+                              Ajouter
+                            </Button>
+                          )}
+                        </div>
+
+                        {examinationFields.length > 0 ? (
+                          <div className="space-y-2">
+                            {examinationFields.map((field, index) => (
+                              <div key={field.id} className="flex items-center space-x-2">
+                                <AutoResizeTextarea
+                                  minRows={1}
+                                  className={`flex-1 input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
+                                  placeholder="Ex: Radiographie lombaire, IRM cervicale..."
+                                  {...register(`examinations.${index}.value`)}
+                                  disabled={consultationData?.isInitialConsultation}
+                                />
+                                {!consultationData?.isInitialConsultation && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeExamination(index)}
+                                  >
+                                    <Trash2 size={14} />
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-sm italic text-gray-500">
+                            Aucun examen demandé
+                          </div>
+                        )}
                       </div>
-                      
-                      {prescriptionFields.length > 0 ? (
-                        <div className="space-y-2">
-                          {prescriptionFields.map((field, index) => (
-                            <div key={field.id} className="flex items-center space-x-2">
-                              <AutoResizeTextarea
-                                minRows={1}
-                                maxRows={3}
-                                className="flex-1 input"
-                                placeholder="Ex: Antalgiques, repos..."
-                                {...register(`prescriptions.${index}.value`)}
-                              />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removePrescription(index)}
-                              >
-                                <Trash2 size={14} />
-                              </Button>
-                            </div>
-                          ))}
+
+                      {/* Prescriptions / Ordonnances */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Prescriptions / Ordonnances {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
+                          </label>
+                          {!consultationData?.isInitialConsultation && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => appendPrescription({ value: '' })}
+                              leftIcon={<Plus size={14} />}
+                            >
+                              Ajouter
+                            </Button>
+                          )}
                         </div>
-                      ) : (
-                        <div className="text-sm italic text-gray-500">
-                          Aucune prescription
-                        </div>
-                      )}
+
+                        {prescriptionFields.length > 0 ? (
+                          <div className="space-y-2">
+                            {prescriptionFields.map((field, index) => (
+                              <div key={field.id} className="flex items-center space-x-2">
+                                <AutoResizeTextarea
+                                  minRows={1}
+                                  className={`flex-1 input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
+                                  placeholder="Ex: Antalgiques, anti-inflammatoires, repos..."
+                                  {...register(`prescriptions.${index}.value`)}
+                                  disabled={consultationData?.isInitialConsultation}
+                                />
+                                {!consultationData?.isInitialConsultation && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removePrescription(index)}
+                                  >
+                                    <Trash2 size={14} />
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-sm italic text-gray-500">
+                            Aucune prescription
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div>
                       <label htmlFor="notes" className="block mb-1 text-sm font-medium text-gray-700">
-                        Notes complémentaires
+                        Note sur le patient {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                       </label>
                       <AutoResizeTextarea
                         id="notes"
                         minRows={3}
-                        maxRows={6}
-                        className="w-full resize-none input"
+                        className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                         {...register('notes')}
-                        placeholder="Notes additionnelles..."
+                        placeholder="Notes additionnelles sur le patient..."
+                        disabled={consultationData?.isInitialConsultation}
                       />
                     </div>
 
                     {/* Documents de consultation */}
                     <div className="pt-6 border-t">
-                      <h3 className="mb-4 text-lg font-medium text-gray-900">Documents de consultation</h3>
+                      <h3 className="mb-4 text-lg font-medium text-gray-900">Documents de consultation {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}</h3>
                       <DocumentUploadManager
                         patientId="temp"
                         entityType="consultation"
@@ -669,25 +887,27 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                         customFolderPath={`users/${auth.currentUser?.uid}/consultations/${consultationId}/documents`}
                         onUploadSuccess={handleDocumentsUpdate}
                         onUploadError={handleDocumentError}
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || consultationData?.isInitialConsultation}
+                        initialDocuments={consultationDocuments}
                       />
                     </div>
 
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                       <div>
                         <label htmlFor="duration" className="block mb-1 text-sm font-medium text-gray-700">
-                          Durée (minutes) *
+                          Durée (minutes) * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                         </label>
                         <input
                           type="number"
                           id="duration"
                           min="15"
                           step="15"
-                          className={`input w-full ${errors.duration ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                          {...register('duration', { 
+                          className={`input w-full ${errors.duration ? 'border-error focus:border-error focus:ring-error' : ''} ${consultationData?.isInitialConsultation ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                          {...register('duration', {
                             required: 'Ce champ est requis',
                             min: { value: 15, message: 'Durée minimum 15 minutes' }
                           })}
+                          disabled={consultationData?.isInitialConsultation}
                         />
                         {errors.duration && (
                           <p className="mt-1 text-sm text-error">{errors.duration.message}</p>
@@ -696,18 +916,19 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                       <div>
                         <label htmlFor="price" className="block mb-1 text-sm font-medium text-gray-700">
-                          Tarif (€) *
+                          Tarif (€) * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                         </label>
                         <input
                           type="number"
                           id="price"
                           min="0"
                           step="5"
-                          className={`input w-full ${errors.price ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                          {...register('price', { 
+                          className={`input w-full ${errors.price ? 'border-error focus:border-error focus:ring-error' : ''} ${consultationData?.isInitialConsultation ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                          {...register('price', {
                             required: 'Ce champ est requis',
                             min: { value: 0, message: 'Le tarif doit être positif' }
                           })}
+                          disabled={consultationData?.isInitialConsultation}
                         />
                         {errors.price && (
                           <p className="mt-1 text-sm text-error">{errors.price.message}</p>
@@ -716,12 +937,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                       <div>
                         <label htmlFor="status" className="block mb-1 text-sm font-medium text-gray-700">
-                          Statut *
+                          Statut * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                         </label>
                         <select
                           id="status"
-                          className={`input w-full ${errors.status ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                          className={`input w-full ${errors.status ? 'border-error focus:border-error focus:ring-error' : ''} ${consultationData?.isInitialConsultation ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                           {...register('status', { required: 'Ce champ est requis' })}
+                          disabled={consultationData?.isInitialConsultation}
                         >
                           <option value="completed">Effectué</option>
                           <option value="draft">En cours</option>
@@ -747,22 +969,25 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                 onClick={onClose}
                 disabled={isSubmitting}
               >
-                Annuler
+                {consultationData?.isInitialConsultation ? 'Fermer' : 'Annuler'}
               </Button>
-              <Button
-                type="submit"
-                form="editConsultationForm"
-                variant="primary"
-                isLoading={isSubmitting}
-                loadingText="Modification en cours..."
-                disabled={!isValid || isSubmitting || loading}
-              >
-                Modifier la consultation
-              </Button>
+              {!consultationData?.isInitialConsultation && (
+                <Button
+                  type="submit"
+                  form="editConsultationForm"
+                  variant="primary"
+                  isLoading={isSubmitting}
+                  loadingText="Modification en cours..."
+                  disabled={!isValid || isSubmitting || loading}
+                >
+                  Modifier la consultation
+                </Button>
+              )}
             </div>
           </motion.div>
         </div>
       )}
+
     </AnimatePresence>
   );
 };

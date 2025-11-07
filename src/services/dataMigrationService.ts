@@ -7,18 +7,16 @@ import {
   getDoc, 
   updateDoc, 
   deleteDoc,
-  writeBatch,
+  addDoc,
   Timestamp 
 } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
-import { HDSCompliance } from '../utils/hdsCompliance';
 import { AppointmentService } from './appointmentService';
-import { ConsultationService } from './consultationService';
-import { InvoiceService } from './invoiceService';
-import { trackEvent } from '../lib/clarityClient';
-import { trackEvent as trackMatomoEvent } from '../lib/matomoTagManager';
-import { trackEvent as trackGAEvent } from '../lib/googleAnalytics';
+// Analytics supprimés: retirer les imports et utiliser des stubs locaux
+const trackEvent = (..._args: any[]) => {};
+const trackMatomoEvent = (..._args: any[]) => {};
+const trackGAEvent = (..._args: any[]) => {};
 
 /**
  * Service pour la migration des données de test vers des données réelles
@@ -45,7 +43,8 @@ export class DataMigrationService {
         'all',
         'migrate_test_data',
         SensitivityLevel.HIGHLY_SENSITIVE,
-        'started'
+        'success',
+        { phase: 'started' }
       );
       
       // Tracking analytics
@@ -407,9 +406,10 @@ export class DataMigrationService {
           );
           
           const consultationsSnapshot = await getDocs(consultationsQuery);
-          const consultations = consultationsSnapshot.docs.map(doc => ({
+          type ConsultationRecord = { id: string; date?: any; [key: string]: any };
+          const consultations: ConsultationRecord[] = consultationsSnapshot.docs.map(doc => ({
             id: doc.id,
-            ...doc.data()
+            ...(doc.data() as any)
           }));
           
           // Garder seulement la consultation la plus récente
@@ -462,16 +462,25 @@ export class DataMigrationService {
           );
           
           const invoicesSnapshot = await getDocs(invoicesQuery);
-          const invoices = invoicesSnapshot.docs.map(doc => ({
+          type InvoiceRecord = { id: string; issueDate?: any; [key: string]: any };
+          const invoices: InvoiceRecord[] = invoicesSnapshot.docs.map(doc => ({
             id: doc.id,
-            ...doc.data()
+            ...(doc.data() as any)
           }));
           
           // Garder seulement la facture la plus récente
           if (invoices.length > 1) {
             invoices.sort((a, b) => {
-              const dateA = new Date(a.issueDate);
-              const dateB = new Date(b.issueDate);
+              const toDateSafe = (val: any): Date => {
+                if (!val) return new Date(0);
+                // Firestore Timestamp support
+                if (val?.toDate && typeof val.toDate === 'function') {
+                  try { return val.toDate(); } catch { return new Date(0); }
+                }
+                try { return new Date(val as string); } catch { return new Date(0); }
+              };
+              const dateA = toDateSafe(a.issueDate);
+              const dateB = toDateSafe(b.issueDate);
               return dateB.getTime() - dateA.getTime();
             });
             
@@ -608,7 +617,8 @@ export class DataMigrationService {
         'all',
         'verify_integrity',
         SensitivityLevel.INTERNAL,
-        'started'
+        'success',
+        { phase: 'started' }
       );
       
       // Résultats de la vérification
@@ -756,7 +766,8 @@ export class DataMigrationService {
         'all',
         'repair_references',
         SensitivityLevel.HIGHLY_SENSITIVE,
-        'started'
+        'success',
+        { phase: 'started' }
       );
       
       // Résultats de la réparation
@@ -887,7 +898,8 @@ export class DataMigrationService {
         'all',
         'migration_report',
         SensitivityLevel.INTERNAL,
-        'started'
+        'success',
+        { phase: 'started' }
       );
       
       // Résultats du rapport
@@ -1005,7 +1017,7 @@ export class DataMigrationService {
       return results;
     } catch (error) {
       console.error('❌ Failed to generate migration report:', error);
-      
+
       // Journaliser l'erreur
       await AuditLogger.log(
         AuditEventType.DATA_ACCESS,
@@ -1015,7 +1027,215 @@ export class DataMigrationService {
         'failure',
         { error: (error as Error).message }
       );
-      
+
+      throw error;
+    }
+  }
+
+  /**
+   * Génère un rapport de migration global pour TOUS les ostéopathes
+   */
+  static async generateGlobalMigrationReport(): Promise<{
+    osteopaths: Array<{
+      id: string;
+      name: string;
+      email: string;
+      totalPatients: number;
+      totalAppointments: number;
+      totalConsultations: number;
+      totalInvoices: number;
+      testPatients: number;
+      testAppointments: number;
+      testConsultations: number;
+      testInvoices: number;
+      realPatients: number;
+      realAppointments: number;
+      realConsultations: number;
+      realInvoices: number;
+    }>;
+    totals: {
+      totalPatients: number;
+      totalAppointments: number;
+      totalConsultations: number;
+      totalInvoices: number;
+      testPatients: number;
+      testAppointments: number;
+      testConsultations: number;
+      testInvoices: number;
+      realPatients: number;
+      realAppointments: number;
+      realConsultations: number;
+      realInvoices: number;
+    };
+  }> {
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    try {
+      console.log('📊 Génération du rapport global de migration...');
+
+      const osteopaths: Array<any> = [];
+      const totals = {
+        totalPatients: 0,
+        totalAppointments: 0,
+        totalConsultations: 0,
+        totalInvoices: 0,
+        testPatients: 0,
+        testAppointments: 0,
+        testConsultations: 0,
+        testInvoices: 0,
+        realPatients: 0,
+        realAppointments: 0,
+        realConsultations: 0,
+        realInvoices: 0
+      };
+
+      // 1. Récupérer tous les utilisateurs pour diagnostiquer les rôles
+      const usersRef = collection(db, 'users');
+
+      // D'abord, lister TOUS les utilisateurs pour voir leurs rôles
+      const allUsersSnapshot = await getDocs(usersRef);
+      console.log(`🔍 DIAGNOSTIC: ${allUsersSnapshot.size} utilisateurs au total`);
+
+      const roleCount: Record<string, number> = {};
+      allUsersSnapshot.docs.forEach(doc => {
+        const role = doc.data().role || 'undefined';
+        roleCount[role] = (roleCount[role] || 0) + 1;
+        console.log(`  - ${doc.data().email}: role = "${role}"`);
+      });
+
+      console.log('\n📊 Répartition des rôles:');
+      Object.entries(roleCount).forEach(([role, count]) => {
+        console.log(`  - "${role}": ${count} utilisateur(s)`);
+      });
+
+      // Maintenant, essayer de récupérer les ostéopathes avec différents rôles
+      console.log('\n🔎 Tentative avec role = "osteopath"...');
+      const usersQuery1 = query(usersRef, where('role', '==', 'osteopath'));
+      const usersSnapshot1 = await getDocs(usersQuery1);
+      console.log(`  → ${usersSnapshot1.size} utilisateur(s) trouvé(s)`);
+
+      console.log('\n🔎 Tentative avec role = "user"...');
+      const usersQuery2 = query(usersRef, where('role', '==', 'user'));
+      const usersSnapshot2 = await getDocs(usersQuery2);
+      console.log(`  → ${usersSnapshot2.size} utilisateur(s) trouvé(s)`);
+
+      // Utiliser le résultat qui contient des données
+      const usersSnapshot = usersSnapshot1.size > 0 ? usersSnapshot1 : usersSnapshot2;
+      console.log(`\n👥 ${usersSnapshot.size} ostéopathes sélectionnés pour le rapport`);
+
+      // 2. Pour chaque ostéopathe, compter ses données
+      for (const userDoc of usersSnapshot.docs) {
+        const userId = userDoc.id;
+        const userData = userDoc.data();
+        const osteopathName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Inconnu';
+
+        console.log(`\n📋 Analyse de: ${osteopathName} (${userData.email})`);
+
+        const osteopathStats = {
+          id: userId,
+          name: osteopathName,
+          email: userData.email || '',
+          totalPatients: 0,
+          totalAppointments: 0,
+          totalConsultations: 0,
+          totalInvoices: 0,
+          testPatients: 0,
+          testAppointments: 0,
+          testConsultations: 0,
+          testInvoices: 0,
+          realPatients: 0,
+          realAppointments: 0,
+          realConsultations: 0,
+          realInvoices: 0
+        };
+
+        // Compter les patients
+        const patientsRef = collection(db, 'patients');
+        const patientsQuery = query(patientsRef, where('osteopathId', '==', userId));
+        const patientsSnapshot = await getDocs(patientsQuery);
+
+        osteopathStats.totalPatients = patientsSnapshot.size;
+        for (const docSnap of patientsSnapshot.docs) {
+          const patientData = docSnap.data();
+          if (patientData.isTestData) {
+            osteopathStats.testPatients++;
+          } else {
+            osteopathStats.realPatients++;
+          }
+        }
+
+        // Compter les rendez-vous
+        const appointmentsRef = collection(db, 'appointments');
+        const appointmentsQuery = query(appointmentsRef, where('osteopathId', '==', userId));
+        const appointmentsSnapshot = await getDocs(appointmentsQuery);
+
+        osteopathStats.totalAppointments = appointmentsSnapshot.size;
+        for (const docSnap of appointmentsSnapshot.docs) {
+          const appointmentData = docSnap.data();
+          if (appointmentData.isTestData) {
+            osteopathStats.testAppointments++;
+          } else {
+            osteopathStats.realAppointments++;
+          }
+        }
+
+        // Compter les consultations
+        const consultationsRef = collection(db, 'consultations');
+        const consultationsQuery = query(consultationsRef, where('osteopathId', '==', userId));
+        const consultationsSnapshot = await getDocs(consultationsQuery);
+
+        osteopathStats.totalConsultations = consultationsSnapshot.size;
+        for (const docSnap of consultationsSnapshot.docs) {
+          const consultationData = docSnap.data();
+          if (consultationData.isTestData) {
+            osteopathStats.testConsultations++;
+          } else {
+            osteopathStats.realConsultations++;
+          }
+        }
+
+        // Compter les factures
+        const invoicesRef = collection(db, 'invoices');
+        const invoicesQuery = query(invoicesRef, where('osteopathId', '==', userId));
+        const invoicesSnapshot = await getDocs(invoicesQuery);
+
+        osteopathStats.totalInvoices = invoicesSnapshot.size;
+        for (const docSnap of invoicesSnapshot.docs) {
+          const invoiceData = docSnap.data();
+          if (invoiceData.isTestData) {
+            osteopathStats.testInvoices++;
+          } else {
+            osteopathStats.realInvoices++;
+          }
+        }
+
+        console.log(`  ✓ ${osteopathStats.totalPatients} patients, ${osteopathStats.totalConsultations} consultations`);
+
+        // Ajouter aux totaux
+        totals.totalPatients += osteopathStats.totalPatients;
+        totals.totalAppointments += osteopathStats.totalAppointments;
+        totals.totalConsultations += osteopathStats.totalConsultations;
+        totals.totalInvoices += osteopathStats.totalInvoices;
+        totals.testPatients += osteopathStats.testPatients;
+        totals.testAppointments += osteopathStats.testAppointments;
+        totals.testConsultations += osteopathStats.testConsultations;
+        totals.testInvoices += osteopathStats.testInvoices;
+        totals.realPatients += osteopathStats.realPatients;
+        totals.realAppointments += osteopathStats.realAppointments;
+        totals.realConsultations += osteopathStats.realConsultations;
+        totals.realInvoices += osteopathStats.realInvoices;
+
+        osteopaths.push(osteopathStats);
+      }
+
+      console.log('\n✅ Rapport global généré avec succès');
+
+      return { osteopaths, totals };
+
+    } catch (error) {
+      console.error('❌ Erreur lors de la génération du rapport global:', error);
       throw error;
     }
   }

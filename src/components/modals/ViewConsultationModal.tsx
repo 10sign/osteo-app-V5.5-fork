@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, Clock, FileText, User, Stethoscope, Eye, AlertCircle } from 'lucide-react';
+import { X, Calendar, Clock, FileText, User, Stethoscope, Eye, AlertCircle, Download, Image as ImageIcon } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ConsultationService } from '../../services/consultationService';
+import { PatientService } from '../../services/patientService';
 import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { DocumentMetadata, formatFileSize, isImageFile } from '../../utils/documentStorage';
+import { HDSCompliance } from '../../utils/hdsCompliance';
 
 interface ViewConsultationModalProps {
   isOpen: boolean;
@@ -28,6 +31,7 @@ interface Consultation {
   appointmentId?: string;
   examinations?: string[];
   prescriptions?: string[];
+  isInitialConsultation?: boolean;
 
   // Champs cliniques
   currentTreatment?: string;
@@ -36,6 +40,7 @@ interface Consultation {
   medicalHistory?: string;
   osteopathicTreatment?: string;
   symptoms?: string[];
+  documents?: DocumentMetadata[];
 
   // Champs d'identité patient (snapshot)
   patientFirstName?: string;
@@ -58,24 +63,26 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
   const [consultation, setConsultation] = useState<Consultation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [patientData, setPatientData] = useState<any>(null);
+  const [patientLastUpdated, setPatientLastUpdated] = useState<Date | null>(null);
 
   // Load consultation data when modal opens
   useEffect(() => {
     const loadConsultation = async () => {
       if (!consultationId) return;
-      
+
       setLoading(true);
       setError(null);
-      
+
       try {
         console.log('🔄 Loading consultation details for ID:', consultationId);
-        
+
         const consultationData = await ConsultationService.getConsultationById(consultationId);
-        
+
         if (!consultationData) {
           throw new Error('Consultation non trouvée');
         }
-        
+
         console.log('✅ Consultation data loaded:', consultationData);
 
         // Rétrocompatibilité : s'assurer que tous les champs existent
@@ -98,11 +105,43 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
           osteopathicTreatment: consultationData.osteopathicTreatment || '',
           symptoms: consultationData.symptoms || [],
           examinations: consultationData.examinations || [],
-          prescriptions: consultationData.prescriptions || []
+          prescriptions: consultationData.prescriptions || [],
+          documents: consultationData.documents || []
         };
 
         setConsultation(completeConsultation);
-        
+
+        // Si consultation initiale, charger les données du patient
+        if (completeConsultation.isInitialConsultation && completeConsultation.patientId) {
+          console.log('🔄 Consultation initiale détectée, chargement des données patient...');
+          try {
+            const patient = await PatientService.getPatientById(completeConsultation.patientId);
+
+            if (patient) {
+              console.log('✅ Données patient chargées:', patient);
+
+              // Déchiffrer les données patient
+              const decryptedPatient = HDSCompliance.decryptPatientData(patient);
+
+              setPatientData(decryptedPatient);
+              setPatientLastUpdated(patient.updatedAt || patient.createdAt || new Date());
+
+              // Injecter les données du patient dans la consultation affichée
+              setConsultation(prev => prev ? {
+                ...prev,
+                currentTreatment: decryptedPatient.currentTreatment || prev.currentTreatment,
+                consultationReason: decryptedPatient.consultationReason || prev.consultationReason,
+                medicalAntecedents: decryptedPatient.medicalAntecedents || prev.medicalAntecedents,
+                medicalHistory: decryptedPatient.medicalHistory || prev.medicalHistory,
+                osteopathicTreatment: decryptedPatient.osteopathicTreatment || prev.osteopathicTreatment,
+                symptoms: decryptedPatient.symptoms || prev.symptoms
+              } : prev);
+            }
+          } catch (patientError) {
+            console.error('⚠️ Erreur lors du chargement des données patient:', patientError);
+          }
+        }
+
       } catch (error) {
         console.error('Error loading consultation:', error);
         setError('Erreur lors du chargement de la consultation');
@@ -200,6 +239,26 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                 </div>
               ) : consultation ? (
                 <div className="space-y-6">
+                  {/* Bandeau d'information pour consultation initiale */}
+                  {consultation.isInitialConsultation && (
+                    <div className="bg-blue-50 border-l-4 border-blue-400 rounded-lg p-4">
+                      <div className="flex items-start">
+                        <AlertCircle size={20} className="text-blue-600 mr-3 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <h4 className="font-medium text-blue-900">Consultation initiale synchronisée</h4>
+                          <p className="mt-1 text-sm text-blue-700">
+                            Les données cliniques affichées proviennent du dossier patient et sont automatiquement synchronisées.
+                          </p>
+                          {patientLastUpdated && (
+                            <p className="mt-1 text-xs text-blue-600">
+                              Dernière mise à jour du dossier patient : {patientLastUpdated.toLocaleDateString('fr-FR')} à {patientLastUpdated.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Informations générales de la consultation */}
                   <div className="bg-primary-50 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
@@ -232,12 +291,12 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                   {/* ✅ SUPPRIMÉ : Anciens champs "Motif de consultation" et "Traitement effectué" 
                       Ces champs sont remplacés par les champs détaillés dans la section "Données cliniques" */}
 
-                  {/* Notes complémentaires */}
+                  {/* Note sur le patient */}
                   {consultation.notes && cleanDecryptedField(consultation.notes, false, '') && (
                     <div>
                       <h4 className="font-medium text-gray-900 mb-2 flex items-center">
                         <FileText size={16} className="mr-2 text-gray-600" />
-                        Notes complémentaires
+                        Note sur le patient
                       </h4>
                       <div className="bg-white border border-gray-200 rounded-lg p-4">
                         <p className="text-gray-900 whitespace-pre-wrap">
@@ -362,6 +421,57 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Documents de consultation */}
+                  {consultation.documents && consultation.documents.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <FileText size={16} className="mr-2 text-gray-600" />
+                        Documents de consultation
+                      </h4>
+                      <div className="bg-white border border-gray-200 rounded-lg p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {consultation.documents.map((document) => (
+                            <div
+                              key={document.id}
+                              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                            >
+                              <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                <div className="flex-shrink-0">
+                                  {isImageFile(document.type) ? (
+                                    <ImageIcon size={20} className="text-blue-500" />
+                                  ) : (
+                                    <FileText size={20} className="text-gray-500" />
+                                  )}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">
+                                    {document.displayName || document.originalName || document.name}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {formatFileSize(document.size)}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <a
+                                href={document.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-shrink-0 text-primary-600 hover:text-primary-700"
+                                title="Voir le document"
+                              >
+                                <Button variant="ghost" size="sm" leftIcon={<Download size={14} />}>
+                                  Voir
+                                </Button>
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
 

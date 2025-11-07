@@ -111,3 +111,21 @@ En cas de problème :
 ## 📝 Documentation
 
 Toutes les modifications sont documentées et les logs sont conservés pour le debugging. Le système maintient la compatibilité avec l'architecture existante.
+## Intégration TestSprite (MCP) avec Trae AI
+
+Pour utiliser TestSprite (agent de tests AI) dans votre environnement Trae AI, configurez la clé API et l’activation MCP :
+
+- Ajoutez la clé dans `./.env` (non versionné) :
+  - `TESTSPRITE_API_KEY=YOUR_KEY`
+- Ajoutez un placeholder dans `./.env.example` pour la documentation d’équipe :
+  - `TESTSPRITE_API_KEY=`
+- Dans Trae AI, activez l’intégration MCP TestSprite et mappez la variable `TESTSPRITE_API_KEY` à partir de votre environnement local.
+
+Bonnes pratiques :
+- Ne jamais exposer la clé côté client (React) ni l’injecter via `import.meta.env` dans le navigateur.
+- Si des appels directs à l’API TestSprite sont nécessaires, faites-les via un proxy serveur (ex. Supabase Function, Cloud Functions, ou script Node) qui lit `process.env.TESTSPRITE_API_KEY`.
+- Continuez à utiliser Vitest pour les tests unitaires ciblés et confiez à TestSprite la planification et l’exécution de scénarios E2E plus larges.
+
+Validation rapide :
+- Vérifiez que `npm run build` et `npm run test:run` passent.
+- Lancez le serveur de dev (`npm run dev`) puis utilisez l’outil MCP TestSprite depuis Trae AI pour générer/éxécuter un cycle de tests (ex. Patients → Consultation → Facture).

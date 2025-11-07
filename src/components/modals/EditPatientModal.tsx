@@ -1,16 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, X as XIcon, Trash2, CheckCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { doc, updateDoc, Timestamp } from 'firebase/firestore';
-import { db, auth } from '../../firebase/config';
+import { auth } from '../../firebase/config';
+import { Timestamp } from 'firebase/firestore';
 import { Button } from '../ui/Button';
 import AutoCapitalizeInput from '../ui/AutoCapitalizeInput';
 import AutoResizeTextarea from '../ui/AutoResizeTextarea';
 import { Patient, PatientFormData, TreatmentHistoryEntry } from '../../types';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
-import { saveFormData, getFormData, clearFormData } from '../../utils/sessionPersistence';
+import { saveFormData, clearFormData } from '../../utils/sessionPersistence';
+import { PatientService } from '../../services/patientService';
 
 interface EditPatientModalProps {
   isOpen: boolean;
@@ -19,11 +20,6 @@ interface EditPatientModalProps {
   patient: Patient;
 }
 
-interface PastAppointment {
-  date: string;
-  time: string;
-  notes: string;
-}
 
 const COMMON_PATHOLOGIES = [
   'Lombalgie',
@@ -47,34 +43,21 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   const [customTag, setCustomTag] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [treatmentHistory, setTreatmentHistory] = useState<TreatmentHistoryEntry[]>(
     patient.treatmentHistory || []
-  );
-  const [pastAppointments, setPastAppointments] = useState<PastAppointment[]>(
-    patient.pastAppointments?.map(app => ({
-      date: app.date.split('T')[0],
-      time: app.date.split('T')[1]?.slice(0, 5) || '',
-      notes: app.notes || ''
-    })) || []
   );
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>(
     patient.documents || []
   );
-  const [clickCount, setClickCount] = useState(0);
+  const [_clickCount, setClickCount] = useState(0);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const formId = `edit_patient_${patient.id}`;
   
   // État initial pour comparaison
-  const [initialState, setInitialState] = useState({
+  const [initialState, _setInitialState] = useState({
     tags: patient.tags || [],
     treatmentHistory: patient.treatmentHistory || [],
-    pastAppointments: patient.pastAppointments?.map(app => ({
-      date: app.date.split('T')[0],
-      time: app.date.split('T')[1]?.slice(0, 5) || '',
-      notes: app.notes || ''
-    })) || [],
     documents: patient.documents || []
   });
 
@@ -124,7 +107,6 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   useEffect(() => {
     if (isOpen) {
       try {
-        console.log('Modal opened, initializing form with patient data:', patient);
         
         // Directly initialize with patient data
         initializeFormWithPatientData();
@@ -132,11 +114,6 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
         // Set other state values
         setSelectedTags(patient.tags || []);
         setTreatmentHistory(patient.treatmentHistory || []);
-        setPastAppointments(patient.pastAppointments?.map(app => ({
-          date: app.date.split('T')[0],
-          time: app.date.split('T')[1]?.slice(0, 5) || '',
-          notes: app.notes || ''
-        })) || []);
         setPatientDocuments(patient.documents || []);
         
         // Trigger validation after initialization
@@ -151,7 +128,6 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
 
   // Function to initialize form with patient data
   const initializeFormWithPatientData = () => {
-    console.log('Initializing form with patient data:', patient);
     
     let nextAppointmentTime = '';
     if (patient.nextAppointment && typeof patient.nextAppointment === 'string' && patient.nextAppointment.includes('T')) {
@@ -183,7 +159,6 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
         osteopathicTreatment: patient.osteopathicTreatment || '' // Nouveau champ
       };
 
-      console.log('Setting form values:', formData);
       
       // Use setValue for each field to ensure proper initialization
       Object.entries(formData).forEach(([key, value]) => {
@@ -209,20 +184,9 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
       // Comparer les listes avec leur état initial
       const hasTagChanges = JSON.stringify(selectedTags.sort()) !== JSON.stringify(initialState.tags.sort());
       const hasTreatmentChanges = JSON.stringify(treatmentHistory) !== JSON.stringify(initialState.treatmentHistory);
-      const hasAppointmentChanges = JSON.stringify(pastAppointments) !== JSON.stringify(initialState.pastAppointments);
       const hasDocumentChanges = patientDocuments.length !== initialState.documents.length;
       
-      const hasAnyChanges = hasFormChanges || hasTagChanges || hasTreatmentChanges || hasAppointmentChanges || hasDocumentChanges;
-      
-      console.log('Edit patient - Changes detection:', {
-        hasFormChanges,
-        hasTagChanges,
-        hasTreatmentChanges,
-        hasAppointmentChanges,
-        hasDocumentChanges,
-        isDirty,
-        hasAnyChanges
-      });
+      const hasAnyChanges = hasFormChanges || hasTagChanges || hasTreatmentChanges || hasDocumentChanges;
       
       setHasChanges(hasAnyChanges);
       return hasAnyChanges;
@@ -236,7 +200,6 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
       saveFormData(formId, {
         formData,
         selectedTags,
-        pastAppointments,
         treatmentHistory
       });
     };
@@ -251,7 +214,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
       clearInterval(intervalId);
       saveData(); // Save on unmount
     };
-  }, [isOpen, watch, selectedTags, pastAppointments, treatmentHistory, patientDocuments, isDirty, initialState]);
+  }, [isOpen, watch, selectedTags, treatmentHistory, patientDocuments, isDirty, initialState]);
 
   // Gérer le clic extérieur avec double-clic
   const handleBackdropClick = () => {
@@ -292,13 +255,11 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
 
   // Confirmer la fermeture sans sauvegarder
   const handleConfirmClose = () => {
-    console.log('User confirmed close without saving edits');
     setShowConfirmation(false);
     
     // Clear saved form data
     try {
       clearFormData(formId);
-      console.log('Cleared form data on confirmed close');
     } catch (error) {
       console.error('Error clearing form data:', error);
     }
@@ -313,54 +274,11 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
 
   // Annuler la fermeture et continuer l'édition
   const handleCancelClose = () => {
-    console.log('User cancelled close, continuing editing');
     setShowConfirmation(false);
     setClickCount(0);
   };
 
-  // Fonction pour obtenir la valeur originale d'un champ
-  const getOriginalValue = (key: string) => {
-    switch (key) {
-      case 'firstName':
-        return patient.firstName || '';
-      case 'lastName':
-        return patient.lastName || '';
-      case 'dateOfBirth':
-        return patient.dateOfBirth || '';
-      case 'profession':
-        return patient.profession || '';
-      case 'gender':
-        return patient.gender || '';
-      case 'email':
-        return patient.email || '';
-      case 'address':
-        return patient.address?.street || '';
-      case 'phone':
-        return patient.phone || '';
-      case 'medicalHistory':
-        return patient.medicalHistory || '';
-      case 'insurance':
-        return patient.insurance?.provider || '';
-      case 'insuranceNumber':
-        return patient.insurance?.policyNumber || '';
-      case 'notes':
-        return patient.notes || '';
-      case 'nextAppointment':
-        return patient.nextAppointment ? patient.nextAppointment.split('T')[0] : '';
-      case 'nextAppointmentTime':
-        return patient.nextAppointment ? patient.nextAppointment.split('T')[1]?.slice(0, 5) : '';
-      case 'currentTreatment':
-        return patient.currentTreatment || '';
-      case 'consultationReason':
-        return patient.consultationReason || '';
-      case 'medicalAntecedents':
-        return patient.medicalAntecedents || '';
-      case 'osteopathicTreatment':
-        return patient.osteopathicTreatment || '';
-      default:
-        return '';
-    }
-  };
+  // (supprimé) Helper inutilisé: getOriginalValue
 
   // Fonction pour ajouter un traitement à l'historique
   const addTreatmentHistoryEntry = () => {
@@ -379,20 +297,6 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
     setTreatmentHistory(updatedHistory);
   };
 
-  // Fonctions pour gérer les rendez-vous passés
-  const addPastAppointment = () => {
-    setPastAppointments([...pastAppointments, { date: '', time: '', notes: '' }]);
-  };
-
-  const removePastAppointment = (index: number) => {
-    setPastAppointments(pastAppointments.filter((_, i) => i !== index));
-  };
-
-  const updatePastAppointment = (index: number, field: keyof PastAppointment, value: string) => {
-    const updatedAppointments = [...pastAppointments];
-    updatedAppointments[index] = { ...updatedAppointments[index], [field]: value };
-    setPastAppointments(updatedAppointments);
-  };
 
   const handleDocumentsUpdate = (documents: DocumentMetadata[]) => {
     setPatientDocuments(documents);
@@ -403,7 +307,6 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   };
 
   const onSubmit = async (data: any) => {
-    console.log('Starting patient update...', { patientId: patient.id, data });
     
     if (!auth.currentUser || !patient) {
       console.error('No authenticated user found');
@@ -447,27 +350,16 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
         consultationReason: data.consultationReason,
         medicalAntecedents: data.medicalAntecedents,
         treatmentHistory: treatmentHistory.filter(entry => entry.date && entry.treatment),
-        pastAppointments: pastAppointments
-          .filter(app => app.date && app.notes)
-          .map(app => ({
-            date: `${app.date}T${app.time || '00:00'}:00`,
-            notes: app.notes
-          })),
         documents: patientDocuments
       };
 
-      console.log('Updating patient with data:', updatedData);
+      // Utiliser le service centralisé pour appliquer les mises à jour avec chiffrement
+      await PatientService.updatePatient(patient.id, updatedData);
+      setSuccess('Dossier patient mis à jour avec succès ! La consultation initiale a été synchronisée.');
 
-      const patientRef = doc(db, 'patients', patient.id);
-      await updateDoc(patientRef, updatedData);
-
-      console.log('Patient updated successfully');
-      setSuccess('Dossier patient mis à jour avec succès !');
-      
       // Clear saved form data after successful submission
       try {
         clearFormData(formId);
-        console.log('Cleared form data after successful update');
       } catch (error) {
         console.error('Error clearing form data:', error);
       }
@@ -486,10 +378,12 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   };
 
   return (
-    <AnimatePresence>
+    <>
+    <AnimatePresence mode="wait">
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div key="edit-patient-modal" className="fixed inset-0 z-50 flex items-center justify-center">
           <motion.div
+            key="edit-patient-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -498,6 +392,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
           />
 
           <motion.div
+            key="edit-patient-content"
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -527,6 +422,28 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                   <span className="text-green-700">{success}</span>
                 </div>
               )}
+
+              {/* Message informatif sur la synchronisation */}
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-medium text-blue-900 mb-1">
+                      Synchronisation automatique
+                    </h4>
+                    <p className="text-sm text-blue-800">
+                      La modification des champs cliniques dans le dossier patient mettra automatiquement à jour la consultation initiale.
+                      Les champs concernés sont : <span className="font-medium">Motif de consultation</span>, <span className="font-medium">Traitement effectué</span>,
+                      <span className="font-medium">Antécédents médicaux</span>, <span className="font-medium">Traitement ostéopathique</span>,
+                      <span className="font-medium">Historique médical</span> et <span className="font-medium">Notes</span>.
+                    </p>
+                  </div>
+                </div>
+              </div>
 
               <form id="editPatientForm" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -694,57 +611,76 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                 </div>
 
                 {/* Nouveaux champs */}
+                <div className="border-t pt-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
+                    Informations cliniques
+                    <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded">Synchronisé avec consultation initiale</span>
+                  </h3>
+                </div>
+
                 <div>
-                  <label htmlFor="consultationReason" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="consultationReason" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
                     Motif de consultation
+                    <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
                   </label>
                   <AutoResizeTextarea
                     id="consultationReason"
                     minRows={3}
                     maxRows={6}
-                    className="input w-full resize-none"
+                    className="input w-full resize-none border-blue-200 focus:border-blue-400 focus:ring-blue-400"
                     {...register('consultationReason')}
                     placeholder="Raison principale de la consultation"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="currentTreatment" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
                     Traitement effectué
+                    <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
                   </label>
                   <AutoResizeTextarea
                     id="currentTreatment"
                     minRows={3}
                     maxRows={6}
-                    className="input w-full resize-none"
+                    className="input w-full resize-none border-blue-200 focus:border-blue-400 focus:ring-blue-400"
                     {...register('currentTreatment')}
                     placeholder="Traitements médicamenteux ou autres thérapies en cours"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="medicalAntecedents" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="medicalAntecedents" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
                     Antécédents médicaux
+                    <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
                   </label>
                   <AutoResizeTextarea
                     id="medicalAntecedents"
                     minRows={4}
                     maxRows={8}
-                    className="input w-full resize-none"
+                    className="input w-full resize-none border-blue-200 focus:border-blue-400 focus:ring-blue-400"
                     {...register('medicalAntecedents')}
                     placeholder="Antécédents médicaux significatifs, chirurgies, etc."
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="medicalHistory" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="medicalHistory" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
                     Historique médical général
+                    <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
                   </label>
                   <AutoResizeTextarea
                     id="medicalHistory"
                     minRows={4}
                     maxRows={8}
-                    className="input w-full resize-none"
+                    className="input w-full resize-none border-blue-200 focus:border-blue-400 focus:ring-blue-400"
                     {...register('medicalHistory')}
                   />
                 </div>
@@ -839,7 +775,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                               minRows={2}
                               maxRows={4}
                               className="input w-full resize-none"
-                              placeholder="Notes complémentaires"
+                              placeholder="Note sur le patient"
                             />
                           </div>
                         </div>
@@ -848,83 +784,6 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                   ) : (
                     <p className="text-sm text-gray-500 italic">
                       Aucun historique de traitement enregistré
-                    </p>
-                  )}
-                </div>
-
-                {/* Rendez-vous passés */}
-                <div className="border-t pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Rendez-vous passés
-                    </label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addPastAppointment}
-                      leftIcon={<Plus size={16} />}
-                    >
-                      Ajouter un rendez-vous passé
-                    </Button>
-                  </div>
-
-                  {pastAppointments.length > 0 ? (
-                    <div className="space-y-4">
-                      {pastAppointments.map((appointment, index) => (
-                        <div key={index} className="border border-gray-200 rounded-lg p-4 relative">
-                          <button
-                            type="button"
-                            onClick={() => removePastAppointment(index)}
-                            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Date
-                              </label>
-                              <input
-                                type="date"
-                                value={appointment.date}
-                                onChange={(e) => updatePastAppointment(index, 'date', e.target.value)}
-                                className="input w-full"
-                                max={new Date().toISOString().split('T')[0]}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Heure
-                              </label>
-                              <input
-                                type="time"
-                                value={appointment.time}
-                                onChange={(e) => updatePastAppointment(index, 'time', e.target.value)}
-                                className="input w-full"
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Notes
-                            </label>
-                            <AutoResizeTextarea
-                              value={appointment.notes}
-                              onChange={(e) => updatePastAppointment(index, 'notes', e.target.value)}
-                              minRows={2}
-                              maxRows={4}
-                              className="input w-full resize-none"
-                              placeholder="Motif du rendez-vous, traitement effectué..."
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500 italic">
-                      Aucun rendez-vous passé enregistré
                     </p>
                   )}
                 </div>
@@ -994,27 +853,33 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                 </div>
 
                 <div>
-                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
                     Note sur le patient
+                    <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
                   </label>
                   <AutoResizeTextarea
                     id="notes"
                     minRows={4}
                     maxRows={8}
-                    className="input w-full resize-none"
+                    className="input w-full resize-none border-blue-200 focus:border-blue-400 focus:ring-blue-400"
                     {...register('notes')}
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="osteopathicTreatment" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="osteopathicTreatment" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
                     Traitement ostéopathique
+                    <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
                   </label>
                   <AutoResizeTextarea
                     id="osteopathicTreatment"
                     minRows={4}
                     maxRows={8}
-                    className="input w-full resize-none"
+                    className="input w-full resize-none border-blue-200 focus:border-blue-400 focus:ring-blue-400"
                     {...register('osteopathicTreatment')}
                     placeholder="Description du traitement ostéopathique effectué ou à effectuer"
                   />
@@ -1094,12 +959,14 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
           </motion.div>
         </div>
       )}
-      
+    </AnimatePresence>
+
       {/* Modal de confirmation pour fermeture */}
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {showConfirmation && (
-          <div className="fixed inset-0 z-60 flex items-center justify-center">
+          <div key="confirmation-modal" className="fixed inset-0 z-60 flex items-center justify-center">
             <motion.div
+              key="confirmation-backdrop"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -1107,6 +974,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
             />
 
             <motion.div
+              key="confirmation-content"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -1145,7 +1013,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
           </div>
         )}
       </AnimatePresence>
-    </AnimatePresence>
+    </>
   );
 };
 

@@ -3,6 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Upload, FileText, Image as ImageIcon } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { uploadPatientFile, UploadProgress } from '../../utils/fileUpload';
+import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { db, auth } from '../../firebase/config';
+import { PatientDocument } from '../../types';
 
 interface AddDocumentModalProps {
   isOpen: boolean;
@@ -48,14 +51,15 @@ const AddDocumentModal: React.FC<AddDocumentModalProps> = ({
   }, []);
 
   const handleUpload = async () => {
-    if (!selectedFile || !patientId) return;
+    if (!selectedFile || !patientId || !auth.currentUser) return;
 
     setIsUploading(true);
     setError(null);
 
     try {
+      // Step 1: Upload file to Firebase Storage
       const result = await uploadPatientFile(
-        selectedFile, 
+        selectedFile,
         patientId,
         (progress) => {
           setUploadProgress(progress);
@@ -64,7 +68,32 @@ const AddDocumentModal: React.FC<AddDocumentModalProps> = ({
           }
         }
       );
-      
+
+      // Step 2: Create document metadata
+      const documentMetadata: PatientDocument = {
+        id: `doc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        name: result.fileName,
+        originalName: selectedFile.name,
+        url: result.url,
+        type: result.fileType,
+        size: result.fileSize,
+        category: 'general',
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: auth.currentUser.uid,
+        folder: `users/${auth.currentUser.uid}/patients/${patientId}/documents`
+      };
+
+      console.log('📝 Saving document metadata to Firestore:', documentMetadata);
+
+      // Step 3: Save document metadata to Firestore
+      const patientRef = doc(db, 'patients', patientId);
+      await updateDoc(patientRef, {
+        documents: arrayUnion(documentMetadata),
+        updatedAt: new Date().toISOString()
+      });
+
+      console.log('✅ Document successfully saved to Firestore');
+
       onSuccess(result.url);
       onClose();
     } catch (error: any) {

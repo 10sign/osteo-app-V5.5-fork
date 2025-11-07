@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { 
   Home, 
@@ -17,17 +18,13 @@ import {
   LogOut,
   User,
   Bell,
-  Shield,
-  ChevronDown,
-  ChevronUp
+  Shield
 } from 'lucide-react';
-import { isAdmin } from '../utils/adminAuth';
-import { isSubstitute, getLinkedOsteopathId } from '../utils/substituteAuth';
-import { trackEvent } from '../lib/matomoTagManager';
-import { trackEvent as trackGAEvent } from '../lib/googleAnalytics';
+// Use role helpers from AuthContext instead of utils expecting Firebase User
+// Analytics supprimés: imports retirés pour alléger le bundle
 
 const DashboardLayout: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isAdmin, isSubstitute, getEffectiveOsteopathId } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -55,14 +52,14 @@ const DashboardLayout: React.FC = () => {
     const checkUserRole = async () => {
       if (!user) return;
       
-      if (isAdmin(user)) {
+      if (isAdmin()) {
         setUserRole('admin');
-      } else if (await isSubstitute(user)) {
+      } else if (isSubstitute()) {
         setUserRole('substitute');
         
         // Récupérer le nom de l'ostéopathe titulaire
         try {
-          const linkedOsteopathId = await getLinkedOsteopathId(user);
+          const linkedOsteopathId = await getEffectiveOsteopathId();
           if (linkedOsteopathId) {
             const osteopathRef = doc(db, 'users', linkedOsteopathId);
             const osteopathDoc = await getDoc(osteopathRef);
@@ -89,11 +86,7 @@ const DashboardLayout: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      // Track logout event
-      trackEvent('User', 'Logout', 'Dashboard');
-      trackGAEvent('logout', {
-        method: 'dashboard_menu'
-      });
+      // Analytics supprimés: pas de tracking de logout
       
       await signOut(auth);
       navigate('/login');
@@ -110,16 +103,7 @@ const DashboardLayout: React.FC = () => {
     if (mobileMenuOpen) setMobileMenuOpen(false);
   };
 
-  const toggleSection = (section: string) => {
-    setCollapsedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
-
-  const isSectionCollapsed = (section: string) => {
-    return collapsedSections[section] || false;
-  };
+  // Deprecated section toggles removed (no collapsible sections currently)
 
   const navItems = [
     { path: '/', label: 'Tableau de bord', icon: <Home size={20} /> },
@@ -158,8 +142,7 @@ const DashboardLayout: React.FC = () => {
               className="p-2 text-gray-500 hover:text-gray-900 relative touch-target"
               aria-label="Notifications"
               onClick={() => {
-                trackEvent('UI', 'Click', 'Notifications');
-                trackGAEvent('click_notifications');
+                // Analytics supprimés: pas de tracking de notifications
               }}
             >
               <Bell size={20} />
@@ -167,7 +150,7 @@ const DashboardLayout: React.FC = () => {
             </button>
             
             {/* Admin indicator */}
-            {isAdmin(user) && (
+            {isAdmin() && (
               <div className="hidden sm:flex items-center bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
                 <Shield size={12} className="mr-1" />
                 Admin
@@ -204,11 +187,10 @@ const DashboardLayout: React.FC = () => {
               
               {userMenuOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-50 border border-gray-200">
-                  {isAdmin(user) && (
+                  {isAdmin() && (
                     <button 
                       onClick={() => {
-                        trackEvent('Navigation', 'Admin Panel', 'From Dashboard');
-                        trackGAEvent('navigate_to_admin', { source: 'user_menu' });
+                        // Analytics supprimés: pas de tracking de navigation Admin
                         navigate('/admin');
                         setUserMenuOpen(false);
                       }}
@@ -248,11 +230,7 @@ const DashboardLayout: React.FC = () => {
                   }`
                 }
                 onClick={() => {
-                  trackEvent('Navigation', 'Menu Click', item.label);
-                  trackGAEvent('navigate_menu', { 
-                    destination: item.path,
-                    menu_item: item.label
-                  });
+                  // Analytics supprimés: pas de tracking de clic menu
                 }}
               >
                 <span className="mr-3">{item.icon}</span>
@@ -290,11 +268,7 @@ const DashboardLayout: React.FC = () => {
                   }`
                 }
                 onClick={() => {
-                  trackEvent('Navigation', 'Mobile Menu Click', item.label);
-                  trackGAEvent('navigate_mobile_menu', { 
-                    destination: item.path,
-                    menu_item: item.label
-                  });
+                  // Analytics supprimés: pas de tracking menu mobile
                   closeMobileMenu();
                 }}
               >
@@ -304,11 +278,10 @@ const DashboardLayout: React.FC = () => {
             ))}
           </nav>
           <div className="p-4 border-t border-gray-200">
-            {isAdmin(user) && (
+            {isAdmin() && (
               <button 
                 onClick={() => {
-                  trackEvent('Navigation', 'Admin Panel', 'From Mobile Menu');
-                  trackGAEvent('navigate_to_admin', { source: 'mobile_menu' });
+                  // Analytics supprimés: pas de tracking de navigation Admin
                   navigate('/admin');
                   closeMobileMenu();
                 }}

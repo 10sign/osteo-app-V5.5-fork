@@ -12,14 +12,10 @@ import {
   Clock,
   CheckCircle,
 } from 'lucide-react';
-import { Button } from '../components/ui/Button';
 import { DashboardService } from '../services/dashboardService';
-import { auth } from '../firebase/config';
 import HDSComplianceBadge from '../components/ui/HDSComplianceBadge';
 import SubstitutesList from '../components/dashboard/SubstitutesList';
-import { trackEvent } from '../lib/clarityClient';
-import { trackEvent as trackMatomoEvent } from '../lib/matomoTagManager';
-import { trackEvent as trackGAEvent } from '../lib/googleAnalytics';
+import MigrationAlertBanner from '../components/ui/MigrationAlertBanner';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -29,7 +25,22 @@ const Dashboard: React.FC = () => {
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
   
   // Stats du tableau de bord
-  const [stats, setStats] = useState({
+  type DashboardStats = {
+    patientCount: number;
+    todayAppointments: number;
+    pendingInvoices: number;
+    newPatientsThisMonth: number;
+    occupancyRate: number;
+    invoicesThisMonth: number;
+    recentNotifications: {
+      id: string;
+      type: 'appointment' | 'invoice' | 'document' | string;
+      message: string;
+      timeFormatted: string;
+    }[];
+  };
+
+  const [stats, setStats] = useState<DashboardStats>({
     patientCount: 0,
     todayAppointments: 0,
     pendingInvoices: 0,
@@ -60,17 +71,6 @@ const Dashboard: React.FC = () => {
   // Chargement initial des statistiques
   useEffect(() => {
     loadDashboardStats(true);
-    
-    // Track dashboard view in Clarity
-    trackEvent("dashboard_view");
-    
-    // Track dashboard view in Matomo
-    trackMatomoEvent('Dashboard', 'Page View', 'Dashboard Home');
-    
-    // Track dashboard view in Google Analytics
-    trackGAEvent('view_dashboard', {
-      page_title: 'Dashboard Home'
-    });
   }, []);
 
   const loadDashboardStats = async (isInitialLoad = false) => {
@@ -95,20 +95,6 @@ const Dashboard: React.FC = () => {
       
       setError(errorMessage);
       
-      // Track error in Clarity
-      trackEvent("dashboard_error", { 
-        error_message: errorMessage,
-        error_type: (error as Error).name
-      });
-      
-      // Track error in Matomo
-      trackMatomoEvent('Error', 'Dashboard Load', errorMessage);
-      
-      // Track error in Google Analytics
-      trackGAEvent('dashboard_error', {
-        error_message: errorMessage,
-        error_type: (error as Error).name || 'Unknown'
-      });
     } finally {
       if (isInitialLoad) {
         setLoading(false);
@@ -117,16 +103,10 @@ const Dashboard: React.FC = () => {
   };
 
   const handleNewAppointment = () => {
-    trackEvent("create_appointment_click", { source: "dashboard" });
-    trackMatomoEvent('Dashboard', 'Action', 'Create Appointment');
-    trackGAEvent('create_appointment', { source: "dashboard" });
     navigate('/consultations?action=new');
   };
 
   const handleNewInvoice = () => {
-    trackEvent("create_invoice_click", { source: "dashboard" });
-    trackMatomoEvent('Dashboard', 'Action', 'Create Invoice');
-    trackGAEvent('create_invoice', { source: "dashboard" });
     navigate('/invoices?action=new');
   };
 
@@ -174,6 +154,9 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Bannière de migration automatique */}
+      <MigrationAlertBanner onMigrationComplete={() => loadDashboardStats(false)} />
+
       {/* Message d'erreur */}
       {error && (
         <div className="p-4 bg-error/5 border border-error/20 rounded-lg flex items-start">
@@ -212,7 +195,6 @@ const Dashboard: React.FC = () => {
             <Link 
               to="/patients" 
               className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-              onClick={() => trackGAEvent('navigate_to_patients', { source: 'dashboard' })}
             >
               Voir tous les patients →
             </Link>
@@ -233,11 +215,6 @@ const Dashboard: React.FC = () => {
             <Link 
               to="/consultations" 
               className="text-sm text-primary-600 hover:text-primary-700 font-medium group flex items-center"
-              onClick={() => {
-                trackEvent("view_appointments_click");
-                trackMatomoEvent('Dashboard', 'Navigation', 'View Appointments');
-                trackGAEvent('navigate_to_consultations', { source: 'dashboard' });
-              }}
             >
               Voir l'agenda et les consultations 
               <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
@@ -259,11 +236,6 @@ const Dashboard: React.FC = () => {
             <Link 
               to="/invoices" 
               className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-              onClick={() => {
-                trackEvent("view_invoices_click");
-                trackMatomoEvent('Dashboard', 'Navigation', 'View Invoices');
-                trackGAEvent('navigate_to_invoices', { source: 'dashboard' });
-              }}
             >
               Voir toutes les factures →
             </Link>
@@ -278,11 +250,6 @@ const Dashboard: React.FC = () => {
           <Link 
             to="/patients?action=new"
             className="card flex items-center hover:shadow-lg"
-            onClick={() => {
-              trackEvent("create_patient_click", { source: "dashboard" });
-              trackMatomoEvent('Dashboard', 'Action', 'Create Patient');
-              trackGAEvent('create_patient', { source: 'dashboard' });
-            }}
           >
             <div className="w-10 h-10 rounded-lg bg-primary-100 flex items-center justify-center mr-4">
               <UserPlus size={20} className="text-primary-600" />
@@ -330,11 +297,6 @@ const Dashboard: React.FC = () => {
             <Link 
               to="/notifications" 
               className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-              onClick={() => {
-                trackEvent("view_notifications_click");
-                trackMatomoEvent('Dashboard', 'Navigation', 'View Notifications');
-                trackGAEvent('navigate_to_notifications', { source: 'dashboard' });
-              }}
             >
               Voir tout
             </Link>
@@ -370,11 +332,6 @@ const Dashboard: React.FC = () => {
             <Link 
               to="/statistics" 
               className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-              onClick={() => {
-                trackEvent("view_statistics_click");
-                trackMatomoEvent('Dashboard', 'Navigation', 'View Statistics');
-                trackGAEvent('navigate_to_statistics', { source: 'dashboard' });
-              }}
             >
               Détails
             </Link>

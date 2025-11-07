@@ -58,6 +58,23 @@ interface ConsultationFormData {
 }
 
 
+const COMMON_SYMPTOMS = [
+  'Lombalgie',
+  'Cervicalgie',
+  'Dorsalgie',
+  'Sciatique',
+  'Migraine',
+  'Vertiges',
+  'Entorse',
+  'Tendinite',
+  'Arthrose',
+  'Scoliose',
+  'Stress',
+  'Anxiété',
+  'Troubles digestifs',
+  'Troubles du sommeil'
+];
+
 const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
   isOpen,
   onClose,
@@ -74,13 +91,15 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
   const [isPatientPreselected, setIsPatientPreselected] = useState(false);
   const [consultationDocuments, setConsultationDocuments] = useState<DocumentMetadata[]>([]);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
+  const [customSymptom, setCustomSymptom] = useState('');
 
   const { register, handleSubmit, formState: { errors, isValid }, reset, control, watch, setValue } = useForm<ConsultationFormData>({
     mode: 'onChange',
     defaultValues: {
       duration: 60,
       price: 60,
-      status: 'draft',
+      status: 'draft' as const,
       examinations: [],
       prescriptions: [],
       date: preselectedDate || new Date().toISOString().split('T')[0],
@@ -101,9 +120,9 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
   const watchedPatientId = watch('patientId');
 
   // Fill patient fields function with useCallback
-  const fillPatientFields = useCallback((patient: Patient, preserveExistingData = false) => {
+  const fillPatientFields = useCallback(async (patient: Patient, preserveExistingData = false) => {
     console.log('Filling patient fields for:', patient.firstName, patient.lastName, 'preserveExistingData:', preserveExistingData);
-    
+
     // Champs d'identité (lecture seule) - toujours remplis
     setValue('patientFirstName', patient.firstName || '');
     setValue('patientLastName', patient.lastName || '');
@@ -116,16 +135,54 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
     setValue('patientInsurance', patient.insurance?.provider || '');
     setValue('patientInsuranceNumber', patient.insurance?.policyNumber || '');
 
-    // ✅ CORRECTION: Champs cliniques - pré-remplir avec les données du patient
-    // Ne remplir que si preserveExistingData est false (nouvelle consultation)
+    // ✅ CORRECTION CRITIQUE: Vérifier si c'est la première consultation du patient
+    // Les champs cliniques ne sont pré-remplis QUE pour la première consultation
     if (!preserveExistingData) {
-      console.log('Pre-filling clinical fields with patient data');
-      setValue('currentTreatment', patient.currentTreatment || '');
-      setValue('consultationReason', patient.consultationReason || '');
-      setValue('medicalAntecedents', patient.medicalAntecedents || '');
-      setValue('medicalHistory', patient.medicalHistory || '');
-      setValue('osteopathicTreatment', patient.osteopathicTreatment || '');
-      setValue('symptoms', Array.isArray(patient.tags) ? patient.tags.join(', ') : (patient.tags || ''));
+      try {
+        // Compter le nombre de consultations existantes pour ce patient
+        const consultationsRef = collection(db, 'consultations');
+        const q = query(
+          consultationsRef,
+          where('osteopathId', '==', auth.currentUser?.uid),
+          where('patientId', '==', patient.id)
+        );
+        const consultationsSnapshot = await getDocs(q);
+        const consultationsCount = consultationsSnapshot.size;
+
+        console.log(`📊 Patient ${patient.firstName} ${patient.lastName} has ${consultationsCount} existing consultation(s)`);
+
+        // ✅ Pré-remplir UNIQUEMENT si c'est la PREMIÈRE consultation (count === 0)
+        if (consultationsCount === 0) {
+          console.log('✅ PREMIÈRE CONSULTATION: Pré-remplissage des champs cliniques avec les données du patient');
+          setValue('currentTreatment', patient.currentTreatment || '');
+          setValue('consultationReason', patient.consultationReason || '');
+          setValue('medicalAntecedents', patient.medicalAntecedents || '');
+          setValue('medicalHistory', patient.medicalHistory || '');
+          setValue('osteopathicTreatment', patient.osteopathicTreatment || '');
+          const patientSymptoms = Array.isArray(patient.tags) ? patient.tags : [];
+          setSelectedSymptoms(patientSymptoms);
+          setValue('symptoms', patientSymptoms.join(', '));
+        } else {
+          console.log(`❌ CONSULTATION N°${consultationsCount + 1}: Champs cliniques laissés VIDES (comportement attendu)`);
+          // Laisser les champs vides pour les consultations suivantes
+          setValue('currentTreatment', '');
+          setValue('consultationReason', '');
+          setValue('medicalAntecedents', '');
+          setValue('medicalHistory', '');
+          setValue('osteopathicTreatment', '');
+          setSelectedSymptoms([]);
+          setValue('symptoms', '');
+        }
+      } catch (error) {
+        console.error('❌ Erreur lors du comptage des consultations:', error);
+        // En cas d'erreur, ne pas pré-remplir pour éviter les doublons
+        setValue('currentTreatment', '');
+        setValue('consultationReason', '');
+        setValue('medicalAntecedents', '');
+        setValue('medicalHistory', '');
+        setValue('osteopathicTreatment', '');
+        setValue('symptoms', '');
+      }
     } else {
       console.log('Preserving existing clinical data');
     }
@@ -247,7 +304,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         endTime: endTime,
         duration: data.duration,
         type: data.reason || 'Consultation ostéopathique',
-        status: 'confirmed',
+        status: 'confirmed' as const,
         location: {
           type: 'office',
           name: 'Cabinet principal'
@@ -292,7 +349,12 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         medicalHistory: data.medicalHistory || '',
         osteopathicTreatment: data.osteopathicTreatment || '',
         symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : [],
-        treatmentHistory: []
+        treatmentHistory: [],
+
+        // ✅ FLAG DE CONSULTATION MANUELLE
+        // Les consultations créées manuellement ne sont JAMAIS des consultations initiales
+        // Seule la consultation créée automatiquement lors de la création du patient a ce flag à true
+        isInitialConsultation: false
       };
 
       // Inclure les documents dans les données de consultation
@@ -301,23 +363,57 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         documents: consultationDocuments
       };
 
-      console.log('📄 Consultation data with documents:', {
-        documentsCount: consultationDocuments.length,
-        documents: consultationDocuments,
-        fullData: consultationDataWithDocuments
-      });
-
-      // ✅ DEBUG: Log des champs cliniques pour vérifier qu'ils sont bien présents
-      console.log('🔍 Champs cliniques dans les données:', {
-        consultationReason: data.consultationReason,
-        currentTreatment: data.currentTreatment,
-        medicalAntecedents: data.medicalAntecedents,
-        medicalHistory: data.medicalHistory,
-        osteopathicTreatment: data.osteopathicTreatment,
-        symptoms: data.symptoms
-      });
+      console.log('🔵 ÉTAPE 0: Documents depuis le modal:', consultationDocuments.length, 'document(s)');
 
       const consultationId = await ConsultationService.createConsultation(consultationDataWithDocuments);
+
+      // Move documents from temp folder to consultation's permanent folder
+      if (consultationDocuments.length > 0) {
+        console.log('🔄 Déplacement des documents du dossier temp vers le dossier permanent...');
+        const { moveFile, createFolderStructure } = await import('../../utils/documentStorage');
+        const updatedDocuments: DocumentMetadata[] = [];
+
+        for (const doc of consultationDocuments) {
+          try {
+            // Check if document is in temp folder
+            if (doc.folder.includes('/temp/')) {
+              const oldPath = `${doc.folder}/${doc.name}`;
+              const newFolder = createFolderStructure(auth.currentUser!.uid, 'consultation', consultationId);
+              const newPath = `${newFolder}/${doc.name}`;
+
+              console.log(`🔄 Déplacement: ${oldPath} → ${newPath}`);
+
+              // Move file in Firebase Storage
+              const newUrl = await moveFile(oldPath, newPath);
+
+              // Update document metadata
+              const updatedDoc: DocumentMetadata = {
+                ...doc,
+                url: newUrl,
+                folder: newFolder
+              };
+
+              updatedDocuments.push(updatedDoc);
+              console.log(`✅ Document déplacé: ${doc.name}`);
+            } else {
+              // Document is already in correct location
+              updatedDocuments.push(doc);
+            }
+          } catch (error) {
+            console.error(`❌ Erreur déplacement document ${doc.name}:`, error);
+            // Keep original document metadata if move fails
+            updatedDocuments.push(doc);
+          }
+        }
+
+        // Update consultation with corrected document paths
+        if (updatedDocuments.length > 0) {
+          await ConsultationService.updateConsultation(consultationId, {
+            documents: updatedDocuments
+          });
+          console.log('✅ Chemins des documents mis à jour dans Firestore');
+        }
+      }
 
       // 3. Lier la consultation au rendez-vous
       await AppointmentService.updateAppointment(appointmentId, {
@@ -491,12 +587,11 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                   {/* Motif de consultation spécifique */}
                   <div className="mb-4">
                     <label htmlFor="consultationReason" className="block mb-1 text-sm font-medium text-gray-700">
-                      Motif de consultation détaillé *
+                      Motif de consultation *
                     </label>
                     <AutoResizeTextarea
                       id="consultationReason"
                       minRows={2}
-                      maxRows={4}
                       className="w-full resize-none input"
                       {...register('consultationReason')}
                       placeholder="Détaillez le motif de consultation..."
@@ -509,12 +604,11 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                   {/* Traitement effectué */}
                   <div className="mb-4">
                     <label htmlFor="currentTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                      Traitement effectué du patient *
+                      Traitement effectué *
                     </label>
                     <AutoResizeTextarea
                       id="currentTreatment"
                       minRows={2}
-                      maxRows={4}
                       className="w-full resize-none input"
                       {...register('currentTreatment')}
                       placeholder="Traitements médicamenteux ou thérapies en cours..."
@@ -532,22 +626,20 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                     <AutoResizeTextarea
                       id="medicalAntecedents"
                       minRows={3}
-                      maxRows={6}
                       className="w-full resize-none input"
                       {...register('medicalAntecedents')}
                       placeholder="Antécédents médicaux significatifs..."
                     />
                   </div>
 
-                  {/* Historique médical */}
+                  {/* Historique médical général */}
                   <div className="mb-4">
                     <label htmlFor="medicalHistory" className="block mb-1 text-sm font-medium text-gray-700">
-                      Historique médical
+                      Historique médical général
                     </label>
                     <AutoResizeTextarea
                       id="medicalHistory"
                       minRows={3}
-                      maxRows={6}
                       className="w-full resize-none input"
                       {...register('medicalHistory')}
                       placeholder="Historique médical général..."
@@ -557,126 +649,204 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                   {/* Traitement ostéopathique */}
                   <div className="mb-4">
                     <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                      Traitement ostéopathique prévu
+                      Traitement ostéopathique
                     </label>
                     <AutoResizeTextarea
                       id="osteopathicTreatment"
                       minRows={3}
-                      maxRows={6}
                       className="w-full resize-none input"
                       {...register('osteopathicTreatment')}
                       placeholder="Décrivez le traitement ostéopathique prévu..."
                     />
                   </div>
 
-                  {/* Symptômes */}
+                  {/* Symptômes / Syndromes */}
                   <div className="mb-4">
-                    <label htmlFor="symptoms" className="block mb-1 text-sm font-medium text-gray-700">
-                      Symptômes
+                    <label className="block mb-2 text-sm font-medium text-gray-700">
+                      Symptômes / Syndromes
                     </label>
-                    <input
-                      type="text"
-                      id="symptoms"
-                      className="w-full input"
-                      {...register('symptoms')}
-                      placeholder="Symptômes séparés par des virgules..."
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      Séparez les symptômes par des virgules (ex: Lombalgie, Cervicalgie, Fatigue)
-                    </p>
+                    <div className="space-y-3">
+                      {selectedSymptoms.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {selectedSymptoms.map((symptom, index) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center px-3 py-1 text-sm rounded-full bg-primary-50 text-primary-700 border border-primary-200"
+                            >
+                              {symptom}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = selectedSymptoms.filter((_, i) => i !== index);
+                                  setSelectedSymptoms(updated);
+                                  setValue('symptoms', updated.join(', '));
+                                }}
+                                className="ml-2 text-primary-500 hover:text-primary-700"
+                              >
+                                <X size={14} />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={customSymptom}
+                          onChange={(e) => setCustomSymptom(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (customSymptom.trim() && !selectedSymptoms.includes(customSymptom.trim())) {
+                                const updated = [...selectedSymptoms, customSymptom.trim()];
+                                setSelectedSymptoms(updated);
+                                setValue('symptoms', updated.join(', '));
+                                setCustomSymptom('');
+                              }
+                            }
+                          }}
+                          className="flex-1 input"
+                          placeholder="Ajouter un symptôme personnalisé..."
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (customSymptom.trim() && !selectedSymptoms.includes(customSymptom.trim())) {
+                              const updated = [...selectedSymptoms, customSymptom.trim()];
+                              setSelectedSymptoms(updated);
+                              setValue('symptoms', updated.join(', '));
+                              setCustomSymptom('');
+                            }
+                          }}
+                          disabled={!customSymptom.trim()}
+                        >
+                          Ajouter
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {COMMON_SYMPTOMS.map((symptom) => (
+                          <button
+                            key={symptom}
+                            type="button"
+                            onClick={() => {
+                              if (!selectedSymptoms.includes(symptom)) {
+                                const updated = [...selectedSymptoms, symptom];
+                                setSelectedSymptoms(updated);
+                                setValue('symptoms', updated.join(', '));
+                              }
+                            }}
+                            disabled={selectedSymptoms.includes(symptom)}
+                            className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                              selectedSymptoms.includes(symptom)
+                                ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {symptom}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <input type="hidden" {...register('symptoms')} />
                   </div>
                 </div>
 
-                {/* Examens demandés */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Examens demandés
-                    </label>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => appendExamination({ value: '' })}
-                      leftIcon={<Plus size={14} />}
-                    >
-                      Ajouter
-                    </Button>
-                  </div>
-                  
-                  {examinationFields.length > 0 ? (
-                    <div className="space-y-2">
-                      {examinationFields.map((field, index) => (
-                        <div key={field.id} className="flex items-center space-x-2">
-                          <AutoResizeTextarea
-                            minRows={1}
-                            maxRows={3}
-                            className="flex-1 input"
-                            placeholder="Ex: Radiographie lombaire..."
-                            {...register(`examinations.${index}.value`)}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeExamination(index)}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-sm italic text-gray-500">
-                      Aucun examen demandé
-                    </div>
-                  )}
-                </div>
+                {/* Documents médicaux (Examens + Prescriptions) */}
+                <div className="space-y-4">
+                  <h3 className="text-base font-medium text-gray-900">Documents médicaux</h3>
 
-                {/* Prescriptions */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Prescriptions
-                    </label>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => appendPrescription({ value: '' })}
-                      leftIcon={<Plus size={14} />}
-                    >
-                      Ajouter
-                    </Button>
+                  {/* Examens demandés */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Examens / Imageries demandés
+                      </label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => appendExamination({ value: '' })}
+                        leftIcon={<Plus size={14} />}
+                      >
+                        Ajouter
+                      </Button>
+                    </div>
+
+                    {examinationFields.length > 0 ? (
+                      <div className="space-y-2">
+                        {examinationFields.map((field, index) => (
+                          <div key={field.id} className="flex items-center space-x-2">
+                            <AutoResizeTextarea
+                              minRows={1}
+                              maxRows={3}
+                              className="flex-1 input"
+                              placeholder="Ex: Radiographie lombaire, IRM cervicale..."
+                              {...register(`examinations.${index}.value`)}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeExamination(index)}
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm italic text-gray-500">
+                        Aucun examen demandé
+                      </div>
+                    )}
                   </div>
-                  
-                  {prescriptionFields.length > 0 ? (
-                    <div className="space-y-2">
-                      {prescriptionFields.map((field, index) => (
-                        <div key={field.id} className="flex items-center space-x-2">
-                          <AutoResizeTextarea
-                            minRows={1}
-                            maxRows={3}
-                            className="flex-1 input"
-                            placeholder="Ex: Antalgiques, repos..."
-                            {...register(`prescriptions.${index}.value`)}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removePrescription(index)}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        </div>
-                      ))}
+
+                  {/* Prescriptions / Ordonnances */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Prescriptions / Ordonnances
+                      </label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => appendPrescription({ value: '' })}
+                        leftIcon={<Plus size={14} />}
+                      >
+                        Ajouter
+                      </Button>
                     </div>
-                  ) : (
-                    <div className="text-sm italic text-gray-500">
-                      Aucune prescription
-                    </div>
-                  )}
+
+                    {prescriptionFields.length > 0 ? (
+                      <div className="space-y-2">
+                        {prescriptionFields.map((field, index) => (
+                          <div key={field.id} className="flex items-center space-x-2">
+                            <AutoResizeTextarea
+                              minRows={1}
+                              className="flex-1 input"
+                              placeholder="Ex: Antalgiques, anti-inflammatoires, repos..."
+                              {...register(`prescriptions.${index}.value`)}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removePrescription(index)}
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm italic text-gray-500">
+                        Aucune prescription
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Documents de consultation */}
@@ -694,15 +864,14 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
 
                 <div>
                   <label htmlFor="notes" className="block mb-1 text-sm font-medium text-gray-700">
-                    Notes complémentaires
+                    Note sur le patient
                   </label>
                   <AutoResizeTextarea
                     id="notes"
                     minRows={3}
-                    maxRows={6}
                     className="w-full resize-none input"
                     {...register('notes')}
-                    placeholder="Notes additionnelles..."
+                    placeholder="Notes additionnelles sur le patient..."
                   />
                 </div>
 

@@ -6,8 +6,6 @@ export default defineConfig(({ command }) => ({
   plugins: [
     react({
       jsxRuntime: 'automatic',
-      fastRefresh: true,
-      strictMode: true,
     }),
     ...(command === 'build' ? [VitePWA({
       registerType: 'autoUpdate',
@@ -41,6 +39,8 @@ export default defineConfig(({ command }) => ({
     })] : [])
   ],
   server: {
+    port: 5175,
+    strictPort: true,
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -54,9 +54,44 @@ export default defineConfig(({ command }) => ({
     },
     rollupOptions: {
       output: {
-        manualChunks: {
-          'firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage', 'firebase/analytics'],
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('firebase')) {
+              return 'firebase';
+            }
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'react-vendor';
+            }
+            if (id.includes('chart.js') || id.includes('react-chartjs')) {
+              return 'charts';
+            }
+            if (id.includes('framer-motion')) {
+              return 'animations';
+            }
+            if (id.includes('crypto-js') || id.includes('browser-image-compression')) {
+              return 'crypto-utils';
+            }
+            return 'vendor';
+          }
+
+          if (id.includes('/src/pages/admin/')) {
+            return 'admin';
+          }
+          if (id.includes('/src/components/admin/')) {
+            return 'admin-components';
+          }
+          if (id.includes('/src/pages/patients/')) {
+            return 'patients';
+          }
+          if (id.includes('/src/pages/consultations/')) {
+            return 'consultations';
+          }
+          if (id.includes('/src/pages/invoices/')) {
+            return 'invoices';
+          }
+          if (id.includes('/src/components/modals/')) {
+            return 'modals';
+          }
         }
       }
     }

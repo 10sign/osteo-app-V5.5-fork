@@ -21,8 +21,6 @@ import {
   CreditCard,
   Info,
   RefreshCw,
-  Pill,
-  AlertTriangle,
   Image as ImageIcon
 } from 'lucide-react';
 import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
@@ -38,7 +36,7 @@ import NewConsultationModal from '../../components/modals/NewConsultationModal';
 import EditConsultationModal from '../../components/modals/EditConsultationModal';
 import ViewConsultationModal from '../../components/modals/ViewConsultationModal';
 import DeleteConsultationModal from '../../components/modals/DeleteConsultationModal';
-import { Patient, Consultation, Invoice } from '../../types';
+import { Patient, Consultation, Invoice, ConsultationFormData } from '../../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { HDSCompliance } from '../../utils/hdsCompliance';
@@ -47,9 +45,12 @@ import { PatientService } from '../../services/patientService';
 import { ConsultationService } from '../../services/consultationService';
 import { InvoiceService } from '../../services/invoiceService';
 import { patientCache } from '../../utils/patientCache';
-import { trackEvent } from '../../lib/clarityClient';
-import { trackEvent as trackMatomoEvent } from '../../lib/matomoTagManager';
-import { trackEvent as trackGAEvent } from '../../lib/googleAnalytics';
+// Analytics supprimés: retirer les imports et utiliser des stubs locaux
+const trackEvent = (..._args: any[]) => {};
+const trackMatomoEvent = (..._args: any[]) => {};
+const trackGAEvent = (..._args: any[]) => {};
+import FieldHistory from '../../components/patient/FieldHistory';
+import { buildFieldHistory } from '../../utils/fieldHistoryBuilder';
 
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -178,10 +179,9 @@ const PatientDetail: React.FC = () => {
           // Créer une consultation rétroactive
           const creationDate = patientData.createdAt ? new Date(patientData.createdAt) : new Date();
           
-          const consultationData = {
+          const consultationData: ConsultationFormData = {
             patientId: id,
             patientName: `${decryptedData.firstName} ${decryptedData.lastName}`,
-            osteopathId: auth.currentUser.uid,
             date: creationDate,
             reason: decryptedData.consultationReason || 'Première consultation',
             treatment: decryptedData.osteopathicTreatment || 'Évaluation initiale et anamnèse',
@@ -282,7 +282,7 @@ const PatientDetail: React.FC = () => {
 
       for (const docSnapshot of snapshot.docs) {
         const data = docSnapshot.data();
-        
+
         // Decrypt data for display
         const decryptedData = HDSCompliance.decryptDataForDisplay(
           data,
@@ -290,13 +290,19 @@ const PatientDetail: React.FC = () => {
           auth.currentUser.uid
         );
 
-        consultationsData.push({
+        const consultation = {
           id: docSnapshot.id,
           ...decryptedData,
           date: data.date?.toDate?.() || new Date(data.date),
           createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
-          updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)
-        } as Consultation);
+          updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt),
+          // Documents are already included in decryptedData from Firestore
+          documents: data.documents || []
+        } as Consultation;
+
+        console.log(`🔵 ÉTAPE 5: Consultation ${docSnapshot.id} chargée avec ${consultation.documents?.length || 0} document(s)`);
+
+        consultationsData.push(consultation);
       }
 
       // Sort by date (most recent first) - ensure proper sorting
@@ -322,19 +328,21 @@ const PatientDetail: React.FC = () => {
     }
   }, [id]);
 
-  // Get the most recent consultation for overview display
+  // Get the most recent consultation for overview display (by date chronologique)
   const getLatestConsultation = useCallback(() => {
     if (consultations.length === 0) return null;
-    
+
     // Sort by date to ensure we get the most recent
     const sortedConsultations = [...consultations].sort((a, b) => {
       const dateA = a.date instanceof Date ? a.date : new Date(a.date);
       const dateB = b.date instanceof Date ? b.date : new Date(b.date);
       return dateB.getTime() - dateA.getTime();
     });
-    
+
     return sortedConsultations[0];
   }, [consultations]);
+
+  // Removed unused getInitialConsultation helper
 
   // Load invoices
   const loadInvoices = useCallback(async () => {
@@ -345,7 +353,8 @@ const PatientDetail: React.FC = () => {
       const q = query(
         invoicesRef,
         where('patientId', '==', id),
-        where('osteopathId', '==', auth.currentUser.uid)
+        // Guard against null currentUser
+        where('osteopathId', '==', auth.currentUser?.uid ?? '')
       );
 
       const snapshot = await getDocs(q);
@@ -356,20 +365,23 @@ const PatientDetail: React.FC = () => {
         
         // Validation des données
         if (data.number && data.patientName && data.issueDate && data.total !== undefined) {
+          const createdAtStr = data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt || new Date().toISOString();
+          const updatedAtStr = data.updatedAt?.toDate?.()?.toISOString?.() || data.updatedAt || createdAtStr;
           invoicesData.push({
             id: doc.id,
             number: data.number,
             patientId: data.patientId || '',
-            patientName: data.patientName,
+            practitionerId: data.practitionerId || data.osteopathId || (auth.currentUser?.uid ?? ''),
             issueDate: data.issueDate,
             dueDate: data.dueDate || '',
-            total: data.total,
-            status: data.status || 'draft',
             items: data.items || [],
             subtotal: data.subtotal || 0,
             tax: data.tax || 0,
+            total: data.total,
+            status: data.status || 'draft',
             notes: data.notes || '',
-            osteopathId: data.osteopathId
+            createdAt: createdAtStr,
+            updatedAt: updatedAtStr
           });
         }
       });
@@ -496,7 +508,7 @@ const PatientDetail: React.FC = () => {
     }
   };
 
-  const handleDocumentSuccess = (documentUrl: string) => {
+  const handleDocumentSuccess = () => {
     setIsAddDocumentModalOpen(false);
     // Reload patient data to show new document
     loadPatientData();
@@ -573,12 +585,17 @@ const PatientDetail: React.FC = () => {
     setIsDeletingConsultation(true);
     try {
       await ConsultationService.deleteConsultation(consultationToDelete.id);
-      
+
       setIsDeleteConsultationModalOpen(false);
       setConsultationToDelete(null);
-      
-      // Reload consultations
-      loadConsultations();
+
+      // Reload consultations AND patient data to update nextAppointment field
+      await Promise.all([
+        loadConsultations(),
+        loadPatientData()
+      ]);
+
+      console.log('✅ Consultation deleted and patient data refreshed');
     } catch (error) {
       console.error('Error deleting consultation:', error);
       setError('Erreur lors de la suppression de la consultation');
@@ -1001,87 +1018,73 @@ const PatientDetail: React.FC = () => {
               </div>
             )}
 
-            {/* ✅ CORRIGÉ : Section Traitement effectué - Affiche les données de la dernière consultation */}
             {(() => {
               const latestConsultation = getLatestConsultation();
-              return latestConsultation?.currentTreatment && (
-                <div className="p-6 bg-white shadow rounded-xl">
-                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                    <Pill size={20} className="mr-2 text-gray-600" />
-                    Traitement effectué (dernière consultation)
-                  </h3>
-                  <p className="text-gray-700 whitespace-pre-wrap">{latestConsultation.currentTreatment}</p>
-                </div>
+              if (!latestConsultation) return null;
+
+              return (
+                <FieldHistory
+                  fieldLabel="Traitement effectué"
+                  currentValue={latestConsultation.currentTreatment || ''}
+                  history={patient ? buildFieldHistory('currentTreatment', patient, consultations) : []}
+                  emptyMessage="Aucun traitement effectué renseigné"
+                />
               );
             })()}
 
-            {/* ✅ CORRIGÉ : Section Motif de consultation - Affiche les données de la dernière consultation */}
             {(() => {
               const latestConsultation = getLatestConsultation();
-              return latestConsultation?.consultationReason && (
-                <div className="p-6 bg-white shadow rounded-xl">
-                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                    <FileText size={20} className="mr-2 text-gray-600" />
-                    Motif de consultation (dernière consultation)
-                  </h3>
-                  <p className="text-gray-700 whitespace-pre-wrap">{latestConsultation.consultationReason}</p>
-                </div>
+              if (!latestConsultation) return null;
+
+              return (
+                <FieldHistory
+                  fieldLabel="Motif de consultation"
+                  currentValue={latestConsultation.consultationReason || ''}
+                  history={patient ? buildFieldHistory('consultationReason', patient, consultations) : []}
+                  emptyMessage="Aucun motif de consultation renseigné"
+                />
               );
             })()}
 
-            {/* ✅ CORRIGÉ : Section Antécédents médicaux - Affiche les données de la dernière consultation */}
             {(() => {
               const latestConsultation = getLatestConsultation();
-              return latestConsultation?.medicalAntecedents && (
-                <div className="p-6 bg-white shadow rounded-xl">
-                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                    <AlertTriangle size={20} className="mr-2 text-gray-600" />
-                    Antécédents médicaux (dernière consultation)
-                  </h3>
-                  <p className="text-gray-700 whitespace-pre-wrap">{latestConsultation.medicalAntecedents}</p>
-                </div>
+              if (!latestConsultation) return null;
+
+              return (
+                <FieldHistory
+                  fieldLabel="Antécédents médicaux"
+                  currentValue={latestConsultation.medicalAntecedents || ''}
+                  history={patient ? buildFieldHistory('medicalAntecedents', patient, consultations) : []}
+                  emptyMessage="Aucun antécédent médical renseigné"
+                />
               );
             })()}
 
-            {/* ✅ CORRIGÉ : Section Traitement ostéopathique - Affiche les données de la dernière consultation */}
             {(() => {
               const latestConsultation = getLatestConsultation();
-              return latestConsultation?.osteopathicTreatment && (
-                <div className="p-6 bg-white shadow rounded-xl">
-                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                    <Stethoscope size={20} className="mr-2 text-gray-600" />
-                    Traitement ostéopathique (dernière consultation)
-                  </h3>
-                  <p className="text-gray-700 whitespace-pre-wrap">{latestConsultation.osteopathicTreatment}</p>
-                </div>
+              if (!latestConsultation) return null;
+
+              return (
+                <FieldHistory
+                  fieldLabel="Traitement ostéopathique"
+                  currentValue={latestConsultation.osteopathicTreatment || ''}
+                  history={patient ? buildFieldHistory('osteopathicTreatment', patient, consultations) : []}
+                  emptyMessage="Aucun traitement ostéopathique renseigné"
+                />
               );
             })()}
 
-            {/* ✅ NOUVEAU : Section Notes complémentaires - Affiche les notes de la dernière consultation */}
             {(() => {
               const latestConsultation = getLatestConsultation();
-              console.log('🔍 Debug notes complémentaires:', {
-                hasConsultation: !!latestConsultation,
-                hasNotes: !!latestConsultation?.notes,
-                notesValue: latestConsultation?.notes,
-                cleanedNotes: latestConsultation?.notes ? cleanDecryptedField(latestConsultation.notes, false, '') : null
-              });
-              
-              // Afficher la carte si la consultation existe, même sans notes
-              return latestConsultation && (
-                <div className="p-6 bg-white shadow rounded-xl">
-                  <h3 className="flex items-center mb-4 text-lg font-semibold text-gray-900">
-                    <FileText size={20} className="mr-2 text-gray-600" />
-                    Notes complémentaires (dernière consultation)
-                  </h3>
-                  {latestConsultation.notes && cleanDecryptedField(latestConsultation.notes, false, '') ? (
-                    <p className="text-gray-700 whitespace-pre-wrap">
-                      {cleanDecryptedField(latestConsultation.notes, false, '')}
-                    </p>
-                  ) : (
-                    <p className="italic text-gray-500">Aucune note complémentaire pour cette consultation</p>
-                  )}
-                </div>
+              if (!latestConsultation) return null;
+
+              return (
+                <FieldHistory
+                  fieldLabel="Note sur le patient"
+                  currentValue={cleanDecryptedField(latestConsultation.notes || '', false, '')}
+                  history={patient ? buildFieldHistory('notes', patient, consultations) : []}
+                  emptyMessage="Aucune note sur le patient"
+                />
               );
             })()}
 
@@ -1105,19 +1108,19 @@ const PatientDetail: React.FC = () => {
                     {latestConsultation.reason && (
                       <div>
                         <div className="text-sm text-gray-500">Raison</div>
-                        <div className="text-gray-700">{latestConsultation.reason}</div>
+                        <div className="text-gray-700 whitespace-pre-wrap break-words">{latestConsultation.reason}</div>
                       </div>
                     )}
                     {latestConsultation.treatment && (
                       <div>
                         <div className="text-sm text-gray-500">Traitement</div>
-                        <div className="text-gray-700 whitespace-pre-wrap">{latestConsultation.treatment}</div>
+                        <div className="text-gray-700 whitespace-pre-wrap break-words">{latestConsultation.treatment}</div>
                       </div>
                     )}
                     {latestConsultation.notes && (
                       <div>
                         <div className="text-sm text-gray-500">Notes</div>
-                        <div className="text-gray-700 whitespace-pre-wrap">{latestConsultation.notes}</div>
+                        <div className="text-gray-700 whitespace-pre-wrap break-words">{latestConsultation.notes}</div>
                       </div>
                     )}
                     <div className="flex items-center justify-between pt-2 border-t border-gray-200">
@@ -1319,18 +1322,17 @@ const PatientDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* ✅ CORRIGÉ : Historique médical - Affiche les données de la dernière consultation */}
             {(() => {
               const latestConsultation = getLatestConsultation();
-              return latestConsultation?.medicalHistory && (
-                <div className="p-6 bg-white shadow rounded-xl">
-                  <h3 className="mb-4 text-lg font-medium text-gray-900">Historique médical (dernière consultation)</h3>
-                  <div className="prose-sm prose max-w-none">
-                    <p className="text-gray-700 whitespace-pre-wrap">
-                      {cleanDecryptedField(latestConsultation.medicalHistory, false, 'Aucun historique médical renseigné')}
-                    </p>
-                  </div>
-                </div>
+              if (!latestConsultation) return null;
+
+              return (
+                <FieldHistory
+                  fieldLabel="Historique médical général"
+                  currentValue={cleanDecryptedField(latestConsultation.medicalHistory || '', false, '')}
+                  history={patient ? buildFieldHistory('medicalHistory', patient, consultations) : []}
+                  emptyMessage="Aucun historique médical renseigné"
+                />
               );
             })()}
 
@@ -1386,15 +1388,15 @@ const PatientDetail: React.FC = () => {
               </div>
             )}
 
-            {/* ✅ CORRIGÉ : Notes - Affiche les données de la dernière consultation */}
+            {/* ✅ CORRIGÉ : Note sur le patient - Affiche les données de la dernière consultation */}
             {(() => {
               const latestConsultation = getLatestConsultation();
               return latestConsultation?.notes && (
                 <div className="p-6 bg-white shadow rounded-xl">
-                  <h3 className="mb-4 text-lg font-medium text-gray-900">Notes (dernière consultation)</h3>
+                  <h3 className="mb-4 text-lg font-medium text-gray-900">Note sur le patient (dernière consultation)</h3>
                   <div className="prose-sm prose max-w-none">
                     <p className="text-gray-700 whitespace-pre-wrap">
-                      {cleanDecryptedField(latestConsultation.notes, false, 'Aucune note')}
+                      {cleanDecryptedField(latestConsultation.notes, false, 'Aucune note sur le patient')}
                     </p>
                   </div>
                 </div>
@@ -1511,6 +1513,11 @@ const PatientDetail: React.FC = () => {
                           <h4 className="text-lg font-medium text-gray-900">
                             Consultation #{consultations.length - index} - {formatDateTime(consultation.date)}
                           </h4>
+                          {consultation.isInitialConsultation && (
+                            <span className="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-full">
+                              Consultation initiale
+                            </span>
+                          )}
                           <span className={`px-2 py-1 text-xs font-medium rounded-full ${getConsultationStatusColor(consultation.status)}`}>
                             {getConsultationStatusText(consultation.status)}
                           </span>
@@ -1560,8 +1567,8 @@ const PatientDetail: React.FC = () => {
 
                       {consultation.notes && cleanDecryptedField(consultation.notes, false, '') && (
                         <div>
-                          <h5 className="mb-1 text-sm font-medium text-gray-700">Notes complémentaires</h5>
-                          <p className="text-gray-900 whitespace-pre-wrap">
+                          <h5 className="mb-1 text-sm font-medium text-gray-700">Note sur le patient</h5>
+                          <p className="text-gray-900 whitespace-pre-wrap break-words">
                             {cleanDecryptedField(consultation.notes, false, '')}
                           </p>
                         </div>
@@ -1571,7 +1578,7 @@ const PatientDetail: React.FC = () => {
                         {consultation.consultationReason && (
                           <div>
                             <h5 className="mb-1 text-xs font-medium text-gray-500 uppercase">Motif détaillé</h5>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
                               {cleanDecryptedField(consultation.consultationReason, false, '-')}
                             </p>
                           </div>
@@ -1579,7 +1586,7 @@ const PatientDetail: React.FC = () => {
                         {consultation.currentTreatment && (
                           <div>
                             <h5 className="mb-1 text-xs font-medium text-gray-500 uppercase">Traitement en cours</h5>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
                               {cleanDecryptedField(consultation.currentTreatment, false, '-')}
                             </p>
                           </div>
@@ -1587,7 +1594,7 @@ const PatientDetail: React.FC = () => {
                         {consultation.medicalAntecedents && (
                           <div>
                             <h5 className="mb-1 text-xs font-medium text-gray-500 uppercase">Antécédents</h5>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
                               {cleanDecryptedField(consultation.medicalAntecedents, false, '-')}
                             </p>
                           </div>
@@ -1595,7 +1602,7 @@ const PatientDetail: React.FC = () => {
                         {consultation.osteopathicTreatment && (
                           <div>
                             <h5 className="mb-1 text-xs font-medium text-gray-500 uppercase">Traitement ostéopathique</h5>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
                               {cleanDecryptedField(consultation.osteopathicTreatment, false, '-')}
                             </p>
                           </div>
@@ -1607,11 +1614,11 @@ const PatientDetail: React.FC = () => {
                         <div className="pt-4 border-t">
                           <h5 className="mb-3 text-sm font-medium text-gray-700">Documents de la consultation</h5>
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                            {consultation.documents.map((document, docIndex) => (
+                            {consultation.documents.map((docMeta, docIndex) => (
                               <div key={docIndex} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
                                 <div className="flex items-center space-x-3">
                                   <div className="flex-shrink-0">
-                                    {document.type?.startsWith('image/') ? (
+                                    {docMeta.type?.startsWith('image/') ? (
                                       <ImageIcon size={20} className="text-blue-500" />
                                     ) : (
                                       <FileText size={20} className="text-gray-500" />
@@ -1619,11 +1626,11 @@ const PatientDetail: React.FC = () => {
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <h6 className="text-sm font-medium text-gray-900 truncate">
-                                      {document.originalName || document.name}
+                                      {docMeta.originalName || docMeta.name}
                                     </h6>
                                     <p className="text-xs text-gray-500">
-                                      {document.size ? `${(document.size / (1024 * 1024)).toFixed(2)} MB` : 'Taille inconnue'}
-                                      {document.category && ` • ${document.category}`}
+                                      {docMeta.size ? `${(docMeta.size / (1024 * 1024)).toFixed(2)} MB` : 'Taille inconnue'}
+                                      {docMeta.category && ` • ${docMeta.category}`}
                                     </p>
                                   </div>
                                 </div>
@@ -1631,7 +1638,7 @@ const PatientDetail: React.FC = () => {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => window.open(document.url, '_blank')}
+                                    onClick={() => window.open(docMeta.url, '_blank')}
                                     leftIcon={<Eye size={12} />}
                                     className="text-xs"
                                   >
@@ -1642,8 +1649,8 @@ const PatientDetail: React.FC = () => {
                                     size="sm"
                                     onClick={() => {
                                       const link = document.createElement('a');
-                                      link.href = document.url;
-                                      link.download = document.originalName || document.name;
+                                      link.href = docMeta.url;
+                                      link.download = docMeta.originalName || docMeta.name;
                                       link.click();
                                     }}
                                     leftIcon={<Download size={12} />}
