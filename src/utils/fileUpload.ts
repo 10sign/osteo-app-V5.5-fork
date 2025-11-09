@@ -34,8 +34,9 @@ export interface UploadProgress {
   error?: string;
 }
 
-function createHDSMetadata(sensitivity: 'HIGHLY_SENSITIVE' | 'SENSITIVE' | 'NORMAL' = 'HIGHLY_SENSITIVE') {
+function createHDSMetadata(sensitivity: 'HIGHLY_SENSITIVE' | 'SENSITIVE' | 'NORMAL' = 'HIGHLY_SENSITIVE', contentType?: string) {
   return {
+    contentType, // Explicitly set if provided
     customMetadata: {
       hdsCompliance: JSON.stringify({
         version: hdsConfig.complianceVersion,
@@ -113,7 +114,7 @@ export async function uploadProfileImage(
     const fileRef = ref(storage, filePath);
 
     // Create metadata with HDS compliance information
-    const metadata = createHDSMetadata('HIGHLY_SENSITIVE');
+    const metadata = createHDSMetadata('HIGHLY_SENSITIVE', processedFile.type);
 
     // Upload file
     onProgress?.({ progress: 50, status: 'uploading' });
@@ -163,7 +164,7 @@ export async function uploadPatientFile(
     const fileRef = ref(storage, filePath);
 
     // Create metadata with HDS compliance information
-    const metadata = createHDSMetadata('SENSITIVE');
+    const metadata = createHDSMetadata('SENSITIVE', processedFile.type);
 
     // Upload file
     onProgress?.({ progress: 50, status: 'uploading' });
