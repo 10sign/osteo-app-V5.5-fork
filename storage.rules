@@ -28,11 +28,10 @@ service firebase.storage {
     
     // Validation des fichiers pour conformité HDS
     function isValidFileType() {
-      return request.resource.contentType.matches('image/.*') ||
-             request.resource.contentType.matches('application/pdf') ||
-             request.resource.contentType.matches('application/msword') ||
-             request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.wordprocessingml.document') ||
-             request.resource.contentType.matches('text/plain');
+      // Autoriser uniquement PDF, JPG et PNG
+      return request.resource.contentType.matches('application/pdf') ||
+             request.resource.contentType.matches('image/jpeg') ||
+             request.resource.contentType.matches('image/png');
     }
     
     function isValidFileSize() {

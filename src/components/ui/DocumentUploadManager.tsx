@@ -361,7 +361,7 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
               type="file"
               className="hidden"
               onChange={handleFileSelect}
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              accept=".pdf,.jpg,.jpeg,.png"
               multiple
               disabled={disabled}
             />
@@ -372,7 +372,7 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
                 {dragOver ? 'Déposez vos fichiers ici' : 'Cliquez ou glissez vos fichiers ici'}
               </p>
               <p className="text-xs text-gray-400 mt-1">
-                PDF, DOC, DOCX, JPG, PNG jusqu'à 10MB
+                PDF, JPG, PNG uniquement • Taille max 10MB
               </p>
             </div>
           </div>
@@ -517,7 +517,7 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
 
       {/* Informations d'aide */}
       <div className="text-xs text-gray-500 space-y-1">
-        <p>• Types acceptés: PDF, DOC, DOCX, JPG, PNG</p>
+        <p>• Types acceptés: PDF, JPG, PNG</p>
         <p>• Taille maximum: 10MB par fichier</p>
         <p>• Les images sont automatiquement compressées si nécessaire</p>
       </div>

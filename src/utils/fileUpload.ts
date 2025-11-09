@@ -3,22 +3,16 @@ import { storage, auth } from '../firebase/config';
 import imageCompression from 'browser-image-compression';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+// Types autorisés (alignés avec Storage.rules): PDF, JPG, PNG
 const ALLOWED_FILE_TYPES = {
   'application/pdf': true,
   'image/jpeg': true,
   'image/png': true,
-  'image/gif': true,
-  'image/webp': true,
-  'application/msword': true,
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': true,
-  'text/plain': true,
 };
 
 const ALLOWED_IMAGE_TYPES = {
   'image/jpeg': true,
   'image/png': true,
-  'image/gif': true,
-  'image/webp': true,
 };
 
 // HDS compliance configuration
@@ -56,7 +50,7 @@ function createHDSMetadata(sensitivity: 'HIGHLY_SENSITIVE' | 'SENSITIVE' | 'NORM
 
 export async function validateFile(file: File): Promise<void> {
   if (!ALLOWED_FILE_TYPES[file.type as keyof typeof ALLOWED_FILE_TYPES]) {
-    throw new Error('Format de fichier non supporté (PDF, JPG, PNG, GIF, WEBP, DOC, DOCX ou TXT uniquement)');
+    throw new Error('Format de fichier non supporté. PDF, JPG ou PNG uniquement (max 10MB).');
   }
 
   if (file.size > MAX_FILE_SIZE) {
@@ -66,7 +60,7 @@ export async function validateFile(file: File): Promise<void> {
 
 export async function validateImageFile(file: File): Promise<void> {
   if (!ALLOWED_IMAGE_TYPES[file.type as keyof typeof ALLOWED_IMAGE_TYPES]) {
-    throw new Error('Format d\'image non supporté (JPG, PNG, GIF ou WEBP uniquement)');
+    throw new Error('Format d\'image non supporté. JPG ou PNG uniquement (max 10MB).');
   }
 
   if (file.size > MAX_FILE_SIZE) {

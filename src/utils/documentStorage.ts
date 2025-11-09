@@ -33,19 +33,11 @@ export interface DocumentMetadata {
   category?: string; // Ajout de la catégorie
 }
 
-// Configuration des types de fichiers autorisés
+// Configuration des types de fichiers autorisés (conforme aux règles Storage)
 const ALLOWED_FILE_TYPES = {
-  // Documents
   'application/pdf': { extension: 'pdf', maxSize: 10 * 1024 * 1024 }, // 10MB
-  'application/msword': { extension: 'doc', maxSize: 10 * 1024 * 1024 },
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { extension: 'docx', maxSize: 10 * 1024 * 1024 },
-  'text/plain': { extension: 'txt', maxSize: 5 * 1024 * 1024 }, // 5MB
-  
-  // Images
   'image/jpeg': { extension: 'jpg', maxSize: 10 * 1024 * 1024 },
-  'image/png': { extension: 'png', maxSize: 10 * 1024 * 1024 },
-  'image/gif': { extension: 'gif', maxSize: 5 * 1024 * 1024 },
-  'image/webp': { extension: 'webp', maxSize: 10 * 1024 * 1024 }
+  'image/png': { extension: 'png', maxSize: 10 * 1024 * 1024 }
 } as const;
 
 // Configuration de compression d'images
@@ -63,6 +55,8 @@ const IMAGE_COMPRESSION_OPTIONS = {
  */
 export function mapStorageErrorToMessage(error: any): string {
   const code = error?.code || 'unknown';
+  const message = (error?.message || '').toLowerCase();
+  const serverResponse = (error as any)?.serverResponse || '';
 
   const errorMessages: Record<string, string> = {
     'storage/unknown': 'Une erreur inconnue s\'est produite. Vérifiez votre connexion Internet et réessayez.',
@@ -83,6 +77,17 @@ export function mapStorageErrorToMessage(error: any): string {
     'storage/server-file-wrong-size': 'La taille du fichier ne correspond pas. Veuillez réessayer.'
   };
 
+  // Cas spécifiques hors codes standards
+  if (serverResponse.includes('412') || message.includes('precondition') || message.includes('412')) {
+    return 'Conflit d’upload (précondition échouée). Réessayez ou renommez le fichier.';
+  }
+  if (message.includes('missing or insufficient permissions') || code === 'storage/unauthorized') {
+    return 'Permissions insuffisantes pour écrire dans le dossier de stockage.';
+  }
+  if (message.includes('blocked_by_client') || message.includes('err_blocked_by_client')) {
+    return 'Une extension navigateur a bloqué la requête (ad blocker). Désactivez-la pour l’upload.';
+  }
+
   return errorMessages[code] || error?.message || 'Erreur lors du téléversement du fichier';
 }
 
@@ -99,7 +104,7 @@ export async function validateFile(file: File): Promise<void> {
   // Vérifier le type de fichier
   const fileConfig = ALLOWED_FILE_TYPES[file.type as keyof typeof ALLOWED_FILE_TYPES];
   if (!fileConfig) {
-    const error = `Type de fichier non autorisé: ${file.type}. Types acceptés: PDF, DOC, DOCX, TXT, JPG, PNG, GIF, WEBP`;
+    const error = `Type de fichier non autorisé: ${file.type}. Types acceptés: PDF, JPG ou PNG (max 10MB)`;
     console.error('❌', error);
     throw new Error(error);
   }
@@ -403,7 +408,20 @@ export async function uploadDocument(
     });
 
     // Mapper l'erreur Firebase vers un message utilisateur clair
-    const errorMessage = mapStorageErrorToMessage(error);
+    let errorMessage = mapStorageErrorToMessage(error);
+
+    // Affiner certains cas fréquents
+    const serverResp = error?.serverResponse || '';
+    const msg = (error?.message || '').toLowerCase();
+    if (serverResp.includes('412') || msg.includes('precondition') || msg.includes('412')) {
+      errorMessage = 'Conflit d’upload (précondition échouée). Réessayez ou renommez le fichier.';
+    }
+    if (msg.includes('missing or insufficient permissions')) {
+      errorMessage = 'Permissions insuffisantes pour écrire dans le dossier de stockage.';
+    }
+    if (msg.includes('blocked_by_client') || msg.includes('err_blocked_by_client')) {
+      errorMessage = 'Une extension navigateur a bloqué la requête (ad blocker). Désactivez-la pour l’upload.';
+    }
 
     onProgress?.({
       progress: 0,
