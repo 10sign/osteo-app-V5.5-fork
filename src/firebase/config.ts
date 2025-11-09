@@ -1,7 +1,6 @@
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
 import { getAuth, setPersistence, browserLocalPersistence, connectAuthEmulator } from "firebase/auth";
-import { getFirestore, enableMultiTabIndexedDbPersistence, setLogLevel, CACHE_SIZE_UNLIMITED, connectFirestoreEmulator } from "firebase/firestore";
+import { getFirestore, initializeFirestore, enableMultiTabIndexedDbPersistence, setLogLevel, CACHE_SIZE_UNLIMITED, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { enableCryptoEngine, initializeEncryption } from "../utils/encryption";
@@ -24,7 +23,7 @@ const firebaseConfig = {
   storageBucket: resolvedStorageBucket,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? "927433064971",
   appId: import.meta.env.VITE_FIREBASE_APP_ID ?? "1:927433064971:web:6134d2d69194aa2e053d0e",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID ?? "G-B4K0K66PE2"
+  // measurementId supprimé: Analytics non utilisés
 };
 
 // Configuration HDS
@@ -47,7 +46,7 @@ const isDev = import.meta.env.DEV;
 // Boolean("false") === true, which caused accidental emulator/prod toggles
 const useProduction = String(import.meta.env.VITE_FIREBASE_USE_PRODUCTION ?? "false") === "true";
 const useEmulator = String(import.meta.env.VITE_FIREBASE_USE_EMULATOR ?? "false") === "true";
-const enableAnalyticsFlag = String(import.meta.env.VITE_ENABLE_ANALYTICS ?? "true") === "true";
+// Analytics totalement supprimés: aucune initialisation ni export
 
 // Vérification masquée des variables d'environnement (présence/fallback)
 (() => {
@@ -59,7 +58,6 @@ const enableAnalyticsFlag = String(import.meta.env.VITE_ENABLE_ANALYTICS ?? "tru
     'VITE_FIREBASE_STORAGE_BUCKET',
     'VITE_FIREBASE_MESSAGING_SENDER_ID',
     'VITE_FIREBASE_APP_ID',
-    'VITE_FIREBASE_MEASUREMENT_ID',
     'VITE_ENCRYPTION_KEY',
   ];
   console.groupCollapsed('🔎 Env check (masked)');
@@ -78,18 +76,34 @@ if (import.meta.env.DEV) {
 }
 
 // Initialisation des services
-// Analytics uniquement en production pour éviter des erreurs réseau locales
-let analytics: ReturnType<typeof getAnalytics> | undefined;
-try {
-  if (enableAnalyticsFlag && (!isDev || useProduction)) {
-    analytics = getAnalytics(app);
-  }
-} catch (err) {
-  console.warn('⚠️ Analytics non initialisé en environnement local:', err);
-}
+// Analytics supprimés: aucune initialisation
 
 const auth = getAuth(app);
-const db = getFirestore(app);
+
+// Configure Firestore transport to avoid net::ERR_ABORTED on Listen/channel.
+// In dev, force long polling unconditionally and disable auto-detection to keep a stable transport.
+const forceLongPolling = import.meta.env.DEV ? true : (String(import.meta.env.VITE_FIRESTORE_FORCE_LONG_POLLING ?? "false") === "true");
+const autoDetectLongPolling = import.meta.env.DEV ? false : (String(import.meta.env.VITE_FIRESTORE_AUTO_DETECT_LONG_POLLING ?? "false") === "true");
+
+const db = (() => {
+  try {
+    const instance = initializeFirestore(app, {
+      cacheSizeBytes: CACHE_SIZE_UNLIMITED,
+      experimentalForceLongPolling: forceLongPolling,
+      experimentalAutoDetectLongPolling: autoDetectLongPolling,
+    });
+    if (import.meta.env.DEV) {
+      console.log('🛰️ Firestore transport:', {
+        experimentalForceLongPolling: forceLongPolling,
+        experimentalAutoDetectLongPolling: autoDetectLongPolling,
+      });
+    }
+    return instance;
+  } catch (err) {
+    console.warn('⚠️ initializeFirestore failed, falling back to getFirestore:', err);
+    return getFirestore(app);
+  }
+})();
 
 // IMPORTANT: Enable multi-tab persistence right after Firestore initialization
 // Use the supported API; options like "synchronizeTabs" are not part of the type
@@ -174,7 +188,7 @@ console.log("🔑 Authentication service ready");
 console.log("💾 Firestore service ready");
 console.log("📦 Storage service ready");
 console.log("⚡ Functions service ready");
-console.log("📊 Analytics:", analytics ? "ENABLED" : "DISABLED (dev)");
+console.log("📊 Analytics:", "REMOVED");
 console.log("🏛️ HDS compliance mode:", hdsConfig.enabled ? "ENABLED" : "DISABLED");
 
-export { app, analytics, auth, db, storage, functions, hdsConfig };
+export { app, auth, db, storage, functions, hdsConfig };

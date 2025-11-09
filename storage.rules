@@ -19,12 +19,26 @@ service firebase.storage {
 
     // Validation fichier (types/tailles/extensions/longueur)
     function isValidFileType() {
-      return request.resource.contentType.matches('application/pdf') ||
-             request.resource.contentType.matches('image/jpeg') ||
-             request.resource.contentType.matches('image/png');
+      return request.resource.contentType != null &&
+        (
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType.matches('application/pdf') ||
+          request.resource.contentType == 'application/octet-stream'
+        );
+    }
+
+    // Autoriser contentType vide ou générique si l'extension est correcte
+    function isLooseTypeCheck() {
+      return (request.resource.contentType == null || request.resource.contentType == 'application/octet-stream')
+        && request.resource.name.matches('.*\\.(pdf|jpg|jpeg|png)$');
+    }
+
+    // Condition unique utilisée dans tous les match pour write/delete
+    function isPermittedFile() {
+      return isValidFileSize() && isReasonableName() && hasValidExtension() && (isValidFileType() || isLooseTypeCheck());
     }
     function isValidFileSize() {
-      return request.resource.size <= 10 * 1024 * 1024; // ≤ 10MB
+      return request.resource.size <= 15 * 1024 * 1024; // 15 MB
     }
     function hasValidExtension() {
       // Vérifie l’extension du nom complet (chemin inclus)
@@ -38,25 +52,22 @@ service firebase.storage {
     // Documents de consultation
     match /users/{userId}/consultations/{consultationId}/documents/{allPaths=**} {
       allow read: if isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr');
-      allow write, delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr')) &&
-                           isValidFileType() && isValidFileSize() &&
-                           hasValidExtension() && isReasonableName();
+      allow write, delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr'))
+        && isPermittedFile();
     }
 
     // Documents patients
     match /users/{userId}/patients/{patientId}/{allPaths=**} {
       allow read: if isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr');
-      allow write, delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr')) &&
-                           isValidFileType() && isValidFileSize() &&
-                           hasValidExtension() && isReasonableName();
+      allow write, delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr'))
+        && isPermittedFile();
     }
 
     // Autres documents utilisateur (cabinet, factures, etc.)
     match /users/{userId}/{allPaths=**} {
       allow read: if isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr');
-      allow write, delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr')) &&
-                           isValidFileType() && isValidFileSize() &&
-                           hasValidExtension() && isReasonableName();
+      allow write, delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr'))
+        && isPermittedFile();
     }
 
     // Blocage du reste
