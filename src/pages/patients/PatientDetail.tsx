@@ -44,6 +44,7 @@ import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { PatientService } from '../../services/patientService';
 import { ConsultationService } from '../../services/consultationService';
 import { InvoiceService } from '../../services/invoiceService';
+import { InitialConsultationSyncService } from '../../services/initialConsultationSyncService';
 import { patientCache } from '../../utils/patientCache';
 // Analytics supprimés: retirer les imports et utiliser des stubs locaux
 const trackEvent = (..._args: any[]) => {};
@@ -176,77 +177,50 @@ const PatientDetail: React.FC = () => {
       
       if (existingConsultations.empty) {
         try {
-          // Créer une consultation rétroactive
-          const creationDate = patientData.createdAt ? new Date(patientData.createdAt) : new Date();
-          
-          const consultationData: ConsultationFormData = {
-            patientId: id,
-            patientName: `${decryptedData.firstName} ${decryptedData.lastName}`,
-            date: creationDate,
-            reason: decryptedData.consultationReason || 'Première consultation',
-            treatment: decryptedData.osteopathicTreatment || 'Évaluation initiale et anamnèse',
-            notes: decryptedData.notes || 'Consultation générée rétroactivement lors de la mise à jour du système.',
-            duration: 60,
-            price: 55,
-            status: 'completed',
-            examinations: [],
-            prescriptions: [],
-            
-            // ✅ SNAPSHOT COMPLET - Champs d'identité du patient au moment T
-            patientFirstName: decryptedData.firstName || '',
-            patientLastName: decryptedData.lastName || '',
-            patientDateOfBirth: decryptedData.dateOfBirth || '',
-            patientGender: decryptedData.gender || '',
-            patientPhone: decryptedData.phone || '',
-            patientEmail: decryptedData.email || '',
-            patientProfession: decryptedData.profession || '',
-            patientAddress: decryptedData.address?.street || '',
-            patientInsurance: decryptedData.insurance?.provider || '',
-            patientInsuranceNumber: decryptedData.insurance?.policyNumber || '',
-            
-            // ✅ SNAPSHOT COMPLET - Champs cliniques du patient au moment T
-            currentTreatment: decryptedData.currentTreatment || '',
-            consultationReason: decryptedData.consultationReason || '',
-            medicalAntecedents: decryptedData.medicalAntecedents || '',
-            medicalHistory: decryptedData.medicalHistory || '',
-            osteopathicTreatment: decryptedData.osteopathicTreatment || '',
-            symptoms: decryptedData.tags || []
-          };
-          
-          const consultationId = await ConsultationService.createConsultation(consultationData);
-          
-          // Créer une facture liée à cette consultation
-          const invoiceNumber = `F-${creationDate.getFullYear()}${String(creationDate.getMonth() + 1).padStart(2, '0')}${String(creationDate.getDate()).padStart(2, '0')}-${id.substring(0, 6)}`;
-          
-          const invoiceData = {
-            number: invoiceNumber,
-            patientId: id,
-            patientName: `${decryptedData.firstName} ${decryptedData.lastName}`,
-            osteopathId: auth.currentUser.uid,
-            issueDate: creationDate.toISOString().split('T')[0],
-            dueDate: new Date(creationDate.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            items: [{
-              id: crypto.randomUUID(),
-              description: 'Première consultation',
-              quantity: 1,
-              unitPrice: 55,
-              amount: 55
-            }],
-            subtotal: 55,
-            tax: 0,
-            total: 55,
-            status: 'draft',
-            notes: 'Facture générée rétroactivement pour la première consultation.',
-            consultationId: consultationId,
-            createdAt: creationDate.toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-          
-          await InvoiceService.createInvoice(invoiceData);
-          
-          console.log('✅ Created retroactive consultation and invoice for patient:', id);
+          // Avant toute création rétroactive, vérifier via le service dédié
+          const initialId = await InitialConsultationSyncService.findInitialConsultation(id, auth.currentUser.uid);
+          if (!initialId) {
+            // Déclencher la synchronisation/creation via le service centralisé
+            const syncResult = await InitialConsultationSyncService.syncInitialConsultationForPatient(
+              id,
+              { ...(decryptedData as any), id },
+              auth.currentUser.uid,
+              { includeEmpty: false }
+            );
+
+            // Créer une facture liée à cette consultation uniquement si une consultation a été créée
+            if (syncResult.success && syncResult.consultationId) {
+              const creationDate = patientData.createdAt ? new Date(patientData.createdAt) : new Date();
+              const invoiceNumber = `F-${creationDate.getFullYear()}${String(creationDate.getMonth() + 1).padStart(2, '0')}${String(creationDate.getDate()).padStart(2, '0')}-${id.substring(0, 6)}`;
+              const invoiceData = {
+                number: invoiceNumber,
+                patientId: id,
+                patientName: `${decryptedData.firstName} ${decryptedData.lastName}`,
+                osteopathId: auth.currentUser.uid,
+                issueDate: creationDate.toISOString().split('T')[0],
+                dueDate: new Date(creationDate.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                items: [{
+                  id: crypto.randomUUID(),
+                  description: 'Première consultation',
+                  quantity: 1,
+                  unitPrice: 55,
+                  amount: 55
+                }],
+                subtotal: 55,
+                tax: 0,
+                total: 55,
+                status: 'draft',
+                notes: 'Facture générée rétroactivement pour la première consultation.',
+                consultationId: syncResult.consultationId,
+                createdAt: creationDate.toISOString(),
+                updatedAt: new Date().toISOString()
+              };
+              await InvoiceService.createInvoice(invoiceData);
+              console.log('✅ Created retroactive initial consultation via sync service and linked invoice');
+            }
+          }
         } catch (retroError) {
-          console.warn('⚠️ Could not create retroactive consultation and invoice:', retroError);
+          console.warn('⚠️ Could not create retroactive consultation via sync service:', retroError);
         }
       }
 
