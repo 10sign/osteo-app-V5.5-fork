@@ -7,7 +7,9 @@ import {
   formatFileSize,
   isImageFile,
   DocumentMetadata,
-  validateFile
+  validateFile,
+  checkStorageConfiguration,
+  printUploadDiagnostic
 } from '../../utils/documentStorage';
 import { auth } from '../../firebase/config';
 
@@ -64,6 +66,39 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
   const [documentName, setDocumentName] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [storageError, setStorageError] = useState<string | null>(null);
+
+  // Vérifier la configuration Storage au montage
+  useEffect(() => {
+    console.log('📝 DocumentUploadManager monté avec:', {
+      patientId,
+      entityType,
+      entityId,
+      customFolderPath,
+      disabled
+    });
+
+    const storageCheck = checkStorageConfiguration();
+    if (!storageCheck.isValid) {
+      console.error('❌ Problème de configuration Storage:', storageCheck.error);
+      console.log('💡 Pour plus d\'aide, tapez: printUploadDiagnostic()');
+      setStorageError(storageCheck.error || 'Erreur de configuration Storage');
+      onUploadError(storageCheck.error || 'Erreur de configuration Storage');
+    } else {
+      console.log('✅ Configuration Storage validée');
+      setStorageError(null);
+    }
+
+    // Exposer la fonction de diagnostic globalement pour débogage
+    (window as any).printUploadDiagnostic = printUploadDiagnostic;
+    (window as any).checkStorageConfig = checkStorageConfiguration;
+
+    return () => {
+      // Nettoyer les fonctions globales au démontage
+      delete (window as any).printUploadDiagnostic;
+      delete (window as any).checkStorageConfig;
+    };
+  }, [patientId, entityType, entityId, customFolderPath, disabled]);
 
   // Synchronize documents state with initialDocuments prop
   useEffect(() => {
@@ -74,7 +109,18 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
   }, [initialDocuments]);
 
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files || !auth.currentUser) return;
+    if (!event.target.files) {
+      console.warn('⚠️ Aucun fichier sélectionné');
+      return;
+    }
+
+    if (!auth.currentUser) {
+      console.error('❌ Utilisateur non authentifié');
+      onUploadError('Vous devez être connecté pour uploader des fichiers');
+      return;
+    }
+
+    console.log('📂 Fichiers sélectionnés:', event.target.files.length);
 
     const files = Array.from(event.target.files);
 
@@ -127,35 +173,66 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
   }, [selectedCategory, documentName, patientId]);
 
   const processFile = async (file: File, category: string, index: number, displayName?: string) => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser) {
+      console.error('❌ Utilisateur non authentifié');
+      updateFileError(index, 'Vous devez être connecté pour uploader des fichiers');
+      return;
+    }
 
     try {
       // Créer le chemin du dossier selon le type d'entité
       let folderPath: string;
-      
+
+      console.log('📋 Configuration upload:', {
+        customFolderPath,
+        entityType,
+        entityId,
+        patientId,
+        category
+      });
+
       if (customFolderPath) {
         folderPath = customFolderPath;
+        console.log('✅ Utilisation du chemin personnalisé:', folderPath);
       } else if (entityType === 'consultation' && entityId) {
         folderPath = `users/${auth.currentUser.uid}/consultations/${entityId}/documents`;
+        console.log('✅ Chemin consultation avec ID:', folderPath);
+      } else if (entityType === 'consultation' && !entityId) {
+        // Générer un ID temporaire unique pour les consultations non encore créées
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        folderPath = `users/${auth.currentUser.uid}/consultations/${tempId}/documents`;
+        console.log('⚠️ Chemin consultation temporaire:', folderPath);
       } else {
         folderPath = `users/${auth.currentUser.uid}/patients/${patientId}/documents/${category}`;
+        console.log('✅ Chemin patient:', folderPath);
       }
+
+      // Vérification du chemin avant upload
+      if (!folderPath || folderPath.includes('undefined') || folderPath.includes('null')) {
+        throw new Error('Chemin d\'upload invalide. Vérifiez la configuration.');
+      }
+
+      console.log('🚀 Démarrage de l\'upload vers:', folderPath);
 
       // Mettre à jour le statut
       updateFileStatus(index, 'uploading', 10);
 
-      // Uploader le document
+      // Uploader le document avec gestion d'erreur améliorée
       const result = await uploadDocument(
         file,
         folderPath,
         undefined,
         (progress) => {
+          console.log(`📊 Progression upload (${index}):`, progress.progress, '%', progress.status);
           updateFileStatus(index, progress.status, progress.progress);
           if (progress.status === 'error') {
+            console.error('❌ Erreur callback upload:', progress.error);
             updateFileError(index, progress.error || 'Erreur lors du téléversement');
           }
         }
       );
+
+      console.log('✅ Upload réussi, résultat:', result);
 
       // Ajouter les métadonnées de catégorie et displayName
       const documentWithCategory: DocumentMetadata = {
@@ -189,10 +266,17 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
         setUploadingFiles(prev => prev.filter((_, i) => i !== index));
       }, 3000);
       
-    } catch (error) {
-      console.error('Upload error:', error);
-      updateFileError(index, error instanceof Error ? error.message : 'Erreur inconnue');
-      onUploadError(error instanceof Error ? error.message : 'Erreur inconnue');
+    } catch (error: any) {
+      console.group('❌ Erreur processFile');
+      console.error('Type:', error?.constructor?.name);
+      console.error('Message:', error?.message);
+      console.error('Code:', error?.code);
+      console.error('Stack:', error?.stack);
+      console.groupEnd();
+
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue lors de l\'upload';
+      updateFileError(index, errorMessage);
+      onUploadError(errorMessage);
     }
   };
 
@@ -226,7 +310,23 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
     event.preventDefault();
     setDragOver(false);
 
-    if (disabled || !event.dataTransfer.files.length) return;
+    if (disabled) {
+      console.warn('⚠️ Upload désactivé');
+      return;
+    }
+
+    if (!event.dataTransfer.files.length) {
+      console.warn('⚠️ Aucun fichier déposé');
+      return;
+    }
+
+    if (!auth.currentUser) {
+      console.error('❌ Utilisateur non authentifié');
+      onUploadError('Vous devez être connecté pour uploader des fichiers');
+      return;
+    }
+
+    console.log('📂 Fichiers déposés:', event.dataTransfer.files.length);
 
     const files = Array.from(event.dataTransfer.files);
 
@@ -332,6 +432,42 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
 
   return (
     <div className={`space-y-4 ${className}`}>
+      {/* Message d'information sur l'authentification */}
+      {!auth.currentUser && (
+        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
+          ⚠️ Vous devez être connecté pour uploader des fichiers
+        </div>
+      )}
+
+      {/* Message d'erreur de configuration Storage */}
+      {storageError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-red-800 mb-1">
+                Problème de configuration
+              </h4>
+              <p className="text-sm text-red-700 mb-2">
+                {storageError}
+              </p>
+              <details className="text-xs text-red-600">
+                <summary className="cursor-pointer hover:text-red-800 font-medium">
+                  Solutions possibles
+                </summary>
+                <ul className="mt-2 ml-4 space-y-1 list-disc">
+                  <li>Vérifiez que vous êtes bien connecté</li>
+                  <li>Vérifiez votre connexion Internet</li>
+                  <li>Désactivez les bloqueurs de publicité (AdBlock, etc.)</li>
+                  <li>Actualisez la page (F5)</li>
+                  <li>Ouvrez la console navigateur (F12) pour plus de détails</li>
+                </ul>
+              </details>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sélection de catégorie et zone de drop */}
       <div className="flex flex-col md:flex-row gap-4">
         <div className="w-full md:w-1/3">
