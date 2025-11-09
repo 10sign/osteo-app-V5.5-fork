@@ -6,16 +6,16 @@ import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { enableCryptoEngine, initializeEncryption } from "../utils/encryption";
 
-// Configuration Firebase
+// Configuration Firebase (utilise les variables VITE_* si présentes)
 const firebaseConfig = {
-  apiKey: "AIzaSyD-L4R32GM-QZCOJBLzcfp69LpC7m8488s",
-  authDomain: "ostheo-app.firebaseapp.com",
-  databaseURL: "https://ostheo-app-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "ostheo-app",
-  storageBucket: "ostheo-app.firebasestorage.app",
-  messagingSenderId: "927433064971",
-  appId: "1:927433064971:web:6134d2d69194aa2e053d0e",
-  measurementId: "G-B4K0K66PE2"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? "AIzaSyD-L4R32GM-QZCOJBLzcfp69LpC7m8488s",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? "ostheo-app.firebaseapp.com",
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL ?? "https://ostheo-app-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? "ostheo-app",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? "ostheo-app.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? "927433064971",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID ?? "1:927433064971:web:6134d2d69194aa2e053d0e",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID ?? "G-B4K0K66PE2"
 };
 
 // Configuration HDS
@@ -36,6 +36,28 @@ const app = initializeApp(firebaseConfig);
 const isDev = import.meta.env.DEV;
 const useProduction = Boolean(import.meta.env.VITE_FIREBASE_USE_PRODUCTION);
 const useEmulator = Boolean(import.meta.env.VITE_FIREBASE_USE_EMULATOR);
+const enableAnalyticsFlag = String(import.meta.env.VITE_ENABLE_ANALYTICS ?? "true") === "true";
+
+// Vérification masquée des variables d'environnement (présence/fallback)
+(() => {
+  const keys = [
+    'VITE_FIREBASE_API_KEY',
+    'VITE_FIREBASE_AUTH_DOMAIN',
+    'VITE_FIREBASE_DATABASE_URL',
+    'VITE_FIREBASE_PROJECT_ID',
+    'VITE_FIREBASE_STORAGE_BUCKET',
+    'VITE_FIREBASE_MESSAGING_SENDER_ID',
+    'VITE_FIREBASE_APP_ID',
+    'VITE_FIREBASE_MEASUREMENT_ID',
+    'VITE_ENCRYPTION_KEY',
+  ];
+  console.groupCollapsed('🔎 Env check (masked)');
+  for (const k of keys) {
+    const present = Boolean((import.meta.env as any)[k]);
+    console.log(`${k}:`, present ? 'present' : 'missing → fallback');
+  }
+  console.groupEnd();
+})();
 
 // Journalisation détaillée en développement
 if (import.meta.env.DEV) {
@@ -48,7 +70,7 @@ if (import.meta.env.DEV) {
 // Analytics uniquement en production pour éviter des erreurs réseau locales
 let analytics: ReturnType<typeof getAnalytics> | undefined;
 try {
-  if (!isDev || useProduction) {
+  if (enableAnalyticsFlag && (!isDev || useProduction)) {
     analytics = getAnalytics(app);
   }
 } catch (err) {

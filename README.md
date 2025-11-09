@@ -139,7 +139,7 @@ Pour utiliser TestSprite (agent de tests AI) dans votre environnement Trae AI, c
 
 Bonnes pratiques :
 - Ne jamais exposer la clé côté client (React) ni l’injecter via `import.meta.env` dans le navigateur.
-- Si des appels directs à l’API TestSprite sont nécessaires, faites-les via un proxy serveur (ex. Supabase Function, Cloud Functions, ou script Node) qui lit `process.env.TESTSPRITE_API_KEY`.
+ - Si des appels directs à l’API TestSprite sont nécessaires, faites-les via un proxy serveur (ex. Firebase Cloud Functions, Netlify Functions, ou script Node) qui lit `process.env.TESTSPRITE_API_KEY`.
 - Continuez à utiliser Vitest pour les tests unitaires ciblés et confiez à TestSprite la planification et l’exécution de scénarios E2E plus larges.
 
 Validation rapide :

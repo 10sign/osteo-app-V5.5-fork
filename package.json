@@ -15,7 +15,6 @@
     "test:watch": "vitest --watch"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.7",
     "browser-image-compression": "^2.0.2",
     "chart.js": "^4.4.1",
     "class-variance-authority": "^0.7.0",
