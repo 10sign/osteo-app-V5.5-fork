@@ -8,6 +8,7 @@ import { Patient, PatientFormData, TreatmentHistoryEntry } from '../../types';
 // Removed unused validatePatientData import
 import { ConsultationService } from '../../services/consultationService';
 import { InvoiceService } from '../../services/invoiceService';
+import { InitialConsultationSyncService } from '../../services/initialConsultationSyncService';
 import AutoResizeTextarea from '../ui/AutoResizeTextarea';
 import AutoCapitalizeInput from '../ui/AutoCapitalizeInput';
 import { patientCache } from '../../utils/patientCache';
@@ -373,66 +374,18 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
       
       setProgress(80);
 
-      // Créer automatiquement une consultation initiale avec TOUTES les données du patient (snapshot complet)
-      const initialConsultationData = {
-        patientId: patientId,
-        patientName: `${data.firstName.trim()} ${data.lastName.trim()}`,
-        osteopathId: auth.currentUser.uid,
-        date: new Date(),
-        // ✅ CORRECTION: Mapping correct des champs principaux
-        reason: data.consultationReason || 'Première consultation',
-        treatment: data.osteopathicTreatment || 'Évaluation initiale et anamnèse',
-        notes: data.notes || 'Consultation générée automatiquement lors de la création du patient.',
-        duration: 60,
-        price: 60,
-        status: 'completed' as const,
-        examinations: [],
-        prescriptions: [],
-
-        // ✅ SNAPSHOT COMPLET - Champs d'identité du patient au moment T
-        patientFirstName: data.firstName.trim(),
-        patientLastName: data.lastName.trim(),
-        patientDateOfBirth: data.dateOfBirth,
-        patientGender: data.gender,
-        patientPhone: data.phone || '',
-        patientEmail: data.email || '',
-        patientProfession: data.profession || '',
-        patientAddress: data.address || '',
-        patientInsurance: data.insurance || '',
-        patientInsuranceNumber: data.insuranceNumber || '',
-
-        // ✅ SNAPSHOT COMPLET - Champs cliniques au moment T (mapping correct)
-        currentTreatment: data.currentTreatment || '',
-        consultationReason: data.consultationReason || '',
-        medicalAntecedents: data.medicalAntecedents || '',
-        medicalHistory: data.medicalHistory || '',
-        osteopathicTreatment: data.osteopathicTreatment || '',
-        symptoms: selectedTags || [],
-        treatmentHistory: [],
-
-        // ✅ FLAG DE CONSULTATION INITIALE
-        // Cette consultation est créée automatiquement lors de la création du dossier patient
-        // Elle est la seule à être pré-remplie avec les données du dossier patient
-        isInitialConsultation: true
-      };
-
-      console.log('🔍 CRÉATION PREMIÈRE CONSULTATION - Données envoyées:', {
-        currentTreatment: initialConsultationData.currentTreatment,
-        consultationReason: initialConsultationData.consultationReason,
-        medicalAntecedents: initialConsultationData.medicalAntecedents,
-        medicalHistory: initialConsultationData.medicalHistory,
-        osteopathicTreatment: initialConsultationData.osteopathicTreatment,
-        symptoms: initialConsultationData.symptoms,
-        notes: initialConsultationData.notes,
-        isInitialConsultation: initialConsultationData.isInitialConsultation
-      });
-
+      // Ne pas créer ici la consultation initiale: elle est gérée automatiquement
+      // par PatientService.createPatient via InitialConsultationSyncService.
+      // Nous récupérons son ID pour lier la facture.
       let initialConsultationId: string | null = null;
       try {
-        initialConsultationId = await ConsultationService.createConsultation(initialConsultationData);
-        console.log('✅ Consultation automatique créée avec snapshot complet des données patient - ID:', initialConsultationId);
+        initialConsultationId = await InitialConsultationSyncService.findInitialConsultation(
+          patientId,
+          auth.currentUser.uid
+        );
+        console.log('✅ Consultation initiale trouvée via sync service - ID:', initialConsultationId);
       } catch (err) {
-        console.warn('⚠️ Échec création consultation automatique (non bloquant):', err);
+        console.warn('⚠️ Recherche de la consultation initiale échouée (non bloquant):', err);
       }
 
       // Créer automatiquement une facture liée à cette consultation
