@@ -151,11 +151,18 @@ service firebase.storage {
     
     // Règles optimisées pour les documents de consultation
     match /users/{userId}/consultations/{consultationId}/documents/{allPaths=**} {
-      // Lecture, écriture et suppression autorisées pour le propriétaire, l'admin, ou Julie
-      allow read, write, delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr')) &&
-                                   isValidFileType() && 
-                                   isValidFileSize() && 
-                                   isValidFileName();
+      // Lecture: autorisée pour le propriétaire, l'admin, ou Julie
+      // (Ne pas utiliser request.resource.* lors des lectures)
+      allow read: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr'));
+
+      // Écriture: autorisée pour le propriétaire avec validations, l'admin ou Julie
+      allow write: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr')) &&
+                    isValidFileType() &&
+                    isValidFileSize() &&
+                    isValidFileName();
+
+      // Suppression: autorisée pour le propriétaire, l'admin, ou Julie
+      allow delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr'));
     }
     
     // Règles pour les patients (dossier spécifique)

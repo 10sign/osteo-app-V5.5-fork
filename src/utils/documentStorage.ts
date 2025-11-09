@@ -1,4 +1,4 @@
-import { ref, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
+import { ref, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata } from 'firebase/storage';
 import { storage, auth } from '../firebase/config';
 import imageCompression from 'browser-image-compression';
 
@@ -86,6 +86,22 @@ export function mapStorageErrorToMessage(error: any): string {
   }
   if (message.includes('blocked_by_client') || message.includes('err_blocked_by_client')) {
     return 'Une extension navigateur a bloqué la requête (ad blocker). Désactivez-la pour l’upload.';
+  }
+
+  // Connexions interrompues/abordées (souvent visibles en net::ERR_ABORTED)
+  if (
+    message.includes('err_aborted') ||
+    message.includes('net::err_aborted') ||
+    message.includes('failed to fetch') ||
+    message.includes('networkerror') ||
+    message.includes('network error')
+  ) {
+    return 'Connexion interrompue. Vérifiez Internet ou désactivez les bloqueurs et réessayez.';
+  }
+
+  // Cas de storage/unknown sans réponse serveur (souvent règles ou réseau)
+  if (code === 'storage/unknown' && !serverResponse) {
+    return 'Une erreur réseau ou de règles s’est produite. Réessayez après quelques secondes.';
   }
 
   return errorMessages[code] || error?.message || 'Erreur lors du téléversement du fichier';
@@ -519,7 +535,7 @@ export async function listDocuments(folderPath: string): Promise<DocumentMetadat
     for (const itemRef of listResult.items) {
       try {
         const url = await getDownloadURL(itemRef);
-        const metadata = await itemRef.getMetadata();
+        const metadata = await getMetadata(itemRef);
         
         // Extraire la catégorie du chemin
         const pathParts = itemRef.fullPath.split('/');
@@ -609,7 +625,7 @@ export async function getStorageUsage(userId: string): Promise<{
       // Traiter les fichiers
       for (const itemRef of result.items) {
         try {
-          const metadata = await itemRef.getMetadata();
+          const metadata = await getMetadata(itemRef);
           const size = metadata.size;
           
           totalSize += size;
@@ -719,7 +735,7 @@ export async function moveFile(oldPath: string, newPath: string): Promise<string
     const blob = await response.blob();
 
     // Récupérer les métadonnées de l'ancien fichier pour les conserver
-    const oldMetadata = await oldRef.getMetadata();
+    const oldMetadata = await getMetadata(oldRef);
     const customMetadata = oldMetadata.customMetadata || {};
 
     // Uploader le contenu vers le nouveau chemin avec les métadonnées
