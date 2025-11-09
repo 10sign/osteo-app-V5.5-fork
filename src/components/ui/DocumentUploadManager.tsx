@@ -1,12 +1,13 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Upload, X, FileText, Image as ImageIcon, AlertCircle, CheckCircle, Loader2, Plus, Trash2 } from 'lucide-react';
+import React, { useState, useRef, useCallback, useEffect, useId } from 'react';
+import { Upload, FileText, Image as ImageIcon, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { Button } from './Button';
-import { 
-  uploadDocument, 
+import {
+  uploadDocument,
   deleteDocument,
   formatFileSize,
   isImageFile,
-  DocumentMetadata
+  DocumentMetadata,
+  validateFile
 } from '../../utils/documentStorage';
 import { auth } from '../../firebase/config';
 
@@ -52,6 +53,9 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
   entityId,
   customFolderPath
 }) => {
+  const baseId = useId();
+  const documentNameId = `${baseId}-document-name`;
+  const fileInputId = `${baseId}-file-input`;
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const [documents, setDocuments] = useState<DocumentMetadata[]>(initialDocuments);
   const [dragOver, setDragOver] = useState(false);
@@ -69,7 +73,7 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
     }
   }, [initialDocuments]);
 
-  const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || !auth.currentUser) return;
 
     const files = Array.from(event.target.files);
@@ -78,11 +82,24 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
     const cleanedDisplayName = documentName.trim();
     const finalDisplayName = cleanedDisplayName || undefined;
 
-    // Ajouter les fichiers à la liste des uploads en cours
-    const newUploadingFiles = files.map(file => ({
+    // Pré-validation locale avant upload (types/tailles)
+    const validatedFiles: { file: File; error?: string }[] = await Promise.all(
+      files.map(async (file) => {
+        try {
+          await validateFile(file);
+          return { file };
+        } catch (e: any) {
+          return { file, error: e?.message || 'Fichier invalide' };
+        }
+      })
+    );
+
+    // Ajouter les fichiers à la liste des uploads en cours avec état initial
+    const newUploadingFiles = validatedFiles.map(({ file, error }) => ({
       file,
       progress: 0,
-      status: 'validating' as const,
+      status: error ? ('error' as const) : ('validating' as const),
+      error,
       category: selectedCategory,
       displayName: finalDisplayName || file.name.replace(/\.[^/.]+$/, '') // Par défaut : nom sans extension
     }));
@@ -91,10 +108,12 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
       const updatedFiles = [...prev, ...newUploadingFiles];
       
       // Traiter chaque fichier avec les bons index
-      files.forEach((file, index) => {
+      validatedFiles.forEach(({ file, error }, index) => {
         const uploadIndex = prev.length + index; // Index correct dans le tableau global
         const fileDisplayName = newUploadingFiles[index].displayName;
-        processFile(file, selectedCategory, uploadIndex, fileDisplayName);
+        if (!error) {
+          processFile(file, selectedCategory, uploadIndex, fileDisplayName);
+        }
       });
       
       return updatedFiles;
@@ -203,7 +222,7 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
     setDragOver(false);
   };
 
-  const handleDrop = (event: React.DragEvent) => {
+  const handleDrop = async (event: React.DragEvent) => {
     event.preventDefault();
     setDragOver(false);
 
@@ -215,11 +234,24 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
     const cleanedDisplayName = documentName.trim();
     const finalDisplayName = cleanedDisplayName || undefined;
 
-    // Ajouter les fichiers à la liste des uploads en cours
-    const newUploadingFiles = files.map(file => ({
+    // Pré-validation locale avant upload (types/tailles)
+    const validatedFiles: { file: File; error?: string }[] = await Promise.all(
+      files.map(async (file) => {
+        try {
+          await validateFile(file);
+          return { file };
+        } catch (e: any) {
+          return { file, error: e?.message || 'Fichier invalide' };
+        }
+      })
+    );
+
+    // Ajouter les fichiers à la liste des uploads en cours avec état initial
+    const newUploadingFiles = validatedFiles.map(({ file, error }) => ({
       file,
       progress: 0,
-      status: 'validating' as const,
+      status: error ? ('error' as const) : ('validating' as const),
+      error,
       category: selectedCategory,
       displayName: finalDisplayName || file.name.replace(/\.[^/.]+$/, '') // Par défaut : nom sans extension
     }));
@@ -228,10 +260,12 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
       const updatedFiles = [...prev, ...newUploadingFiles];
       
       // Traiter chaque fichier avec les bons index
-      files.forEach((file, index) => {
+      validatedFiles.forEach(({ file, error }, index) => {
         const uploadIndex = prev.length + index; // Index correct dans le tableau global
         const fileDisplayName = newUploadingFiles[index].displayName;
-        processFile(file, selectedCategory, uploadIndex, fileDisplayName);
+        if (!error) {
+          processFile(file, selectedCategory, uploadIndex, fileDisplayName);
+        }
       });
       
       return updatedFiles;
@@ -319,11 +353,12 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
         </div>
         
         <div className="w-full md:w-2/3">
-          <label htmlFor="documentName" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor={documentNameId} className="block text-sm font-medium text-gray-700 mb-1">
             Nom du document (optionnel)
           </label>
           <input
-            id="documentName"
+            id={documentNameId}
+            name="documentName"
             type="text"
             value={documentName}
             onChange={(e) => {
@@ -338,9 +373,10 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
             className="input w-full mb-3"
             disabled={disabled}
             maxLength={120}
+            autoComplete="off"
           />
 
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor={fileInputId} className="block text-sm font-medium text-gray-700 mb-1">
             Téléverser un document
           </label>
           <div
@@ -364,6 +400,9 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
               accept=".pdf,.jpg,.jpeg,.png"
               multiple
               disabled={disabled}
+              id={fileInputId}
+              name="consultationDocuments"
+              autoComplete="off"
             />
 
             <div className="space-y-2">

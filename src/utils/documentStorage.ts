@@ -207,7 +207,7 @@ export async function compressImageIfNeeded(
 /**
  * Génère un nom de fichier unique
  */
-export function generateUniqueFileName(originalName: string, folder: string): string {
+export function generateUniqueFileName(originalName: string, _folder: string): string {
   const timestamp = Date.now();
   const randomId = Math.random().toString(36).substring(2, 8);
   const extension = originalName.split('.').pop()?.toLowerCase() || '';
@@ -284,6 +284,11 @@ export async function uploadDocument(
 
   console.log('👤 Utilisateur authentifié:', auth.currentUser.uid);
 
+  // Variables utilisées à la fois dans le try et le catch
+  let uniqueFileName: string = '';
+  let uploadPath: string = '';
+  let processedFile: File = file;
+
   try {
     // Étape 1: Validation
     console.log('📋 Étape 1: Validation du fichier');
@@ -303,12 +308,12 @@ export async function uploadDocument(
       fileName: file.name
     });
 
-    const processedFile = await compressImageIfNeeded(file, onProgress);
+    processedFile = await compressImageIfNeeded(file, onProgress);
 
     // Étape 3: Génération du nom unique
     console.log('📝 Étape 3: Génération du nom de fichier');
-    const uniqueFileName = fileName || generateUniqueFileName(file.name, folder);
-    const uploadPath = `${folder}/${uniqueFileName}`;
+    uniqueFileName = fileName || generateUniqueFileName(file.name, folder);
+    uploadPath = `${folder}/${uniqueFileName}`;
 
     console.log('📍 Chemin d\'upload final:', uploadPath);
 
@@ -327,7 +332,7 @@ export async function uploadDocument(
 
     // Étape 5: Upload vers Firebase Storage
     console.log('☁️ Étape 4: Upload vers Firebase Storage');
-    const storageRef = ref(storage, uploadPath);
+    const storageRef = ref(storage, uploadPath.replace(/\/+/, '/'));
     
     // Métadonnées personnalisées
     const metadata = {
@@ -343,40 +348,50 @@ export async function uploadDocument(
 
     console.log('📤 Upload en cours vers:', storageRef.fullPath);
 
-    // Utiliser uploadBytesResumable pour une meilleure gestion d'erreur et progression
-    const uploadTask = uploadBytesResumable(storageRef, processedFile, metadata);
+    const forceDirect = String((import.meta as any).env?.VITE_FORCE_DIRECT_UPLOAD ?? '').toLowerCase() === 'true';
+    const preferDirectInDev = (import.meta as any).env?.DEV && !forceDirect ? true : forceDirect;
 
-    // Promesse pour gérer l'upload avec progression
-    const snapshot = await new Promise<any>((resolve, reject) => {
-      uploadTask.on(
-        'state_changed',
-        // Progression
-        (snapshot) => {
-          const progress = 40 + ((snapshot.bytesTransferred / snapshot.totalBytes) * 50); // 40-90%
-          onProgress?.({
-            progress,
-            status: 'uploading',
-            fileName: file.name
-          });
+    let snapshot: any;
+    if (preferDirectInDev) {
+      // Tentative directe non résumable (fiable ≤10MB, évite les handshakes en dev)
+      try {
+        console.log('➡️ Upload direct via uploadBytes (dev/préférence)');
+        snapshot = await uploadBytes(storageRef, processedFile, metadata);
+      } catch (directErr: any) {
+        console.warn('⚠️ Upload direct échoué, bascule vers résumable:', {
+          code: directErr?.code,
+          message: directErr?.message,
+          serverResponse: directErr?.serverResponse
+        });
+      }
+    }
 
-          console.log(`📊 Progression: ${Math.round(progress)}% (${snapshot.bytesTransferred}/${snapshot.totalBytes} octets)`);
-        },
-        // Erreur
-        (error) => {
-          console.error('❌ Erreur durant l\'upload:', {
-            code: error.code,
-            message: error.message,
-            serverResponse: (error as any).serverResponse
-          });
-          reject(error);
-        },
-        // Succès
-        () => {
-          console.log('✅ Upload terminé avec succès');
-          resolve(uploadTask.snapshot);
-        }
-      );
-    });
+    if (!snapshot) {
+      // Utiliser uploadBytesResumable pour progression fine
+      const uploadTask = uploadBytesResumable(storageRef, processedFile, metadata);
+      snapshot = await new Promise<any>((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            const progress = 40 + ((snapshot.bytesTransferred / snapshot.totalBytes) * 50);
+            onProgress?.({ progress, status: 'uploading', fileName: file.name });
+            console.log(`📊 Progression: ${Math.round(progress)}% (${snapshot.bytesTransferred}/${snapshot.totalBytes} octets)`);
+          },
+          (error) => {
+            console.error('❌ Erreur durant l\'upload (résumable):', {
+              code: error.code,
+              message: error.message,
+              serverResponse: (error as any).serverResponse
+            });
+            reject(error);
+          },
+          () => {
+            console.log('✅ Upload terminé avec succès (résumable)');
+            resolve(uploadTask.snapshot);
+          }
+        );
+      });
+    }
 
     console.log('✅ Upload terminé, snapshot:', {
       bytesTransferred: snapshot.totalBytes,
@@ -423,13 +438,103 @@ export async function uploadDocument(
       stack: error?.stack
     });
 
+    // Détecter un cas de précondition (412) et retenter automatiquement
+    const serverResp = error?.serverResponse || '';
+    const msg = (error?.message || '').toLowerCase();
+    const isPreconditionFailure = serverResp.includes('412') || msg.includes('precondition') || msg.includes('412');
+
+    if (isPreconditionFailure) {
+      try {
+        console.warn('⚠️ Précondition échouée (412). Nouvelle tentative avec un nom unique et fallback uploadBytes.');
+        // Nouveau nom et chemin pour éviter tout conflit éventuel
+        uniqueFileName = generateUniqueFileName(file.name, folder);
+        uploadPath = `${folder}/${uniqueFileName}`;
+        const storageRef = ref(storage, uploadPath);
+
+        onProgress?.({ progress: 45, status: 'uploading', fileName: file.name });
+
+        // Fallback non-résumable (suffisant pour ≤10MB)
+        const snapshot = await uploadBytes(storageRef, processedFile, {
+          contentType: processedFile.type,
+          customMetadata: {
+            originalName: file.name,
+            uploadedBy: auth.currentUser!.uid,
+            uploadedAt: new Date().toISOString(),
+            originalSize: file.size.toString(),
+            processedSize: processedFile.size.toString(),
+            retry: 'true'
+          }
+        });
+
+        const downloadURL = await getDownloadURL(snapshot.ref);
+
+        onProgress?.({ progress: 100, status: 'complete', fileName: file.name });
+
+        return {
+          url: downloadURL,
+          fileName: uniqueFileName,
+          fileType: processedFile.type,
+          fileSize: processedFile.size,
+          uploadPath,
+          uploadedAt: new Date().toISOString()
+        };
+      } catch (retryError: any) {
+        console.error('❌ Échec du retry après 412:', retryError);
+        // Continuer vers le mapping d'erreur standard
+        error = retryError;
+      }
+    }
+
+    // Fallback pour storage/unknown sans réponse serveur (sessions résumables instables)
+    const isUnknownNoServerResponse =
+      (error?.code === 'storage/unknown' || msg.includes('storage/unknown') || !error?.code) &&
+      !serverResp;
+
+    if (isUnknownNoServerResponse) {
+      try {
+        console.warn('⚠️ storage/unknown sans réponse serveur. Fallback immédiat vers uploadBytes.');
+        uniqueFileName = generateUniqueFileName(file.name, folder);
+        uploadPath = `${folder}/${uniqueFileName}`;
+        const storageRef = ref(storage, uploadPath);
+
+        onProgress?.({ progress: 50, status: 'uploading', fileName: file.name });
+
+        const snapshot = await uploadBytes(storageRef, processedFile, {
+          contentType: processedFile.type,
+          customMetadata: {
+            originalName: file.name,
+            uploadedBy: auth.currentUser!.uid,
+            uploadedAt: new Date().toISOString(),
+            originalSize: file.size.toString(),
+            processedSize: processedFile.size.toString(),
+            retry: 'true',
+            fallback: 'uploadBytes'
+          }
+        });
+
+        const downloadURL = await getDownloadURL(snapshot.ref);
+
+        onProgress?.({ progress: 100, status: 'complete', fileName: file.name });
+
+        return {
+          url: downloadURL,
+          fileName: uniqueFileName,
+          fileType: processedFile.type,
+          fileSize: processedFile.size,
+          uploadPath,
+          uploadedAt: new Date().toISOString()
+        };
+      } catch (retryError: any) {
+        console.error('❌ Échec du fallback uploadBytes après storage/unknown:', retryError);
+        error = retryError;
+      }
+    }
+
     // Mapper l'erreur Firebase vers un message utilisateur clair
     let errorMessage = mapStorageErrorToMessage(error);
 
     // Affiner certains cas fréquents
-    const serverResp = error?.serverResponse || '';
-    const msg = (error?.message || '').toLowerCase();
-    if (serverResp.includes('412') || msg.includes('precondition') || msg.includes('412')) {
+    if ((error?.serverResponse || '').includes('412') || (error?.message || '').toLowerCase().includes('precondition') || (error?.message || '').toLowerCase().includes('412')) {
       errorMessage = 'Conflit d’upload (précondition échouée). Réessayez ou renommez le fichier.';
     }
     if (msg.includes('missing or insufficient permissions')) {
@@ -574,7 +679,7 @@ export async function listDocuments(folderPath: string): Promise<DocumentMetadat
  */
 export async function getSecureDownloadURL(
   filePath: string,
-  expirationTime: number = 3600000 // 1 heure par défaut
+  _expirationTime: number = 3600000 // 1 heure par défaut
 ): Promise<string> {
   if (!auth.currentUser) {
     throw new Error('Utilisateur non authentifié');
@@ -610,8 +715,8 @@ export async function getStorageUsage(userId: string): Promise<{
   try {
     console.log('📊 Calcul de l\'utilisation du stockage pour:', userId);
     const userFolderRef = ref(storage, `users/${userId}`);
-    const listResult = await listAll(userFolderRef);
-    
+    // Note: on ne lit pas directement listAll ici; on utilise la fonction récursive ci-dessous
+
     let totalSize = 0;
     let fileCount = 0;
     const folderSizes: Record<string, number> = {};
@@ -739,7 +844,7 @@ export async function moveFile(oldPath: string, newPath: string): Promise<string
     const customMetadata = oldMetadata.customMetadata || {};
 
     // Uploader le contenu vers le nouveau chemin avec les métadonnées
-    const snapshot = await uploadBytes(newRef, blob, {
+    await uploadBytes(newRef, blob, {
       contentType: oldMetadata.contentType,
       customMetadata: {
         ...customMetadata,

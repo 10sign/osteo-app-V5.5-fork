@@ -7,12 +7,21 @@ import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { enableCryptoEngine, initializeEncryption } from "../utils/encryption";
 
 // Configuration Firebase (utilise les variables VITE_* si présentes)
+// Sécurise la valeur du bucket: non vide et format *.appspot.com
+const resolvedStorageBucket = (() => {
+  const raw = String(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? "").trim();
+  const valid = raw && /.+\.appspot\.com$/.test(raw);
+  return valid ? raw : "ostheo-app.appspot.com";
+})();
+
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? "AIzaSyD-L4R32GM-QZCOJBLzcfp69LpC7m8488s",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? "ostheo-app.firebaseapp.com",
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL ?? "https://ostheo-app-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? "ostheo-app",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? "ostheo-app.firebasestorage.app",
+  // Le bucket Firebase Storage doit être au format <project-id>.appspot.com
+  // Correction du fallback pour éviter les erreurs réseau en dev (valeur vide ou invalide)
+  storageBucket: resolvedStorageBucket,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? "927433064971",
   appId: import.meta.env.VITE_FIREBASE_APP_ID ?? "1:927433064971:web:6134d2d69194aa2e053d0e",
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID ?? "G-B4K0K66PE2"
@@ -34,8 +43,10 @@ const hdsConfig = {
 const app = initializeApp(firebaseConfig);
 
 const isDev = import.meta.env.DEV;
-const useProduction = Boolean(import.meta.env.VITE_FIREBASE_USE_PRODUCTION);
-const useEmulator = Boolean(import.meta.env.VITE_FIREBASE_USE_EMULATOR);
+// Important: interpret env flags as explicit strings, not Boolean(string)
+// Boolean("false") === true, which caused accidental emulator/prod toggles
+const useProduction = String(import.meta.env.VITE_FIREBASE_USE_PRODUCTION ?? "false") === "true";
+const useEmulator = String(import.meta.env.VITE_FIREBASE_USE_EMULATOR ?? "false") === "true";
 const enableAnalyticsFlag = String(import.meta.env.VITE_ENABLE_ANALYTICS ?? "true") === "true";
 
 // Vérification masquée des variables d'environnement (présence/fallback)
