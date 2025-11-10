@@ -995,8 +995,117 @@ export async function moveFile(oldPath: string, newPath: string): Promise<string
       } else {
         throw new Error(`Erreur lors du déplacement du fichier: ${error.message}`);
       }
-    }
-    
-    throw new Error('Erreur inconnue lors du déplacement du fichier');
+  } 
+  
+  throw new Error('Erreur inconnue lors du déplacement du fichier');
   }
+}
+// --- Configuration & Diagnostic helpers (exported for UI components) ---
+
+export interface StorageConfigurationCheckResult {
+  isValid: boolean;
+  error?: string;
+  details?: {
+    projectId?: string;
+    storageBucket?: string;
+    appName?: string;
+    authenticated: boolean;
+    userId?: string | null;
+  };
+}
+
+/**
+ * Vérifie rapidement que la configuration Firebase/Storage est cohérente côté client.
+ * - Vérifie la présence de `projectId` et `storageBucket`
+ * - Vérifie le format du bucket (`*.appspot.com`)
+ * - Retourne l'état d'authentification courant (utile pour les uploads)
+ */
+export function checkStorageConfiguration(): StorageConfigurationCheckResult {
+  try {
+    const projectId = (app?.options as any)?.projectId as string | undefined;
+    const storageBucket = (app?.options as any)?.storageBucket as string | undefined;
+
+    if (!projectId) {
+      return {
+        isValid: false,
+        error: 'Firebase projectId manquant. Vérifiez vos variables VITE_*.'
+      };
+    }
+
+    if (!storageBucket) {
+      return {
+        isValid: false,
+        error: 'Firebase storageBucket manquant. Définissez VITE_FIREBASE_STORAGE_BUCKET.'
+      };
+    }
+
+    if (!/.+\.appspot\.com$/.test(storageBucket)) {
+      return {
+        isValid: false,
+        error: `Bucket invalide: ${storageBucket}. Format attendu: <project-id>.appspot.com`
+      };
+    }
+
+    return {
+      isValid: true,
+      details: {
+        projectId,
+        storageBucket,
+        appName: (app as any)?.name,
+        authenticated: !!auth?.currentUser,
+        userId: auth?.currentUser?.uid ?? null
+      }
+    };
+  } catch (err: any) {
+    return {
+      isValid: false,
+      error: err?.message || 'Erreur inattendue lors de la vérification Storage'
+    };
+  }
+}
+
+/**
+ * Affiche un diagnostic détaillé dans la console pour aider au débogage des uploads.
+ * Retourne également le résultat synthétique de la vérification.
+ */
+export function printUploadDiagnostic(): StorageConfigurationCheckResult {
+  const result = checkStorageConfiguration();
+  try {
+    // Masque la présence des variables sensibles sans afficher les valeurs réelles
+    const envKeys = [
+      'VITE_FIREBASE_API_KEY',
+      'VITE_FIREBASE_AUTH_DOMAIN',
+      'VITE_FIREBASE_DATABASE_URL',
+      'VITE_FIREBASE_PROJECT_ID',
+      'VITE_FIREBASE_STORAGE_BUCKET',
+      'VITE_FIREBASE_MESSAGING_SENDER_ID',
+      'VITE_FIREBASE_APP_ID',
+    ];
+
+    console.groupCollapsed('📦 Upload Diagnostic');
+    console.log('✅ Configuration valide:', result.isValid);
+    if (!result.isValid) {
+      console.log('❌ Erreur:', result.error);
+    }
+    console.log('ℹ️ Détails:', result.details);
+    console.log('👤 Authenticated:', !!auth?.currentUser, 'uid:', auth?.currentUser?.uid);
+    console.log('🧩 App name:', (app as any)?.name);
+    console.log('🏷️ ProjectId:', (app?.options as any)?.projectId);
+    console.log('🗄️ Storage bucket:', (app?.options as any)?.storageBucket);
+
+    // Affiche la présence des variables d'environnement sans les valeurs
+    try {
+      const presence: Record<string, 'present' | 'missing'> = {};
+      for (const k of envKeys) {
+        presence[k] = ((import.meta as any)?.env && (import.meta as any).env[k]) ? 'present' : 'missing';
+      }
+      console.log('🔎 Env presence (masked):', presence);
+    } catch {
+      // ignore si le contexte ne supporte pas import.meta.env
+    }
+    console.groupEnd();
+  } catch {
+    // No-op: logging ne doit jamais faire échouer l'appli
+  }
+  return result;
 }
