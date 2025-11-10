@@ -26,3 +26,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+ 
+# Project-local scripts and tools (do not version large binaries)
+toolbox/
