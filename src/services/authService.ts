@@ -18,9 +18,12 @@ class AuthService {
   async login(credentials: LoginCredentials): Promise<ApiResponse<{ user: User; token: string }>> {
     try {
       const { email, password, phone, rememberMe = false } = credentials;
+      // Normalize inputs to avoid common credential issues (trailing spaces, case sensitivity)
+      const normalizedEmail = String(email || '').trim().toLowerCase();
+      const normalizedPassword = String(password || '').trim();
 
       // Special handling for julie.boddaert@hotmail.fr with phone authentication
-      if (phone && phone === '06 16 53 13 76' && email === 'julie.boddaert@hotmail.fr') {
+      if (phone && phone === '06 16 53 13 76' && normalizedEmail === 'julie.boddaert@hotmail.fr') {
         // Validate phone number format
         if (!this.isValidPhoneNumber(phone)) {
           return {
@@ -32,7 +35,7 @@ class AuthService {
       }
 
       // Authentification Firebase
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, normalizedPassword);
       const firebaseUser = userCredential.user;
 
       // Obtenir le token Firebase
@@ -42,7 +45,7 @@ class AuthService {
       const user = await this.createOrUpdateUserProfile(firebaseUser);
 
       // Update phone number for specific client if provided
-      if (phone && email === 'julie.boddaert@hotmail.fr' && phone === '06 16 53 13 76') {
+      if (phone && normalizedEmail === 'julie.boddaert@hotmail.fr' && phone === '06 16 53 13 76') {
         await this.updateUserPhone(user.uid, phone);
         user.phone = phone;
       }
@@ -317,6 +320,11 @@ class AuthService {
         return 'Erreur de connexion réseau';
       case 'auth/user-disabled':
         return 'Ce compte a été désactivé';
+      case 'auth/invalid-api-key':
+        return 'Configuration Firebase invalide (clé API). Contactez le support.';
+      case 'auth/configuration-not-found':
+      case 'auth/domain-not-allowed':
+        return 'Domaine non autorisé. Ajoutez ce domaine dans Firebase Auth.';
       default:
         return 'Une erreur est survenue lors de la connexion';
     }

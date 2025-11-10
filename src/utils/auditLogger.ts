@@ -44,6 +44,8 @@ export interface AuditEvent {
 export class AuditLogger {
   private static readonly COLLECTION_NAME = 'audit_logs';
   private static sessionId: string = crypto.randomUUID();
+  // Feature flag: avoid external IP lookup to reduce console noise and blockers in production
+  private static readonly enableIPLogging: boolean = String((import.meta as any).env?.VITE_ENABLE_IP_LOGGING ?? 'false') === 'true';
   
   /**
    * Journalise un événement d'audit
@@ -177,10 +179,18 @@ export class AuditLogger {
    * Obtient l'adresse IP du client
    */
   private static async getClientIP(): Promise<string> {
+    // If disabled via env, skip network call entirely
+    if (!this.enableIPLogging) return 'unknown';
+
     try {
-      const response = await fetch('https://api.ipify.org?format=json');
+      // Fetch with a short timeout to avoid hanging or noisy console errors
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1500);
+      const response = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!response.ok) return 'unknown';
       const data = await response.json();
-      return data.ip;
+      return data?.ip ?? 'unknown';
     } catch {
       return 'unknown';
     }
