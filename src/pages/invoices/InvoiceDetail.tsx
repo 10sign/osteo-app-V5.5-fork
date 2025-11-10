@@ -16,7 +16,7 @@ import {
   ChevronLeft,
   MoreVertical
 } from 'lucide-react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../../components/ui/Button';
 import EditInvoiceModal from '../../components/modals/EditInvoiceModal';
@@ -163,7 +163,7 @@ const InvoiceDetail: React.FC = () => {
         updateData.paymentMethod = 'Carte bancaire'; // Default payment method
       }
 
-      await updateDoc(doc(db, 'invoices', invoice.id), updateData);
+      await InvoiceService.updateInvoice(invoice.id, updateData);
       
       // Update local state
       setInvoice(prev => prev ? {

@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import AutoResizeTextarea from '../ui/AutoResizeTextarea';
+import { InvoiceService } from '../../services/invoiceService';
 
 interface EditInvoiceModalProps {
   isOpen: boolean;
@@ -161,7 +162,7 @@ const EditInvoiceModal: React.FC<EditInvoiceModalProps> = ({
         updatedAt: new Date().toISOString()
       };
 
-      await updateDoc(doc(db, 'invoices', invoiceId), invoiceData);
+      await InvoiceService.updateInvoice(invoiceId, invoiceData);
       
       onSuccess();
       onClose();

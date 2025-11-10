@@ -1,0 +1,92 @@
+{
+  "mcp_version": "1.0",
+  "generated_by": "assistant",
+  "metadata": {
+    "name": "osteo-app",
+    "owner": "10sign",
+    "repo": "osteoappv4",
+    "branch": "main",
+    "description": "OsteoApp - application React + Vite avec Firebase functions",
+    "repo_url": "https://github.com/10sign/osteoappv4"
+  },
+  "language_and_frameworks": {
+    "primary_languages": ["TypeScript", "JavaScript", "HTML", "CSS"],
+    "frameworks": ["React", "Vite", "TailwindCSS"],
+    "platform_services": ["Firebase (Firestore, Functions, Hosting, Storage)"]
+  },
+  "package_manager": "npm",
+  "engines": {
+    "node": "18"
+  },
+  "projects": {
+    "frontend": {
+      "path": ".",
+      "manifest": "package.json",
+      "build_command": "npm run build",
+      "dev_command": "npm run dev",
+      "preview_command": "npm run preview",
+      "test_command": "npm test",
+      "output_dir": "dist",
+      "dev_port": 5175,
+      "notes": "Vite-based React app (voir package.json et vite.config.ts)."
+    },
+    "functions": {
+      "path": "functions",
+      "manifest": "functions/package.json",
+      "build_command": "npm --prefix functions run build",
+      "serve_command": "npm --prefix functions run serve",
+      "deploy_command": "npm --prefix functions run deploy || firebase deploy --only functions",
+      "runtime": "node18",
+      "main": "lib/index.js",
+      "emulator_port": 5001,
+      "notes": "Firebase Cloud Functions (TypeScript -> lib via tsc)."
+    },
+    "sdk": {
+      "path": "sdk",
+      "manifest": "sdk/package.json",
+      "build_command": "npm --prefix sdk run build",
+      "output_dir": "sdk/dist",
+      "notes": "SDK package construit avec tsc."
+    }
+  },
+  "firebase": {
+    "config_file": "firebase.json",
+    "firestore_rules": "firestore.rules",
+    "storage_rules": "storage.rules",
+    "indexes": "firestore.indexes.json",
+    "notes": "Le projet contient firebase.json, les règles et les indexes."
+  },
+  "tests": {
+    "unit_test_command": "npm test",
+    "ci_test_command": "npm run test:run",
+    "framework": "vitest"
+  },
+  "recommended_ci_steps": [
+    "Install dependencies: npm ci",
+    "Build SDK: npm --prefix sdk run build",
+    "Build functions: npm --prefix functions run build",
+    "Build frontend: npm run build",
+    "Run tests: npm run test:run"
+  ],
+  "env_and_secrets": {
+    "example_files": [".firebaserc", "firebase.json"],
+    "note": "Pas de .env commit — configurer les secrets en CI/hosting/GitHub."
+  },
+  "ports": {
+    "frontend_dev": 5175,
+    "functions_emulator": 5001
+  },
+  "sources": [
+    { "path": "package.json" },
+    { "path": "functions/package.json" },
+    { "path": "sdk/package.json" },
+    { "path": "vite.config.ts" },
+    { "path": "firebase.json" },
+    { "path": "firestore.rules" },
+    { "path": "storage.rules" },
+    { "path": "tsconfig.json" },
+    { "path": "src" },
+    { "path": "functions" }
+  ],
+  "notes": "Manifeste MCP nettoyé et aligné sur le workspace local (ports, chemins)."
+}

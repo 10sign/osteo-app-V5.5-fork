@@ -149,8 +149,8 @@ export class InvoiceService {
         updatedAt: Timestamp.now()
       };
       
-      // 5. Mettre à jour la facture
-      await updateDoc(invoiceRef, updatesWithMetadata);
+      // 5. Mettre à jour la facture avec conformité HDS
+      await HDSCompliance.updateCompliantData('invoices', invoiceId, updatesWithMetadata);
       
       // 6. Journaliser l'action
       await AuditLogger.log(
