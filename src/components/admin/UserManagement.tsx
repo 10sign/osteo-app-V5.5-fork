@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Search, 
-  Filter, 
-  MoreVertical, 
   Shield, 
   UserX, 
   UserCheck,
@@ -13,7 +11,7 @@ import {
   RefreshCw,
   AlertTriangle
 } from 'lucide-react';
-import { collection, query, onSnapshot, updateDoc, doc, deleteDoc, getCountFromServer } from 'firebase/firestore';
+import { collection, query, onSnapshot, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import { User } from '../../types/auth';

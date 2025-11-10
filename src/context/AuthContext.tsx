@@ -281,6 +281,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshAuth();
   }, [refreshAuth]);
 
+  // Auto-login en développement si des identifiants sont fournis via l'environnement
+  useEffect(() => {
+    const enabled = String((import.meta as any).env.VITE_AUTO_LOGIN_ENABLED ?? "false") === "true";
+    const email = String((import.meta as any).env.VITE_AUTO_LOGIN_EMAIL ?? "").trim();
+    const password = String((import.meta as any).env.VITE_AUTO_LOGIN_PASSWORD ?? "").trim();
+
+    // Ne tente l'auto-login que:
+    // - en mode développement
+    // - si activé explicitement
+    // - si non déjà authentifié
+    // - si email et mot de passe sont fournis
+    if (import.meta.env.DEV && enabled && !authState.isAuthenticated && email && password) {
+      (async () => {
+        try {
+          await login({ email, password });
+        } catch (err) {
+          console.warn('Auto-login a échoué:', err);
+        }
+      })();
+    }
+  }, [authState.isAuthenticated, login]);
+
   const value: AuthContextType = {
     ...authState,
     login,

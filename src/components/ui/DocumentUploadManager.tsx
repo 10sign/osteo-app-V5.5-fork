@@ -13,6 +13,7 @@ import {
 } from '../../utils/documentStorage';
 import { mapStorageErrorToMessage } from '../../utils/documentStorage';
 import { auth } from '../../firebase/config';
+import { uploadPatientFile } from '../../utils/fileUpload';
 
 interface DocumentUploadManagerProps {
   onUploadSuccess: (documents: DocumentMetadata[]) => void;
@@ -68,6 +69,19 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
+
+  // Helper: extrait le nom du fichier depuis une URL signée Firebase Storage
+  const extractStorageFileNameFromURL = (url: string): string | null => {
+    try {
+      const u = new URL(url);
+      const encoded = u.pathname.split('/o/')[1] || '';
+      const fullPath = decodeURIComponent(encoded);
+      const parts = fullPath.split('/');
+      return parts[parts.length - 1] || null;
+    } catch {
+      return null;
+    }
+  };
 
   // Vérifier la configuration Storage au montage
   useEffect(() => {
@@ -199,12 +213,12 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
         folderPath = `users/${auth.currentUser.uid}/consultations/${entityId}/documents`;
         console.log('✅ Chemin consultation avec ID:', folderPath);
       } else if (entityType === 'consultation' && !entityId) {
-        // Générer un ID temporaire unique pour les consultations non encore créées
         const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         folderPath = `users/${auth.currentUser.uid}/consultations/${tempId}/documents`;
         console.log('⚠️ Chemin consultation temporaire:', folderPath);
       } else {
-        folderPath = `users/${auth.currentUser.uid}/patients/${patientId}/documents/${category}`;
+        // Patient: pas de sous-dossier par catégorie dans le chemin Storage
+        folderPath = `users/${auth.currentUser.uid}/patients/${patientId}/documents`;
         console.log('✅ Chemin patient:', folderPath);
       }
 
@@ -218,30 +232,48 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
       // Mettre à jour le statut
       updateFileStatus(index, 'uploading', 10);
 
-      // Uploader le document avec gestion d'erreur améliorée
-      const result = await uploadDocument(
-        file,
-        folderPath,
-        undefined,
-        (progress) => {
-          console.log(`📊 Progression upload (${index}):`, progress.progress, '%', progress.status);
-          updateFileStatus(index, progress.status, progress.progress);
-          if (progress.status === 'error') {
-            console.error('❌ Erreur callback upload:', progress.error);
-            updateFileError(index, progress.error || 'Erreur lors du téléversement');
+      // Upload: utiliser la voie stable pour patient, conserver uploadDocument pour consultation
+      let result;
+      if (!customFolderPath && entityType === 'patient') {
+        result = await uploadPatientFile(
+          file,
+          patientId,
+          (progress) => {
+            console.log(`📊 Progression upload (${index}):`, progress.progress, '%', progress.status);
+            updateFileStatus(index, (progress.status as UploadingFile['status']) || 'uploading', progress.progress);
+            if (progress.status === 'error') {
+              console.error('❌ Erreur callback upload:', progress.error);
+              updateFileError(index, progress.error || 'Erreur lors du téléversement');
+            }
           }
-        }
-      );
+        );
+      } else {
+        result = await uploadDocument(
+          file,
+          folderPath,
+          undefined,
+          (progress) => {
+            console.log(`📊 Progression upload (${index}):`, progress.progress, '%', progress.status);
+            updateFileStatus(index, progress.status, progress.progress);
+            if (progress.status === 'error') {
+              console.error('❌ Erreur callback upload:', progress.error);
+              updateFileError(index, progress.error || 'Erreur lors du téléversement');
+            }
+          }
+        );
+      }
 
       console.log('✅ Upload réussi, résultat:', result);
 
-      // Ajouter les métadonnées de catégorie et displayName
+      // Harmoniser le nom de fichier: utiliser le nom réel stocké si possible
+      const storedFileName = extractStorageFileNameFromURL(result.url) || result.fileName;
+
       const documentWithCategory: DocumentMetadata = {
         ...result,
-        id: result.fileName,
-        name: result.fileName,
+        id: storedFileName,
+        name: storedFileName,
         originalName: file.name,
-        displayName: displayName, // Nom personnalisé du document
+        displayName: displayName,
         url: result.url,
         type: file.type,
         size: result.fileSize,
