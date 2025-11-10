@@ -6,7 +6,6 @@ import {
   Trash2,
   Download,
   Mail,
-  User,
   Calendar,
   CreditCard,
   Clock,

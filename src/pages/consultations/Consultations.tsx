@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
-  Search,
   X,
   AlertCircle,
   Loader2,
-  Filter,
   Calendar as CalendarIcon,
   Clock,
-  User,
   Edit,
   Trash2,
   RefreshCw,
@@ -20,13 +17,9 @@ import CalendarView from '../../components/calendar/CalendarView';
 import NewConsultationModal from '../../components/modals/NewConsultationModal';
 import EditConsultationModal from '../../components/modals/EditConsultationModal';
 import DeleteConsultationModal from '../../components/modals/DeleteConsultationModal';
-import { 
-  format, 
-  isFuture,
-  parseISO
-} from 'date-fns';
+import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { collection, doc, getDoc, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { setupSafeSnapshot } from '../../utils/firestoreListener';
 import { db, auth } from '../../firebase/config';
 import { ConsultationService } from '../../services/consultationService';
@@ -78,17 +71,15 @@ const Consultations: React.FC = () => {
   const location = useLocation();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<'day' | 'week' | 'month'>('week');
-  const [selectedSlot, setSelectedSlot] = useState<Date | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showPatientSearch, setShowPatientSearch] = useState(false);
+  
   const [patientNotFound, setPatientNotFound] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [mappedConsultationsForCalendar, setMappedConsultationsForCalendar] = useState<Appointment[]>([]);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
-  const [patients, setPatients] = useState<Patient[]>([]);
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  
   const [refreshing, setRefreshing] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
@@ -623,34 +614,7 @@ const Consultations: React.FC = () => {
         );
       })();
 
-      // Chargement des patients pour la recherche
-      const loadPatients = async () => {
-        try {
-          console.log('👥 Loading patients...');
-          const patientsRef = collection(db, 'patients');
-          const patientsQuery = query(
-            patientsRef,
-            where('osteopathId', '==', auth.currentUser!.uid)
-          );
-
-          const patientsSnapshot = await getDocs(patientsQuery);
-          const patientsData: Patient[] = patientsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            firstName: doc.data().firstName,
-            lastName: doc.data().lastName,
-            phone: doc.data().phone || '',
-            email: doc.data().email || ''
-          }));
-
-          patientsData.sort((a, b) => a.lastName.localeCompare(b.lastName));
-          console.log('✅ Loaded patients:', patientsData.length);
-          setPatients(patientsData);
-        } catch (err) {
-          console.error('❌ Error loading patients:', err);
-        }
-      };
-
-      loadPatients();
+      // Recherche patients (désactivée — états et chargement supprimés car non utilisés)
 
       return () => {
         console.log('🔌 Cleaning up listeners');
@@ -687,32 +651,12 @@ const Consultations: React.FC = () => {
   }, [loadAppointments, loadConsultations]);
 
   // Handle patient link click
-  const handlePatientClick = async (e: React.MouseEvent, patientId: string, patientName: string) => {
-    e.preventDefault();
-    
-    if (!patientId) {
-      setPatientNotFound(patientName);
-      setTimeout(() => setPatientNotFound(null), 5000);
-      return;
-    }
-    
-    try {
-      const patientDoc = await getDoc(doc(db, 'patients', patientId));
-      
-      if (patientDoc.exists()) {
-        navigate(`/patients/${patientId}`);
-      } else {
-        setPatientNotFound(patientName);
-        setTimeout(() => setPatientNotFound(null), 5000);
-      }
-    } catch (error) {
-      console.error('Error checking patient:', error);
-      setPatientNotFound(patientName);
-    }
-  };
+  // Navigation patient via liens (fonction non utilisée supprimée)
 
   // Handle time slot click
   const handleTimeSlotClick = (day: Date, hour: number) => {
+    // Marquer les paramètres comme utilisés pour satisfaire TypeScript
+    void day; void hour;
     // Ouvrir le modal de nouvelle consultation
     setIsNewConsultationModalOpen(true);
   };

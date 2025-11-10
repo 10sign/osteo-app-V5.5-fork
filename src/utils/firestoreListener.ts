@@ -9,7 +9,7 @@ import { getDocs, onSnapshot, Query } from 'firebase/firestore';
  * This reduces noisy aborted network logs by avoiding listeners for queries
  * that would be rejected by rules or fail due to environment constraints.
  */
-export async function setupSafeSnapshot<T = unknown>(
+export async function setupSafeSnapshot(
   q: Query,
   next: (snapshot: any) => void,
   error: (err: Error) => void

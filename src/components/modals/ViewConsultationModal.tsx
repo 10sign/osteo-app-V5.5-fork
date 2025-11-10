@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, Clock, FileText, User, Stethoscope, Eye, AlertCircle, Download, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { X, Calendar, Clock, FileText, User, Eye, AlertCircle, Download, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ConsultationService } from '../../services/consultationService';
 import { PatientService } from '../../services/patientService';
@@ -144,17 +144,6 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                   ? new Date(lastUpdatedSource)
                   : new Date();
               setPatientLastUpdated(lastUpdated);
-
-              // Injecter les données du patient dans la consultation affichée
-              setConsultation(prev => prev ? {
-                ...prev,
-                currentTreatment: decryptedPatient.currentTreatment || prev.currentTreatment,
-                consultationReason: decryptedPatient.consultationReason || prev.consultationReason,
-                medicalAntecedents: decryptedPatient.medicalAntecedents || prev.medicalAntecedents,
-                medicalHistory: decryptedPatient.medicalHistory || prev.medicalHistory,
-                osteopathicTreatment: decryptedPatient.osteopathicTreatment || prev.osteopathicTreatment,
-                symptoms: decryptedPatient.symptoms || prev.symptoms
-              } : prev);
             }
           } catch (patientError) {
             console.error('⚠️ Erreur lors du chargement des données patient:', patientError);
@@ -208,6 +197,40 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
       default:
         return status;
     }
+  };
+
+  // Helper d'affichage avec fallback dossier patient pour consultation initiale
+  const renderClinicalField = (
+    label: string,
+    snapshotValue?: string,
+    patientValue?: string,
+    isInitial?: boolean
+  ) => {
+    const snapshotText = cleanDecryptedField(snapshotValue || '', false, '');
+    const patientText = cleanDecryptedField(patientValue || '', false, '');
+
+    const useSnapshot = !!snapshotText;
+    const usePatientFallback = !!isInitial && !snapshotText && !!patientText;
+
+    if (!useSnapshot && !usePatientFallback) return null;
+
+    return (
+      <div className="mb-4">
+        <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+          {label}
+          {usePatientFallback && (
+            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700">
+              Source : dossier patient
+            </span>
+          )}
+        </h4>
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <p className="text-gray-900 whitespace-pre-wrap">
+            {useSnapshot ? snapshotText : patientText}
+          </p>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -266,7 +289,7 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                         <div className="flex-1">
                           <h4 className="font-medium text-blue-900">Consultation initiale synchronisée</h4>
                           <p className="mt-1 text-sm text-blue-700">
-                            Les données cliniques affichées proviennent du dossier patient et sont automatiquement synchronisées.
+                            Chaque champ affiche le snapshot de la consultation. S'il est vide, la valeur du dossier patient est affichée avec le badge « Source : dossier patient ».
                           </p>
                           {patientLastUpdated && (
                             <p className="mt-1 text-xs text-blue-600">
@@ -359,87 +382,78 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                     <div className="border-t pt-6 mt-6">
                       <h3 className="text-lg font-medium text-gray-900 mb-4">Données cliniques de la consultation</h3>
 
-                      {/* Motif détaillé */}
-                      {consultation.consultationReason && cleanDecryptedField(consultation.consultationReason, false, '') && (
-                        <div className="mb-4">
-                          <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                            <FileText size={16} className="mr-2 text-gray-600" />
-                            Motif de consultation détaillé
-                          </h4>
-                          <div className="bg-white border border-gray-200 rounded-lg p-4">
-                            <p className="text-gray-900 whitespace-pre-wrap">
-                              {cleanDecryptedField(consultation.consultationReason, false, '')}
-                            </p>
-                          </div>
-                        </div>
+                      {/* Motif détaillé (avec fallback dossier patient si snapshot vide) */}
+                      {renderClinicalField(
+                        'Motif de consultation détaillé',
+                        consultation.consultationReason,
+                        patientData?.consultationReason,
+                        consultation.isInitialConsultation
                       )}
 
-                      {/* Traitement effectué */}
-                      {consultation.currentTreatment && cleanDecryptedField(consultation.currentTreatment, false, '') && (
-                        <div className="mb-4">
-                          <h4 className="font-medium text-gray-900 mb-2">Traitement effectué du patient</h4>
-                          <div className="bg-white border border-gray-200 rounded-lg p-4">
-                            <p className="text-gray-900 whitespace-pre-wrap">
-                              {cleanDecryptedField(consultation.currentTreatment, false, '')}
-                            </p>
-                          </div>
-                        </div>
+                      {/* Traitement effectué du patient */}
+                      {renderClinicalField(
+                        'Traitement effectué du patient',
+                        consultation.currentTreatment,
+                        patientData?.currentTreatment,
+                        consultation.isInitialConsultation
                       )}
 
                       {/* Antécédents médicaux */}
-                      {consultation.medicalAntecedents && cleanDecryptedField(consultation.medicalAntecedents, false, '') && (
-                        <div className="mb-4">
-                          <h4 className="font-medium text-gray-900 mb-2">Antécédents médicaux</h4>
-                          <div className="bg-white border border-gray-200 rounded-lg p-4">
-                            <p className="text-gray-900 whitespace-pre-wrap">
-                              {cleanDecryptedField(consultation.medicalAntecedents, false, '')}
-                            </p>
-                          </div>
-                        </div>
+                      {renderClinicalField(
+                        'Antécédents médicaux',
+                        consultation.medicalAntecedents,
+                        patientData?.medicalAntecedents,
+                        consultation.isInitialConsultation
                       )}
 
                       {/* Historique médical */}
-                      {consultation.medicalHistory && cleanDecryptedField(consultation.medicalHistory, false, '') && (
-                        <div className="mb-4">
-                          <h4 className="font-medium text-gray-900 mb-2">Historique médical</h4>
-                          <div className="bg-white border border-gray-200 rounded-lg p-4">
-                            <p className="text-gray-900 whitespace-pre-wrap">
-                              {cleanDecryptedField(consultation.medicalHistory, false, '')}
-                            </p>
-                          </div>
-                        </div>
+                      {renderClinicalField(
+                        'Historique médical',
+                        consultation.medicalHistory,
+                        patientData?.medicalHistory,
+                        consultation.isInitialConsultation
                       )}
 
                       {/* Traitement ostéopathique */}
-                      {consultation.osteopathicTreatment && cleanDecryptedField(consultation.osteopathicTreatment, false, '') && (
-                        <div className="mb-4">
-                          <h4 className="font-medium text-gray-900 mb-2">Traitement ostéopathique</h4>
-                          <div className="bg-white border border-gray-200 rounded-lg p-4">
-                            <p className="text-gray-900 whitespace-pre-wrap">
-                              {cleanDecryptedField(consultation.osteopathicTreatment, false, '')}
-                            </p>
-                          </div>
-                        </div>
+                      {renderClinicalField(
+                        'Traitement ostéopathique',
+                        consultation.osteopathicTreatment,
+                        patientData?.osteopathicTreatment,
+                        consultation.isInitialConsultation
                       )}
 
-                      {/* Symptômes */}
-                      {consultation.symptoms && consultation.symptoms.length > 0 && (
-                        <div className="mb-4">
-                          <h4 className="font-medium text-gray-900 mb-2">Symptômes</h4>
-                          <div className="bg-white border border-gray-200 rounded-lg p-4">
-                            <div className="flex flex-wrap gap-2">
-                              {consultation.symptoms.map((symptom, index) => (
-                                <span
-                                  key={index}
-                                  className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-primary-50 text-primary-700"
-                                >
-                                  {symptom}
+                      {/* Symptômes (fallback patient si snapshot vide) */}
+                      {(() => {
+                        const hasSnapshotSymptoms = (consultation.symptoms && consultation.symptoms.length > 0);
+                        const fallbackSymptoms = (consultation.isInitialConsultation && patientData?.symptoms && patientData.symptoms.length > 0) ? patientData.symptoms : [];
+                        const symptomsToDisplay = hasSnapshotSymptoms ? (consultation.symptoms || []) : fallbackSymptoms;
+                        if (!symptomsToDisplay || symptomsToDisplay.length === 0) return null;
+                        const showFallbackBadge = !hasSnapshotSymptoms && consultation.isInitialConsultation && fallbackSymptoms.length > 0;
+                        return (
+                          <div className="mb-4">
+                            <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                              Symptômes
+                              {showFallbackBadge && (
+                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700">
+                                  Source : dossier patient
                                 </span>
-                              ))}
+                              )}
+                            </h4>
+                            <div className="bg-white border border-gray-200 rounded-lg p-4">
+                              <div className="flex flex-wrap gap-2">
+                                {symptomsToDisplay.map((symptom: string, index: number) => (
+                                  <span
+                                    key={index}
+                                    className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-primary-50 text-primary-700"
+                                  >
+                                    {symptom}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   )}
 

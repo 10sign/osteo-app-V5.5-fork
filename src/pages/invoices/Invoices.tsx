@@ -2,18 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   FileText, 
-  Search, 
   Plus, 
   Download, 
   Mail,
-  Filter,
   Eye,
   AlertCircle,
   Edit,
   Trash2,
-  Menu,
   MoreVertical,
-  RefreshCw
+  RefreshCw,
+  Search,
+  Filter
 } from 'lucide-react';
 import { collection, query, where, doc, getDoc, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { setupSafeSnapshot } from '../../utils/firestoreListener';

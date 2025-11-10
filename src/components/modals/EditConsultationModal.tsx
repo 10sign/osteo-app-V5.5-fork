@@ -80,6 +80,21 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
   // État pour les données du patient (consultation initiale)
   const [_patientData, _setPatientData] = useState<any>(null);
   const [patientLastUpdated, setPatientLastUpdated] = useState<Date | null>(null);
+  const [clinicalFallback, setClinicalFallback] = useState<{ 
+    consultationReason: boolean;
+    currentTreatment: boolean;
+    medicalAntecedents: boolean;
+    medicalHistory: boolean;
+    osteopathicTreatment: boolean;
+    symptoms: boolean;
+  }>({
+    consultationReason: false,
+    currentTreatment: false,
+    medicalAntecedents: false,
+    medicalHistory: false,
+    osteopathicTreatment: false,
+    symptoms: false
+  });
 
   // Avertissement pour les données corrompues
   const [hasCorruptedData, setHasCorruptedData] = useState(false);
@@ -177,7 +192,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         
         console.log('🔓 Decrypted consultation data:', decryptedData);
         
-        // ✅ Pour les consultations initiales, utiliser les données du patient comme source de vérité
+        // ✅ Construire l'objet consultation en conservant les valeurs snapshot
         const consultation = {
           id: consultationDoc.id,
           ...decryptedData,
@@ -194,20 +209,13 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
           patientAddress: decryptedData.patientAddress || '',
           patientInsurance: decryptedData.patientInsurance || '',
           patientInsuranceNumber: decryptedData.patientInsuranceNumber || '',
-
-          // ✅ Pour les consultations initiales, utiliser les données du dossier patient
-          currentTreatment: rawData.isInitialConsultation && loadedPatientData ?
-            (loadedPatientData.currentTreatment || '') : (decryptedData.currentTreatment || ''),
-          consultationReason: rawData.isInitialConsultation && loadedPatientData ?
-            (loadedPatientData.consultationReason || '') : (decryptedData.consultationReason || ''),
-          medicalAntecedents: rawData.isInitialConsultation && loadedPatientData ?
-            (loadedPatientData.medicalAntecedents || '') : (decryptedData.medicalAntecedents || ''),
-          medicalHistory: rawData.isInitialConsultation && loadedPatientData ?
-            (loadedPatientData.medicalHistory || '') : (decryptedData.medicalHistory || ''),
-          osteopathicTreatment: rawData.isInitialConsultation && loadedPatientData ?
-            (loadedPatientData.osteopathicTreatment || '') : (decryptedData.osteopathicTreatment || ''),
-          symptoms: rawData.isInitialConsultation && loadedPatientData ?
-            (loadedPatientData.tags || []) : (decryptedData.symptoms || [])
+          // ⛔ Ne pas remplacer les champs cliniques par le patient; garder le snapshot ici
+          currentTreatment: decryptedData.currentTreatment || '',
+          consultationReason: decryptedData.consultationReason || '',
+          medicalAntecedents: decryptedData.medicalAntecedents || '',
+          medicalHistory: decryptedData.medicalHistory || '',
+          osteopathicTreatment: decryptedData.osteopathicTreatment || '',
+          symptoms: decryptedData.symptoms || []
         };
 
         setConsultationData(consultation);
@@ -239,6 +247,45 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
           return cleaned;
         };
 
+        // Déterminer fallback par champ pour consultation initiale
+        const isInitial = !!rawData.isInitialConsultation;
+        const cleanSnapshot = (v: any) => cleanDecryptedField(v, true, '');
+        const cleanPatient = (v: any) => cleanDecryptedField(v, true, '');
+
+        const crSnapshot = cleanSnapshot(consultation.consultationReason);
+        const crPatient = cleanPatient(loadedPatientData?.consultationReason || '');
+        const useCrPatient = isInitial && !crSnapshot && !!crPatient;
+
+        const ctSnapshot = cleanSnapshot(consultation.currentTreatment);
+        const ctPatient = cleanPatient(loadedPatientData?.currentTreatment || '');
+        const useCtPatient = isInitial && !ctSnapshot && !!ctPatient;
+
+        const maSnapshot = cleanSnapshot(consultation.medicalAntecedents);
+        const maPatient = cleanPatient(loadedPatientData?.medicalAntecedents || '');
+        const useMaPatient = isInitial && !maSnapshot && !!maPatient;
+
+        const mhSnapshot = cleanSnapshot(consultation.medicalHistory);
+        const mhPatient = cleanPatient(loadedPatientData?.medicalHistory || '');
+        const useMhPatient = isInitial && !mhSnapshot && !!mhPatient;
+
+        const otSnapshot = cleanSnapshot(consultation.osteopathicTreatment);
+        const otPatient = cleanPatient(loadedPatientData?.osteopathicTreatment || '');
+        const useOtPatient = isInitial && !otSnapshot && !!otPatient;
+
+        // Symptômes
+        const symptomsSnapshotArr = Array.isArray(consultation.symptoms) ? consultation.symptoms : (consultation.symptoms ? String(consultation.symptoms).split(',').map((s: string) => s.trim()).filter(Boolean) : []);
+        const symptomsPatientArr = Array.isArray(loadedPatientData?.symptoms) ? loadedPatientData?.symptoms : [];
+        const useSymptomsPatient = isInitial && symptomsSnapshotArr.length === 0 && symptomsPatientArr.length > 0;
+
+        setClinicalFallback({
+          consultationReason: !!useCrPatient,
+          currentTreatment: !!useCtPatient,
+          medicalAntecedents: !!useMaPatient,
+          medicalHistory: !!useMhPatient,
+          osteopathicTreatment: !!useOtPatient,
+          symptoms: !!useSymptomsPatient
+        });
+
         reset({
           date: dateString,
           time: timeString,
@@ -250,18 +297,16 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
           prescriptions: consultation.prescriptions?.map((presc: string) => ({ value: presc })) || [],
 
           // Champs cliniques avec protection contre les erreurs de déchiffrement
-          currentTreatment: cleanClinicalFields(consultation.currentTreatment),
-          consultationReason: cleanClinicalFields(consultation.consultationReason),
-          medicalAntecedents: cleanClinicalFields(consultation.medicalAntecedents),
-          medicalHistory: cleanClinicalFields(consultation.medicalHistory),
-          osteopathicTreatment: cleanClinicalFields(consultation.osteopathicTreatment),
-          symptoms: cleanClinicalFields(Array.isArray(consultation.symptoms) ? consultation.symptoms.join(', ') : (consultation.symptoms || ''))
+          currentTreatment: useCtPatient ? ctPatient : cleanClinicalFields(consultation.currentTreatment),
+          consultationReason: useCrPatient ? crPatient : cleanClinicalFields(consultation.consultationReason),
+          medicalAntecedents: useMaPatient ? maPatient : cleanClinicalFields(consultation.medicalAntecedents),
+          medicalHistory: useMhPatient ? mhPatient : cleanClinicalFields(consultation.medicalHistory),
+          osteopathicTreatment: useOtPatient ? otPatient : cleanClinicalFields(consultation.osteopathicTreatment),
+          symptoms: cleanClinicalFields((useSymptomsPatient ? symptomsPatientArr : symptomsSnapshotArr).join(', '))
         });
 
         // Initialiser les symptômes sélectionnés
-        const symptomsArray = Array.isArray(consultation.symptoms) ? consultation.symptoms :
-                              (consultation.symptoms ? consultation.symptoms.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
-        setSelectedSymptoms(symptomsArray);
+        setSelectedSymptoms(useSymptomsPatient ? symptomsPatientArr : symptomsSnapshotArr);
         
         console.log('📝 Form initialized with cleaned data');
       } catch (error) {
@@ -581,7 +626,12 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Motif de consultation */}
                       <div className="mb-4">
                         <label htmlFor="consultationReason" className="block mb-1 text-sm font-medium text-gray-700">
-                          Motif de consultation * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
+                          Motif de consultation * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
+                          {clinicalFallback.consultationReason && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700">
+                              Source : dossier patient
+                            </span>
+                          )}
                         </label>
                         <AutoResizeTextarea
                           id="consultationReason"
@@ -599,7 +649,12 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Traitement effectué */}
                       <div className="mb-4">
                         <label htmlFor="currentTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                          Traitement effectué * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
+                          Traitement effectué * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
+                          {clinicalFallback.currentTreatment && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700">
+                              Source : dossier patient
+                            </span>
+                          )}
                         </label>
                         <AutoResizeTextarea
                           id="currentTreatment"
@@ -617,7 +672,12 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Antécédents médicaux */}
                       <div className="mb-4">
                         <label htmlFor="medicalAntecedents" className="block mb-1 text-sm font-medium text-gray-700">
-                          Antécédents médicaux {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
+                          Antécédents médicaux {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
+                          {clinicalFallback.medicalAntecedents && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700">
+                              Source : dossier patient
+                            </span>
+                          )}
                         </label>
                         <AutoResizeTextarea
                           id="medicalAntecedents"
@@ -632,7 +692,12 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Historique médical général */}
                       <div className="mb-4">
                         <label htmlFor="medicalHistory" className="block mb-1 text-sm font-medium text-gray-700">
-                          Historique médical général {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
+                          Historique médical général {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
+                          {clinicalFallback.medicalHistory && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700">
+                              Source : dossier patient
+                            </span>
+                          )}
                         </label>
                         <AutoResizeTextarea
                           id="medicalHistory"
@@ -647,7 +712,12 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Traitement ostéopathique */}
                       <div className="mb-4">
                         <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                          Traitement ostéopathique {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
+                          Traitement ostéopathique {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
+                          {clinicalFallback.osteopathicTreatment && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700">
+                              Source : dossier patient
+                            </span>
+                          )}
                         </label>
                         <AutoResizeTextarea
                           id="osteopathicTreatment"
@@ -662,7 +732,12 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                       {/* Symptômes / Syndromes */}
                       <div className="mb-4">
                         <label className="block mb-2 text-sm font-medium text-gray-700">
-                          Symptômes / Syndromes {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule - Source: Dossier patient)</span>}
+                          Symptômes / Syndromes {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
+                          {clinicalFallback.symptoms && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700">
+                              Source : dossier patient
+                            </span>
+                          )}
                         </label>
                         <div className="space-y-3">
                           {selectedSymptoms.length > 0 && (
