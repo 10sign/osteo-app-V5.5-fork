@@ -139,12 +139,15 @@ class AuthService {
       if (!userDoc.exists()) return null;
 
       const userData = userDoc.data();
+      const normalizedEmail = (currentUser.email || '').trim().toLowerCase();
+      const defaultRole = this.isAdminEmail(normalizedEmail) ? 'admin' : 'osteopath';
+
       return {
         uid: currentUser.uid,
         email: currentUser.email!,
         displayName: currentUser.displayName || userData.displayName,
-        role: userData.role || (this.isAdminEmail(currentUser.email!) ? 'admin' : 'user'),
-        permissions: userData.permissions || this.getDefaultPermissions(userData.role),
+        role: userData.role || defaultRole,
+        permissions: userData.permissions || this.getDefaultPermissions(userData.role || defaultRole),
         lastLogin: userData.lastLogin,
         isActive: userData.isActive !== false
       };
@@ -162,27 +165,38 @@ class AuthService {
     const userDoc = await getDoc(userRef);
 
     const normalizedEmail = (firebaseUser.email || '').trim().toLowerCase();
-    const role = this.isAdminEmail(normalizedEmail) ? 'admin' : 'user';
-    const permissions = this.getDefaultPermissions(role);
-
-    const userData: Partial<User> = {
-      uid: firebaseUser.uid,
-      email: normalizedEmail,
-      displayName: firebaseUser.displayName || '',
-      role,
-      permissions,
-      lastLogin: new Date().toISOString(),
-      isActive: true
-    };
+    const isAdminEmail = this.isAdminEmail(normalizedEmail);
 
     if (userDoc.exists()) {
       await updateDoc(userRef, {
-        lastLogin: userData.lastLogin,
+        lastLogin: new Date().toISOString(),
         isActive: true
       });
-      const existingData = userDoc.data();
-      return { ...existingData, ...userData } as User;
+      const existingData = userDoc.data() as Partial<User>;
+
+      const resolvedRole = existingData.role || (isAdminEmail ? 'admin' : 'osteopath');
+      const resolvedPermissions = existingData.permissions || this.getDefaultPermissions(resolvedRole);
+
+      return {
+        uid: firebaseUser.uid,
+        email: normalizedEmail,
+        displayName: firebaseUser.displayName || existingData.displayName || '',
+        role: resolvedRole,
+        permissions: resolvedPermissions,
+        lastLogin: new Date().toISOString(),
+        isActive: true
+      } as User;
     } else {
+      const role = isAdminEmail ? 'admin' : 'osteopath';
+      const userData: Partial<User> = {
+        uid: firebaseUser.uid,
+        email: normalizedEmail,
+        displayName: firebaseUser.displayName || '',
+        role,
+        permissions: this.getDefaultPermissions(role),
+        lastLogin: new Date().toISOString(),
+        isActive: true
+      };
       await setDoc(userRef, userData);
       return userData as User;
     }

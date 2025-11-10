@@ -22,7 +22,8 @@ import {
   RefreshCw,
   Image as ImageIcon
 } from 'lucide-react';
-import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { setupSafeSnapshot } from '../../utils/firestoreListener';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../../components/ui/Button';
 import EditPatientModal from '../../components/modals/EditPatientModal';
@@ -238,54 +239,21 @@ const PatientDetail: React.FC = () => {
     }
   }, [id]);
 
-  // Load consultations
+  // Load consultations (use service to ensure documents are populated)
   const loadConsultations = useCallback(async () => {
     if (!id || !auth.currentUser) return;
 
     try {
-      const consultationsRef = collection(db, 'consultations');
-      const q = query(
-        consultationsRef,
-        where('patientId', '==', id),
-        where('osteopathId', '==', auth.currentUser.uid)
-      );
-
-      const snapshot = await getDocs(q);
-      const consultationsData: Consultation[] = [];
-
-      for (const docSnapshot of snapshot.docs) {
-        const data = docSnapshot.data();
-
-        // Decrypt data for display
-        const decryptedData = HDSCompliance.decryptDataForDisplay(
-          data,
-          'consultations',
-          auth.currentUser.uid
-        );
-
-        const consultation = {
-          id: docSnapshot.id,
-          ...decryptedData,
-          date: data.date?.toDate?.() || new Date(data.date),
-          createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
-          updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt),
-          // Documents are already included in decryptedData from Firestore
-          documents: data.documents || []
-        } as Consultation;
-
-        console.log(`🔵 ÉTAPE 5: Consultation ${docSnapshot.id} chargée avec ${consultation.documents?.length || 0} document(s)`);
-
-        consultationsData.push(consultation);
-      }
+      const consultationsData = await ConsultationService.getConsultationsByPatientId(id);
 
       // Sort by date (most recent first) - ensure proper sorting
       consultationsData.sort((a, b) => {
-        const dateA = a.date instanceof Date ? a.date : new Date(a.date);
-        const dateB = b.date instanceof Date ? b.date : new Date(b.date);
+        const dateA = a.date instanceof Date ? a.date : new Date(a.date as any);
+        const dateB = b.date instanceof Date ? b.date : new Date(b.date as any);
         return dateB.getTime() - dateA.getTime();
       });
-      
-      console.log('📋 Loaded consultations:', consultationsData.length, 'consultations');
+
+      console.log('📋 Loaded consultations via service:', consultationsData.length, 'consultations');
       if (consultationsData.length > 0) {
         console.log('📅 Most recent consultation:', {
           id: consultationsData[0].id,
@@ -293,11 +261,10 @@ const PatientDetail: React.FC = () => {
           reason: consultationsData[0].reason
         });
       }
-      
+
       setConsultations(consultationsData);
-      
     } catch (error) {
-      console.error('Error loading consultations:', error);
+      console.error('Error loading consultations via service:', error);
     }
   }, [id]);
 
@@ -386,33 +353,42 @@ const PatientDetail: React.FC = () => {
   useEffect(() => {
     if (!id || !auth.currentUser) return;
 
-    // Consultations listener
-    const consultationsRef = collection(db, 'consultations');
-    const consultationsQuery = query(
-      consultationsRef,
-      where('patientId', '==', id),
-      where('osteopathId', '==', auth.currentUser.uid)
-    );
+    let consultationsUnsubscribe: () => void = () => {};
+    let invoicesUnsubscribe: () => void = () => {};
 
-    const consultationsUnsubscribe = onSnapshot(consultationsQuery, () => {
-      if (!loading) {
-        loadConsultations();
-      }
-    });
+    (async () => {
+      // Consultations listener
+      const consultationsRef = collection(db, 'consultations');
+      const consultationsQuery = query(
+        consultationsRef,
+        where('patientId', '==', id),
+        where('osteopathId', '==', auth.currentUser!.uid)
+      );
 
-    // Invoices listener
-    const invoicesRef = collection(db, 'invoices');
-    const invoicesQuery = query(
-      invoicesRef,
-      where('patientId', '==', id),
-      where('osteopathId', '==', auth.currentUser.uid)
-    );
+      consultationsUnsubscribe = await setupSafeSnapshot(consultationsQuery, () => {
+        if (!loading) {
+          loadConsultations();
+        }
+      }, (err) => {
+        console.error('Consultations listener error in PatientDetail:', err);
+      });
 
-    const invoicesUnsubscribe = onSnapshot(invoicesQuery, () => {
-      if (!loading) {
-        loadInvoices();
-      }
-    });
+      // Invoices listener
+      const invoicesRef = collection(db, 'invoices');
+      const invoicesQuery = query(
+        invoicesRef,
+        where('patientId', '==', id),
+        where('osteopathId', '==', auth.currentUser!.uid)
+      );
+
+      invoicesUnsubscribe = await setupSafeSnapshot(invoicesQuery, () => {
+        if (!loading) {
+          loadInvoices();
+        }
+      }, (err) => {
+        console.error('Invoices listener error in PatientDetail:', err);
+      });
+    })();
 
     return () => {
       consultationsUnsubscribe();

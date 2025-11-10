@@ -26,7 +26,8 @@ import {
   parseISO
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { collection, doc, getDoc, getDocs, query, where, onSnapshot, Timestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { setupSafeSnapshot } from '../../utils/firestoreListener';
 import { db, auth } from '../../firebase/config';
 import { ConsultationService } from '../../services/consultationService';
 import { AppointmentService } from '../../services/appointmentService';
@@ -578,19 +579,22 @@ const Consultations: React.FC = () => {
         where('osteopathId', '==', auth.currentUser.uid)
       );
 
-      const appointmentsUnsubscribe = onSnapshot(
-        appointmentsQuery,
-        (snapshot) => {
-          console.log('🔄 Appointments real-time update received, docs count:', snapshot.docs.length);
-          if (!loading) {
-            loadAppointments().catch(console.error);
+      let appointmentsUnsubscribe: () => void = () => {};
+      (async () => {
+        appointmentsUnsubscribe = await setupSafeSnapshot(
+          appointmentsQuery,
+          (snapshot) => {
+            console.log('🔄 Appointments real-time update received, docs count:', snapshot.docs.length);
+            if (!loading) {
+              loadAppointments().catch(console.error);
+            }
+          },
+          (error) => {
+            console.error('❌ Appointments real-time listener error:', error);
+            setError('Erreur de synchronisation en temps réel: ' + error.message);
           }
-        },
-        (error) => {
-          console.error('❌ Appointments real-time listener error:', error);
-          setError('Erreur de synchronisation en temps réel: ' + error.message);
-        }
-      );
+        );
+      })();
 
       // Configuration du listener en temps réel pour les consultations
       const consultationsRef = collection(db, 'consultations');
@@ -599,22 +603,25 @@ const Consultations: React.FC = () => {
         where('osteopathId', '==', auth.currentUser.uid)
       );
 
-      const consultationsUnsubscribe = onSnapshot(
-        consultationsQuery,
-        (snapshot) => {
-          console.log('🔄 Consultations real-time update received, docs count:', snapshot.docs.length);
-          if (!loading) {
-            Promise.all([
-              loadConsultations(),
-              loadConsultationsForCalendar()
-            ]).catch(console.error);
+      let consultationsUnsubscribe: () => void = () => {};
+      (async () => {
+        consultationsUnsubscribe = await setupSafeSnapshot(
+          consultationsQuery,
+          (snapshot) => {
+            console.log('🔄 Consultations real-time update received, docs count:', snapshot.docs.length);
+            if (!loading) {
+              Promise.all([
+                loadConsultations(),
+                loadConsultationsForCalendar()
+              ]).catch(console.error);
+            }
+          },
+          (error) => {
+            console.error('❌ Consultations real-time listener error:', error);
+            setError('Erreur de synchronisation en temps réel: ' + error.message);
           }
-        },
-        (error) => {
-          console.error('❌ Consultations real-time listener error:', error);
-          setError('Erreur de synchronisation en temps réel: ' + error.message);
-        }
-      );
+        );
+      })();
 
       // Chargement des patients pour la recherche
       const loadPatients = async () => {

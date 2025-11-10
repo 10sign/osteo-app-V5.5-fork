@@ -206,6 +206,19 @@ export class ConsultationService {
       } as Consultation;
 
       console.log('📄 Documents chargés pour la consultation depuis Firestore:', consultation.documents?.length || 0);
+
+      // ✅ Fallback: si aucun document en Firestore, charger depuis Firebase Storage
+      if (!consultation.documents || consultation.documents.length === 0) {
+        try {
+          const documentsFolder = `users/${auth.currentUser.uid}/consultations/${docSnap.id}/documents`;
+          const storageDocs = await listDocuments(documentsFolder);
+          consultation.documents = storageDocs;
+          console.log('📁 Fallback Storage: documents chargés:', storageDocs.length);
+        } catch (docError) {
+          console.warn('⚠️ Erreur lors du fallback documents Storage:', docSnap.id, docError);
+          consultation.documents = [];
+        }
+      }
       
       // Journalisation de l'accès aux données
       await AuditLogger.log(

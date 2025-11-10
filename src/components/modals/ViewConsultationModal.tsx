@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, Clock, FileText, User, Stethoscope, Eye, AlertCircle, Download, Image as ImageIcon } from 'lucide-react';
+import { X, Calendar, Clock, FileText, User, Stethoscope, Eye, AlertCircle, Download, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ConsultationService } from '../../services/consultationService';
 import { PatientService } from '../../services/patientService';
 import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { DocumentMetadata, formatFileSize, isImageFile } from '../../utils/documentStorage';
+import { DocumentMetadata, formatFileSize, isImageFile, deleteDocument } from '../../utils/documentStorage';
 import { HDSCompliance } from '../../utils/hdsCompliance';
+import { auth } from '../../firebase/config';
 
 interface ViewConsultationModalProps {
   isOpen: boolean;
@@ -88,6 +89,13 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
         // Rétrocompatibilité : s'assurer que tous les champs existent
         const completeConsultation = {
           ...consultationData,
+          // Champs requis avec valeurs par défaut pour compatibilité typée
+          reason: consultationData.reason || '',
+          treatment: consultationData.treatment || '',
+          notes: consultationData.notes || '',
+          status: consultationData.status || 'draft',
+          duration: typeof consultationData.duration === 'number' ? consultationData.duration : 0,
+          price: typeof consultationData.price === 'number' ? consultationData.price : 0,
           patientFirstName: consultationData.patientFirstName || '',
           patientLastName: consultationData.patientLastName || '',
           patientDateOfBirth: consultationData.patientDateOfBirth || '',
@@ -120,11 +128,22 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
             if (patient) {
               console.log('✅ Données patient chargées:', patient);
 
-              // Déchiffrer les données patient
-              const decryptedPatient = HDSCompliance.decryptPatientData(patient);
+              // Déchiffrer les données patient pour affichage
+              const decryptedPatient = HDSCompliance.decryptDataForDisplay(
+                patient,
+                'patients',
+                auth.currentUser?.uid || ''
+              );
 
               setPatientData(decryptedPatient);
-              setPatientLastUpdated(patient.updatedAt || patient.createdAt || new Date());
+              const lastUpdatedSource: any = patient.updatedAt || patient.createdAt;
+              const lastUpdated =
+                lastUpdatedSource instanceof Date
+                  ? lastUpdatedSource
+                  : lastUpdatedSource
+                  ? new Date(lastUpdatedSource)
+                  : new Date();
+              setPatientLastUpdated(lastUpdated);
 
               // Injecter les données du patient dans la consultation affichée
               setConsultation(prev => prev ? {
@@ -457,17 +476,39 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                                 </div>
                               </div>
 
-                              <a
-                                href={document.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex-shrink-0 text-primary-600 hover:text-primary-700"
-                                title="Voir le document"
-                              >
-                                <Button variant="ghost" size="sm" leftIcon={<Download size={14} />}>
-                                  Voir
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <a
+                                  href={document.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary-600 hover:text-primary-700"
+                                  title="Voir le document"
+                                >
+                                  <Button variant="ghost" size="sm" leftIcon={<Download size={14} />}>Voir</Button>
+                                </a>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  leftIcon={<Trash2 size={14} />}
+                                  className="text-red-600 hover:text-red-700"
+                                  onClick={async () => {
+                                    const confirmDelete = window.confirm('Supprimer ce document de la consultation ?');
+                                    if (!confirmDelete || !consultation) return;
+                                    try {
+                                      const filePath = `${document.folder}/${document.name}`;
+                                      await deleteDocument(filePath);
+                                      const updatedDocs = (consultation.documents || []).filter(d => d.id !== document.id);
+                                      await ConsultationService.updateConsultation(consultationId, { documents: updatedDocs });
+                                      setConsultation({ ...consultation, documents: updatedDocs });
+                                    } catch (err) {
+                                      console.error('Erreur de suppression du document:', err);
+                                      alert('Échec de la suppression du document.');
+                                    }
+                                  }}
+                                >
+                                  Supprimer
                                 </Button>
-                              </a>
+                              </div>
                             </div>
                           ))}
                         </div>

@@ -9,7 +9,6 @@ import {
   User,
   Calendar,
   CreditCard,
-  FileText,
   Clock,
   AlertCircle,
   Share2,

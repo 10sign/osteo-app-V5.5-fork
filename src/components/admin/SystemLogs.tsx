@@ -8,7 +8,9 @@ import {
   Clock,
   Globe
 } from 'lucide-react';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import { setupSafeSnapshot } from '../../utils/firestoreListener';
 import { db } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import { ActivityLog } from '../../types/auth';
@@ -23,24 +25,34 @@ const SystemLogs: React.FC = () => {
   const unsubscribeRef = React.useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    const unsubscribe = loadLogs();
-    unsubscribeRef.current = unsubscribe;
+    let mounted = true;
+    (async () => {
+      const unsubscribe = await loadLogs();
+      if (mounted) {
+        unsubscribeRef.current = unsubscribe;
+      }
+    })();
     return () => {
+      mounted = false;
       unsubscribeRef.current?.();
       unsubscribeRef.current = null;
     };
   }, []);
 
-  const loadLogs = () => {
+  const buildQuery = () => {
     const logsRef = collection(db, 'activity_logs');
-    const q = query(
+    return query(
       logsRef,
       orderBy('timestamp', 'desc'),
       limit(100)
     );
+  };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const logsData = snapshot.docs.map(doc => ({
+  const loadLogs = async (): Promise<() => void> => {
+    const q = buildQuery();
+
+    const unsubscribe = await setupSafeSnapshot(q, (snapshot) => {
+      const logsData = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
         id: doc.id,
         ...doc.data()
       })) as ActivityLog[];
@@ -48,16 +60,32 @@ const SystemLogs: React.FC = () => {
       setLogs(logsData);
       setLoading(false);
       setRefreshing(false);
+    }, (err) => {
+      console.error('Erreur SystemLogs listener:', err);
+      setLoading(false);
+      setRefreshing(false);
     });
 
     return unsubscribe;
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    // Nettoyer le listener précédent avant de se réabonner
-    unsubscribeRef.current?.();
-    unsubscribeRef.current = loadLogs();
+    // Au lieu de recréer le listener (ce qui peut interrompre la connexion long-polling),
+    // on effectue une lecture "one-shot" pour rafraîchir immédiatement.
+    try {
+      const q = buildQuery();
+      const snapshot = await getDocs(q);
+      const logsData = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
+        id: doc.id,
+        ...doc.data()
+      })) as ActivityLog[];
+      setLogs(logsData);
+    } catch (err) {
+      console.error('Erreur de rafraîchissement des logs:', err);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleExport = () => {

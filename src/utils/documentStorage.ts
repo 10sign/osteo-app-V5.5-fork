@@ -1017,7 +1017,7 @@ export interface StorageConfigurationCheckResult {
 /**
  * Vérifie rapidement que la configuration Firebase/Storage est cohérente côté client.
  * - Vérifie la présence de `projectId` et `storageBucket`
- * - Vérifie le format du bucket (`*.appspot.com`)
+ * - Vérifie le format du bucket (`*.appspot.com` ou `*.firebasestorage.app`)
  * - Retourne l'état d'authentification courant (utile pour les uploads)
  */
 export function checkStorageConfiguration(): StorageConfigurationCheckResult {
@@ -1039,10 +1039,11 @@ export function checkStorageConfiguration(): StorageConfigurationCheckResult {
       };
     }
 
-    if (!/.+\.appspot\.com$/.test(storageBucket)) {
+    const isValidBucket = /.+\.appspot\.com$/.test(storageBucket) || /.+\.firebasestorage\.app$/.test(storageBucket);
+    if (!isValidBucket) {
       return {
         isValid: false,
-        error: `Bucket invalide: ${storageBucket}. Format attendu: <project-id>.appspot.com`
+        error: `Bucket invalide: ${storageBucket}. Format attendu: <project-id>.appspot.com ou <project-id>.firebasestorage.app`
       };
     }
 

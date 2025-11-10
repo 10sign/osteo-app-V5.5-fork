@@ -15,7 +15,8 @@ import {
   MoreVertical,
   RefreshCw
 } from 'lucide-react';
-import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, doc, getDoc, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import { setupSafeSnapshot } from '../../utils/firestoreListener';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../../components/ui/Button';
 import NewInvoiceModal from '../../components/modals/NewInvoiceModal';
@@ -105,54 +106,59 @@ const Invoices: React.FC = () => {
         where('osteopathId', '==', auth.currentUser.uid)
       );
 
-      const unsubscribe = onSnapshot(q, 
-        (snapshot) => {
-          try {
-            const invoicesData: Invoice[] = [];
-            
-            snapshot.docs.forEach(doc => {
-              const data = doc.data();
-              
-              // Validation des données
-              if (data.number && data.patientName && data.issueDate && data.total !== undefined) {
-                invoicesData.push({
-                  id: doc.id,
-                  number: data.number,
-                  patientId: data.patientId || '',
-                  patientName: data.patientName,
-                  issueDate: data.issueDate,
-                  dueDate: data.dueDate || '',
-                  total: data.total,
-                  status: data.status || 'draft'
-                });
-              } else {
-                console.warn('Invalid invoice data:', doc.id, data);
-              }
-            });
-            
-            // ✅ Tri côté client au lieu de orderBy dans la requête
-            const sortedInvoices = invoicesData.sort((a, b) => 
-              new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime()
-            );
-            
-            console.log('Loaded invoices:', sortedInvoices);
-            setInvoices(sortedInvoices);
-            setLoading(false);
-            setRefreshing(false);
-          } catch (error) {
-            console.error('Error processing invoices:', error);
-            setError('Erreur lors du traitement des factures');
+      let unsubscribe: () => void = () => {};
+
+      (async () => {
+        unsubscribe = await setupSafeSnapshot(
+          q,
+          (snapshot) => {
+            try {
+              const invoicesData: Invoice[] = [];
+
+              snapshot.docs.forEach((doc: QueryDocumentSnapshot<DocumentData>) => {
+                const data = doc.data();
+
+                // Validation des données
+                if (data.number && data.patientName && data.issueDate && data.total !== undefined) {
+                  invoicesData.push({
+                    id: doc.id,
+                    number: data.number,
+                    patientId: data.patientId || '',
+                    patientName: data.patientName,
+                    issueDate: data.issueDate,
+                    dueDate: data.dueDate || '',
+                    total: data.total,
+                    status: data.status || 'draft'
+                  });
+                } else {
+                  console.warn('Invalid invoice data:', doc.id, data);
+                }
+              });
+
+              // ✅ Tri côté client au lieu de orderBy dans la requête
+              const sortedInvoices = invoicesData.sort((a, b) =>
+                new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime()
+              );
+
+              console.log('Loaded invoices:', sortedInvoices);
+              setInvoices(sortedInvoices);
+              setLoading(false);
+              setRefreshing(false);
+            } catch (error) {
+              console.error('Error processing invoices:', error);
+              setError('Erreur lors du traitement des factures');
+              setLoading(false);
+              setRefreshing(false);
+            }
+          },
+          (error) => {
+            console.error('Error in invoices listener:', error);
+            setError('Erreur lors de la récupération des factures');
             setLoading(false);
             setRefreshing(false);
           }
-        },
-        (error) => {
-          console.error('Error in invoices listener:', error);
-          setError('Erreur lors de la récupération des factures');
-          setLoading(false);
-          setRefreshing(false);
-        }
-      );
+        );
+      })();
 
       return () => unsubscribe();
     } catch (error) {

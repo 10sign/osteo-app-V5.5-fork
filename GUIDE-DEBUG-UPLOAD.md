@@ -53,7 +53,7 @@ printUploadDiagnostic()
 **Solution:**
 1. Vérifiez que le fichier `.env` contient:
    ```
-   VITE_FIREBASE_STORAGE_BUCKET=ostheo-app.appspot.com
+VITE_FIREBASE_STORAGE_BUCKET=ostheo-app.firebasestorage.app
    ```
 2. Redémarrez le serveur de développement:
    ```bash
@@ -107,7 +107,7 @@ checkStorageConfig()
 Résultat attendu:
 ```
 ✅ Storage initialisé
-✅ Bucket configuré: ostheo-app.appspot.com
+✅ Bucket configuré: ostheo-app.firebasestorage.app
 ✅ Utilisateur authentifié: [votre-uid]
 🎉 Configuration Storage valide
 ```

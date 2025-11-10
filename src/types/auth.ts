@@ -5,7 +5,7 @@ export interface User {
   firstName?: string;
   lastName?: string;
   phone?: string;
-  role: 'user' | 'admin' | 'substitute';
+  role: 'user' | 'admin' | 'substitute' | 'osteopath';
   permissions: string[];
   linkedTo?: string; // Pour les remplaçants : ID de l'ostéopathe titulaire
   lastLogin?: string;
@@ -30,7 +30,7 @@ export interface LoginCredentials {
 export interface JWTPayload {
   uid: string;
   email: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'osteopath' | 'substitute';
   permissions: string[];
   iat: number;
   exp: number;

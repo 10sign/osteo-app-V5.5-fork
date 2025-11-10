@@ -42,7 +42,9 @@ export interface AuditEvent {
  * Service de journalisation d'audit conforme HDS
  */
 export class AuditLogger {
-  private static readonly COLLECTION_NAME = 'audit_logs';
+  // Utilise la collection autorisée par les règles Firestore
+  // Règles: allow create if isAuthenticated(); admin-only read/update/delete
+  private static readonly COLLECTION_NAME = 'activity_logs';
   private static sessionId: string = crypto.randomUUID();
   
   /**
@@ -97,7 +99,12 @@ export class AuditLogger {
       return docRef.id;
       
     } catch (error) {
-      console.error('❌ Failed to create audit log:', error);
+      const message = (error as any)?.message || String(error);
+      if (/Missing or insufficient permissions/i.test(message)) {
+        console.warn('⚠️ Audit log non persisté (permissions insuffisantes, contexte dev ou non-admin).');
+      } else {
+        console.error('❌ Failed to create audit log:', error);
+      }
       
       // En cas d'erreur, tentative de journalisation locale
       this.logLocally({

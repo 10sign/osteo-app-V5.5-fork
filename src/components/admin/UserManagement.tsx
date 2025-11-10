@@ -11,7 +11,8 @@ import {
   RefreshCw,
   AlertTriangle
 } from 'lucide-react';
-import { collection, query, onSnapshot, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, updateDoc, doc, deleteDoc, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import { setupSafeSnapshot } from '../../utils/firestoreListener';
 import { db } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import { User } from '../../types/auth';
@@ -65,8 +66,8 @@ const UserManagement: React.FC = () => {
       const usersRef = collection(db, 'users');
       const q = query(usersRef);
 
-      const unsubscribe = onSnapshot(q, async (snapshot) => {
-        const usersData = snapshot.docs.map(doc => ({
+      const unsubscribe = await setupSafeSnapshot(q, async (snapshot) => {
+        const usersData = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
           ...doc.data(),
           uid: doc.id
         })) as User[];

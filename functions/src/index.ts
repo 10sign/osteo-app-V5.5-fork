@@ -4,7 +4,25 @@ import nodemailer from 'nodemailer';
 import PDFDocument = require('pdfkit');
 import { randomUUID } from 'crypto';
 
-admin.initializeApp();
+// Initialisation sécurisée du SDK Admin
+// - En environnement Firebase Functions (GCP), l'initialisation par défaut fonctionne (ADC)
+// - Hors GCP, on peut fournir les identifiants via variables d'environnement
+if (!admin.apps.length) {
+  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || 'ostheo-app';
+  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+  const privateKey = (process.env.FIREBASE_ADMIN_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+  const databaseURL = process.env.FIREBASE_DATABASE_URL || 'https://ostheo-app-default-rtdb.europe-west1.firebasedatabase.app';
+
+  if (clientEmail && privateKey) {
+    admin.initializeApp({
+      credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
+      databaseURL,
+    });
+  } else {
+    // Fallback: ADC (Application Default Credentials) lorsqu'on tourne sur Firebase Functions
+    admin.initializeApp({ databaseURL });
+  }
+}
 
 async function requireAuth(req: any) {
   const authHeader = req.get('Authorization') || '';

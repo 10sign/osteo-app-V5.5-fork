@@ -11,8 +11,9 @@ import {
   AlertTriangle,
   Link as LinkIcon
 } from 'lucide-react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db } from '../../firebase/config';
+import { setupSafeSnapshot } from '../../utils/firestoreListener';
 import { Button } from '../ui/Button';
 import { Substitute } from '../../types/substitute';
 import { SubstituteService } from '../../services/substituteService';
@@ -67,20 +68,22 @@ const SubstituteManagement: React.FC = () => {
       const osteopathsRef = collection(db, 'users');
       const osteopathsQuery = query(osteopathsRef, where('role', '==', 'osteopath'));
       
-      const osteopathsUnsubscribe = onSnapshot(osteopathsQuery, (snapshot) => {
-        const osteopathsData = snapshot.docs.map(doc => ({
+      const osteopathsUnsubscribe = await setupSafeSnapshot(osteopathsQuery, (snapshot) => {
+        const osteopathsData = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
           uid: doc.id,
           ...doc.data()
         }));
         setOsteopaths(osteopathsData);
+      }, (error) => {
+        console.error('Erreur listener ostéopathes:', error);
       });
 
       // Charger les remplaçants
       const substitutesRef = collection(db, 'users');
       const substitutesQuery = query(substitutesRef, where('role', '==', 'substitute'));
 
-      const substitutesUnsubscribe = onSnapshot(substitutesQuery, (snapshot) => {
-        const substitutesData = snapshot.docs.map(doc => ({
+      const substitutesUnsubscribe = await setupSafeSnapshot(substitutesQuery, (snapshot) => {
+        const substitutesData = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
           uid: doc.id,
           ...doc.data()
         })) as Substitute[];
@@ -93,6 +96,11 @@ const SubstituteManagement: React.FC = () => {
         const inactive = total - active;
 
         setStats({ total, active, inactive });
+        setLoading(false);
+        setRefreshing(false);
+      }, (error) => {
+        console.error('Erreur listener remplaçants:', error);
+        setError('Erreur lors de la récupération des remplaçants');
         setLoading(false);
         setRefreshing(false);
       });

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, updateDoc, doc, deleteDoc, getCountFromServer, where } from 'firebase/firestore';
+import { collection, query, orderBy, updateDoc, doc, deleteDoc, getCountFromServer, where, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db } from '../../firebase/config';
+import { setupSafeSnapshot } from '../../utils/firestoreListener';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../ui/Button';
 import { 
@@ -97,8 +98,8 @@ function BetaWaitlistDashboard() {
         orderBy('submittedAt', 'desc')
       );
 
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const waitlistData = snapshot.docs.map(doc => ({
+      const unsubscribe = await setupSafeSnapshot(q, (snapshot) => {
+        const waitlistData = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
           id: doc.id,
           ...doc.data()
         })) as BetaWaitlistEntry[];
