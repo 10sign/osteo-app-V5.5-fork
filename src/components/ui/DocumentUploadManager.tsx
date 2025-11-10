@@ -11,6 +11,7 @@ import {
   checkStorageConfiguration,
   printUploadDiagnostic
 } from '../../utils/documentStorage';
+import { mapStorageErrorToMessage } from '../../utils/documentStorage';
 import { auth } from '../../firebase/config';
 
 interface DocumentUploadManagerProps {
@@ -274,7 +275,7 @@ const DocumentUploadManager: React.FC<DocumentUploadManagerProps> = ({
       console.error('Stack:', error?.stack);
       console.groupEnd();
 
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue lors de l\'upload';
+      const errorMessage = mapStorageErrorToMessage(error);
       updateFileError(index, errorMessage);
       onUploadError(errorMessage);
     }

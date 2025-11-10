@@ -127,6 +127,29 @@ const ALLOWED_FILE_TYPES = {
   'image/png': { extension: 'png', maxSize: 10 * 1024 * 1024 }
 } as const;
 
+// Extensions autorisées (fallback pour contentType manquant ou octet-stream)
+const ALLOWED_EXTENSIONS = { pdf: true, jpg: true, jpeg: true, png: true } as const;
+
+function getFileExtension(name: string): string | null {
+  const parts = name.toLowerCase().split('.');
+  return parts.length > 1 ? parts.pop() || null : null;
+}
+
+function inferContentTypeFromName(name: string): string {
+  const ext = getFileExtension(name);
+  switch (ext) {
+    case 'pdf':
+      return 'application/pdf';
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'png':
+      return 'image/png';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
 // Configuration de compression d'images
 const IMAGE_COMPRESSION_OPTIONS = {
   maxSizeMB: 2,
@@ -206,14 +229,19 @@ export async function validateFile(file: File): Promise<void> {
 
   // Vérifier le type de fichier
   const fileConfig = ALLOWED_FILE_TYPES[file.type as keyof typeof ALLOWED_FILE_TYPES];
-  if (!fileConfig) {
-    const error = `Type de fichier non autorisé: ${file.type}. Types acceptés: PDF, JPG ou PNG (max 10MB)`;
+  const ext = getFileExtension(file.name);
+  const isOctetStream = !file.type || file.type === 'application/octet-stream';
+  const extAllowed = !!(ext && (ALLOWED_EXTENSIONS as any)[ext]);
+
+  if (!fileConfig && !(isOctetStream && extAllowed)) {
+    const error = `Type de fichier non autorisé: ${file.type || 'inconnu'}. Types acceptés: PDF, JPG ou PNG (max 10MB)`;
     console.error('❌', error);
     throw new Error(error);
   }
 
   // Vérifier la taille
-  if (file.size > fileConfig.maxSize) {
+  const maxSize = fileConfig?.maxSize ?? 10 * 1024 * 1024;
+  if (file.size > maxSize) {
     const maxSizeMB = (fileConfig.maxSize / (1024 * 1024)).toFixed(1);
     const error = `Fichier trop volumineux. Taille maximum: ${maxSizeMB}MB`;
     console.error('❌', error);
@@ -433,7 +461,9 @@ export async function uploadDocument(
 
     // Métadonnées personnalisées
     const metadata = {
-      contentType: processedFile.type,
+      contentType: (processedFile.type && processedFile.type !== 'application/octet-stream')
+        ? processedFile.type
+        : inferContentTypeFromName(file.name),
       customMetadata: {
         originalName: file.name,
         uploadedBy: auth.currentUser.uid,
@@ -603,7 +633,9 @@ export async function uploadDocument(
 
         // Fallback non-résumable (suffisant pour ≤10MB)
         const snapshot = await uploadBytes(storageRef, processedFile, {
-          contentType: processedFile.type,
+          contentType: (processedFile.type && processedFile.type !== 'application/octet-stream')
+            ? processedFile.type
+            : inferContentTypeFromName(file.name),
           customMetadata: {
             originalName: file.name,
             uploadedBy: auth.currentUser!.uid,
@@ -648,7 +680,9 @@ export async function uploadDocument(
         onProgress?.({ progress: 50, status: 'uploading', fileName: file.name });
 
         const snapshot = await uploadBytes(storageRef, processedFile, {
-          contentType: processedFile.type,
+          contentType: (processedFile.type && processedFile.type !== 'application/octet-stream')
+            ? processedFile.type
+            : inferContentTypeFromName(file.name),
           customMetadata: {
             originalName: file.name,
             uploadedBy: auth.currentUser!.uid,

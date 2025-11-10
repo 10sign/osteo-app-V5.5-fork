@@ -6,17 +6,16 @@ import { Button } from '../ui/Button';
 import { 
   Users, 
   Mail, 
-  Calendar, 
   Download, 
   Eye, 
   UserCheck, 
   Trash2,
-  Filter,
   Search,
   TrendingUp,
   Clock,
   Star,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -44,7 +43,7 @@ interface BetaWaitlistEntry {
   utm_campaign?: string;
 }
 
-const BetaWaitlistDashboard: React.FC = () => {
+function BetaWaitlistDashboard() {
   const { user, isAdmin } = useAuth();
   const [entries, setEntries] = useState<BetaWaitlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,12 +59,26 @@ const BetaWaitlistDashboard: React.FC = () => {
     registered: 0,
     declined: 0
   });
+  const unsubscribeRef = React.useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (user && isAdmin()) {
-      loadWaitlistData();
+      let cancelled = false;
+
+      (async () => {
+        const maybeUnsub = await loadWaitlistData();
+        if (!cancelled && typeof maybeUnsub === 'function') {
+          unsubscribeRef.current = maybeUnsub;
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+        unsubscribeRef.current?.();
+        unsubscribeRef.current = null;
+      };
     }
-  }, [user, isAdmin]);
+  }, [user]);
 
   const loadWaitlistData = async () => {
     if (!user || !isAdmin()) return;
@@ -147,9 +160,11 @@ const BetaWaitlistDashboard: React.FC = () => {
     }
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    loadWaitlistData();
+    unsubscribeRef.current?.();
+    const unsub = await loadWaitlistData();
+    unsubscribeRef.current = (typeof unsub === 'function') ? unsub : null;
   };
 
   const handleStatusChange = async (entryId: string, newStatus: string) => {
@@ -244,20 +259,7 @@ const BetaWaitlistDashboard: React.FC = () => {
     }
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'waiting':
-        return 'En attente';
-      case 'invited':
-        return 'Invité';
-      case 'registered':
-        return 'Inscrit';
-      case 'declined':
-        return 'Refusé';
-      default:
-        return status;
-    }
-  };
+  // getStatusText non utilisé – retiré pour éviter l'avertissement linter
 
   // Filter entries based on search term and status filter
   const filteredEntries = entries.filter(entry => {

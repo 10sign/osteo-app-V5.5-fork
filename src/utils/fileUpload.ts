@@ -10,6 +10,28 @@ const ALLOWED_FILE_TYPES = {
   'image/png': true,
 };
 
+const ALLOWED_EXTENSIONS = { pdf: true, jpg: true, jpeg: true, png: true } as const;
+
+function getFileExtension(name: string): string | null {
+  const parts = name.toLowerCase().split('.');
+  return parts.length > 1 ? parts.pop() || null : null;
+}
+
+function inferContentTypeFromName(name: string): string {
+  const ext = getFileExtension(name);
+  switch (ext) {
+    case 'pdf':
+      return 'application/pdf';
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'png':
+      return 'image/png';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
 const ALLOWED_IMAGE_TYPES = {
   'image/jpeg': true,
   'image/png': true,
@@ -50,7 +72,10 @@ function createHDSMetadata(sensitivity: 'HIGHLY_SENSITIVE' | 'SENSITIVE' | 'NORM
 }
 
 export async function validateFile(file: File): Promise<void> {
-  if (!ALLOWED_FILE_TYPES[file.type as keyof typeof ALLOWED_FILE_TYPES]) {
+  const ext = getFileExtension(file.name);
+  const isOctetStream = !file.type || file.type === 'application/octet-stream';
+
+  if (!ALLOWED_FILE_TYPES[file.type as keyof typeof ALLOWED_FILE_TYPES] && !(isOctetStream && ext && (ALLOWED_EXTENSIONS as any)[ext])) {
     throw new Error('Format de fichier non supporté. PDF, JPG ou PNG uniquement (max 10MB).');
   }
 
@@ -60,7 +85,10 @@ export async function validateFile(file: File): Promise<void> {
 }
 
 export async function validateImageFile(file: File): Promise<void> {
-  if (!ALLOWED_IMAGE_TYPES[file.type as keyof typeof ALLOWED_IMAGE_TYPES]) {
+  const ext = getFileExtension(file.name);
+  const isOctetStream = !file.type || file.type === 'application/octet-stream';
+
+  if (!ALLOWED_IMAGE_TYPES[file.type as keyof typeof ALLOWED_IMAGE_TYPES] && !(isOctetStream && ext && (ALLOWED_EXTENSIONS as any)[ext])) {
     throw new Error('Format d\'image non supporté. JPG ou PNG uniquement (max 10MB).');
   }
 
@@ -114,7 +142,10 @@ export async function uploadProfileImage(
     const fileRef = ref(storage, filePath);
 
     // Create metadata with HDS compliance information
-    const metadata = createHDSMetadata('HIGHLY_SENSITIVE', processedFile.type);
+    const contentType = (processedFile.type && processedFile.type !== 'application/octet-stream')
+      ? processedFile.type
+      : inferContentTypeFromName(file.name);
+    const metadata = createHDSMetadata('HIGHLY_SENSITIVE', contentType);
 
     // Upload file
     onProgress?.({ progress: 50, status: 'uploading' });
@@ -164,7 +195,10 @@ export async function uploadPatientFile(
     const fileRef = ref(storage, filePath);
 
     // Create metadata with HDS compliance information
-    const metadata = createHDSMetadata('SENSITIVE', processedFile.type);
+    const contentType = (processedFile.type && processedFile.type !== 'application/octet-stream')
+      ? processedFile.type
+      : inferContentTypeFromName(file.name);
+    const metadata = createHDSMetadata('SENSITIVE', contentType);
 
     // Upload file
     onProgress?.({ progress: 50, status: 'uploading' });

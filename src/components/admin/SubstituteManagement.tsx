@@ -9,7 +9,6 @@ import {
   UserX,
   RefreshCw,
   AlertTriangle,
-  Shield,
   Link as LinkIcon
 } from 'lucide-react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -42,8 +41,21 @@ const SubstituteManagement: React.FC = () => {
     inactive: 0
   });
 
+  const unsubscribeRef = React.useRef<(() => void) | null>(null);
+
   useEffect(() => {
-    loadData();
+    let cancelled = false;
+    (async () => {
+      const unsub = await loadData();
+      if (!cancelled && typeof unsub === 'function') {
+        unsubscribeRef.current = unsub;
+      }
+    })();
+    return () => {
+      cancelled = true;
+      unsubscribeRef.current?.();
+      unsubscribeRef.current = null;
+    };
   }, []);
 
   const loadData = async () => {
@@ -98,9 +110,12 @@ const SubstituteManagement: React.FC = () => {
     }
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    loadData();
+    // Reset listeners to avoid duplicates
+    unsubscribeRef.current?.();
+    const unsub = await loadData();
+    unsubscribeRef.current = (typeof unsub === 'function') ? unsub : null;
   };
 
   const handleToggleStatus = async (substitute: Substitute) => {

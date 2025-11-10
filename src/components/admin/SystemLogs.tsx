@@ -2,14 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { 
   Activity, 
   Search, 
-  Filter, 
   Download, 
   RefreshCw,
   User,
   Clock,
   Globe
 } from 'lucide-react';
-import { collection, query, orderBy, limit, onSnapshot, where } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import { ActivityLog } from '../../types/auth';
@@ -21,8 +20,15 @@ const SystemLogs: React.FC = () => {
   const [filterAction, setFilterAction] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
 
+  const unsubscribeRef = React.useRef<(() => void) | null>(null);
+
   useEffect(() => {
-    loadLogs();
+    const unsubscribe = loadLogs();
+    unsubscribeRef.current = unsubscribe;
+    return () => {
+      unsubscribeRef.current?.();
+      unsubscribeRef.current = null;
+    };
   }, []);
 
   const loadLogs = () => {
@@ -49,7 +55,9 @@ const SystemLogs: React.FC = () => {
 
   const handleRefresh = () => {
     setRefreshing(true);
-    loadLogs();
+    // Nettoyer le listener précédent avant de se réabonner
+    unsubscribeRef.current?.();
+    unsubscribeRef.current = loadLogs();
   };
 
   const handleExport = () => {

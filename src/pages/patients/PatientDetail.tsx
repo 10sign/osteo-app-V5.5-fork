@@ -16,7 +16,6 @@ import {
   CheckCircle,
   Eye,
   Download,
-  History,
   Stethoscope,
   CreditCard,
   Info,
@@ -36,7 +35,7 @@ import NewConsultationModal from '../../components/modals/NewConsultationModal';
 import EditConsultationModal from '../../components/modals/EditConsultationModal';
 import ViewConsultationModal from '../../components/modals/ViewConsultationModal';
 import DeleteConsultationModal from '../../components/modals/DeleteConsultationModal';
-import { Patient, Consultation, Invoice, ConsultationFormData } from '../../types';
+import { Patient, Consultation, Invoice } from '../../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { HDSCompliance } from '../../utils/hdsCompliance';
@@ -419,7 +418,7 @@ const PatientDetail: React.FC = () => {
       consultationsUnsubscribe();
       invoicesUnsubscribe();
     };
-  }, [id, loading, loadConsultations, loadInvoices]);
+  }, [id, loadConsultations, loadInvoices]);
 
   // Fonction de rafraîchissement manuel
   const handleRefresh = useCallback(async (showLoading = true) => {

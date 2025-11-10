@@ -10,7 +10,8 @@ import {
   Edit,
   Trash2,
   UserPlus,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { collection, query, onSnapshot, updateDoc, doc, deleteDoc, getCountFromServer } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -36,8 +37,25 @@ const UserManagement: React.FC = () => {
     admin: 0
   });
 
+  // Conserver le dernier unsubscribe pour éviter les ré-abonnements multiples
+  const unsubscribeRef = React.useRef<(() => void) | null>(null);
+
   useEffect(() => {
-    loadUsers();
+    let mounted = true;
+    (async () => {
+      const unsubscribe = await loadUsers();
+      if (mounted) {
+        unsubscribeRef.current = unsubscribe || null;
+      } else {
+        // Si le composant s'est démonté pendant le chargement, nettoyer immédiatement
+        unsubscribe?.();
+      }
+    })();
+    return () => {
+      mounted = false;
+      unsubscribeRef.current?.();
+      unsubscribeRef.current = null;
+    };
   }, []);
 
   const loadUsers = async () => {
@@ -83,12 +101,20 @@ const UserManagement: React.FC = () => {
       setError('Erreur lors du chargement des utilisateurs');
       setLoading(false);
       setRefreshing(false);
+      return undefined;
     }
   };
 
   const handleRefresh = () => {
     setRefreshing(true);
-    loadUsers();
+    // Nettoyer le listener précédent avant de se réabonner
+    unsubscribeRef.current?.();
+    unsubscribeRef.current = null;
+    // Réabonner et stocker le nouveau unsubscribe
+    (async () => {
+      const unsubscribe = await loadUsers();
+      unsubscribeRef.current = unsubscribe || null;
+    })();
   };
 
   const handleToggleStatus = async (user: User) => {

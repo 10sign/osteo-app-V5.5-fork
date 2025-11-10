@@ -21,8 +21,10 @@ service firebase.storage {
     function isValidFileType() {
       return request.resource.contentType != null &&
         (
+          // Autoriser uniquement PDF/JPG/PNG
           request.resource.contentType.matches('image/.*') ||
           request.resource.contentType.matches('application/pdf') ||
+          // Fallback: certains navigateurs envoient application/octet-stream
           request.resource.contentType == 'application/octet-stream'
         );
     }
@@ -35,10 +37,11 @@ service firebase.storage {
 
     // Condition unique utilisée dans tous les match pour write/delete
     function isPermittedFile() {
+      // Taille max 10MB pour cohérence avec le front
       return isValidFileSize() && isReasonableName() && hasValidExtension() && (isValidFileType() || isLooseTypeCheck());
     }
     function isValidFileSize() {
-      return request.resource.size <= 15 * 1024 * 1024; // 15 MB
+      return request.resource.size <= 10 * 1024 * 1024; // 10 MB
     }
     function hasValidExtension() {
       // Vérifie l’extension du nom complet (chemin inclus)
