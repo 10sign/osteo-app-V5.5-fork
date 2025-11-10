@@ -1,93 +1,6 @@
 import { ref, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata } from 'firebase/storage';
-import { storage, auth } from '../firebase/config';
+import { storage, auth, app } from '../firebase/config';
 import imageCompression from 'browser-image-compression';
-
-/**
- * Vérifie que Firebase Storage est correctement configuré et accessible
- */
-export function checkStorageConfiguration(): { isValid: boolean; error?: string } {
-  console.group('🔍 Vérification de la configuration Firebase Storage');
-
-  try {
-    // Vérification 1: Storage initialisé
-    if (!storage) {
-      console.error('❌ Firebase Storage n\'est pas initialisé');
-      console.log('👉 Solution: Vérifiez que Firebase est correctement initialisé dans firebase/config.ts');
-      console.groupEnd();
-      return {
-        isValid: false,
-        error: 'Firebase Storage n\'est pas initialisé. Vérifiez votre configuration Firebase.'
-      };
-    }
-    console.log('✅ Storage initialisé');
-
-    // Vérification 2: Bucket configuré
-    const bucket = (storage as any).app.options.storageBucket;
-    if (!bucket || bucket === '') {
-      console.error('❌ Bucket Storage non configuré');
-      console.log('👉 Solution: Ajoutez VITE_FIREBASE_STORAGE_BUCKET dans votre fichier .env');
-      console.log('👉 Format attendu: project-id.appspot.com');
-      console.groupEnd();
-      return {
-        isValid: false,
-        error: 'Le bucket Firebase Storage n\'est pas configuré. Vérifiez VITE_FIREBASE_STORAGE_BUCKET dans votre .env'
-      };
-    }
-    console.log('✅ Bucket configuré:', bucket);
-
-    // Vérification 3: Authentification
-    if (!auth.currentUser) {
-      console.warn('⚠️ Utilisateur non authentifié');
-      console.log('👉 Solution: Connectez-vous avant d\'uploader des fichiers');
-    } else {
-      console.log('✅ Utilisateur authentifié:', auth.currentUser.uid);
-    }
-
-    console.log('🎉 Configuration Storage valide');
-    console.groupEnd();
-    return { isValid: true };
-  } catch (error: any) {
-    console.error('❌ Erreur de vérification Storage:', error);
-    console.groupEnd();
-    return {
-      isValid: false,
-      error: 'Erreur lors de la vérification de Firebase Storage: ' + (error.message || 'Erreur inconnue')
-    };
-  }
-}
-
-/**
- * Guide de diagnostic pour les problèmes d'upload
- */
-export function printUploadDiagnostic() {
-  console.group('👨‍⚕️ GUIDE DE DIAGNOSTIC - Upload de documents');
-  console.log('');
-  console.log('🔍 Problèmes courants et solutions:');
-  console.log('');
-  console.log('1️⃣ "Utilisateur non authentifié"');
-  console.log('   ➡️ Assurez-vous d\'\u00eatre connecté avant d\'uploader');
-  console.log('');
-  console.log('2️⃣ "Firebase Storage non configuré"');
-  console.log('   ➡️ Vérifiez le fichier .env et la variable VITE_FIREBASE_STORAGE_BUCKET');
-  console.log('   ➡️ Format: ostheo-app.appspot.com');
-  console.log('');
-  console.log('3️⃣ "Permissions insuffisantes"');
-  console.log('   ➡️ Vérifiez les règles Firebase Storage (storage.rules)');
-  console.log('   ➡️ Assurez-vous que l\'utilisateur a les droits d\'\u00e9criture');
-  console.log('');
-  console.log('4️⃣ "Connexion interrompue" ou "ERR_ABORTED"');
-  console.log('   ➡️ Désactivez les bloqueurs de publicité (AdBlock, uBlock, etc.)');
-  console.log('   ➡️ Vérifiez votre connexion Internet');
-  console.log('');
-  console.log('5️⃣ "Type de fichier non autorisé"');
-  console.log('   ➡️ Types acceptés: PDF, JPG, PNG');
-  console.log('   ➡️ Taille maximum: 10MB');
-  console.log('');
-  console.log('🔧 Pour vérifier la configuration:');
-  console.log('   Tapez: checkStorageConfiguration()');
-  console.log('');
-  console.groupEnd();
-}
 
 // Types et interfaces
 export interface UploadProgress {
@@ -126,29 +39,6 @@ const ALLOWED_FILE_TYPES = {
   'image/jpeg': { extension: 'jpg', maxSize: 10 * 1024 * 1024 },
   'image/png': { extension: 'png', maxSize: 10 * 1024 * 1024 }
 } as const;
-
-// Extensions autorisées (fallback pour contentType manquant ou octet-stream)
-const ALLOWED_EXTENSIONS = { pdf: true, jpg: true, jpeg: true, png: true } as const;
-
-function getFileExtension(name: string): string | null {
-  const parts = name.toLowerCase().split('.');
-  return parts.length > 1 ? parts.pop() || null : null;
-}
-
-function inferContentTypeFromName(name: string): string {
-  const ext = getFileExtension(name);
-  switch (ext) {
-    case 'pdf':
-      return 'application/pdf';
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg';
-    case 'png':
-      return 'image/png';
-    default:
-      return 'application/octet-stream';
-  }
-}
 
 // Configuration de compression d'images
 const IMAGE_COMPRESSION_OPTIONS = {
@@ -229,19 +119,14 @@ export async function validateFile(file: File): Promise<void> {
 
   // Vérifier le type de fichier
   const fileConfig = ALLOWED_FILE_TYPES[file.type as keyof typeof ALLOWED_FILE_TYPES];
-  const ext = getFileExtension(file.name);
-  const isOctetStream = !file.type || file.type === 'application/octet-stream';
-  const extAllowed = !!(ext && (ALLOWED_EXTENSIONS as any)[ext]);
-
-  if (!fileConfig && !(isOctetStream && extAllowed)) {
-    const error = `Type de fichier non autorisé: ${file.type || 'inconnu'}. Types acceptés: PDF, JPG ou PNG (max 10MB)`;
+  if (!fileConfig) {
+    const error = `Type de fichier non autorisé: ${file.type}. Types acceptés: PDF, JPG ou PNG (max 10MB)`;
     console.error('❌', error);
     throw new Error(error);
   }
 
   // Vérifier la taille
-  const maxSize = fileConfig?.maxSize ?? 10 * 1024 * 1024;
-  if (file.size > maxSize) {
+  if (file.size > fileConfig.maxSize) {
     const maxSizeMB = (fileConfig.maxSize / (1024 * 1024)).toFixed(1);
     const error = `Fichier trop volumineux. Taille maximum: ${maxSizeMB}MB`;
     console.error('❌', error);
@@ -384,38 +269,47 @@ export async function uploadDocument(
   fileName?: string,
   onProgress?: (progress: UploadProgress) => void
 ): Promise<UploadResult> {
-  console.group('🚀 UPLOAD DOCUMENT - Début');
-  console.log('📋 Informations du fichier:', {
+  console.log('🚀 Début de l\'upload:', {
     fileName: file.name,
     fileSize: file.size,
     fileType: file.type,
     folder
   });
 
-  // Vérification critique 1: Authentification
   if (!auth.currentUser) {
-    const error = 'Utilisateur non authentifié - Veuillez vous reconnecter';
-    console.error('❌ ERREUR CRITIQUE:', error);
-    console.groupEnd();
+    const error = 'Utilisateur non authentifié';
+    console.error('❌', error);
     throw new Error(error);
   }
 
-  console.log('✅ Utilisateur authentifié:', auth.currentUser.uid);
-  console.log('📧 Email utilisateur:', auth.currentUser.email);
-
-  // Vérification critique 2: Configuration Storage
-  if (!storage) {
-    const error = 'Firebase Storage non configuré - Problème de configuration';
-    console.error('❌ ERREUR CRITIQUE:', error);
-    console.groupEnd();
-    throw new Error(error);
-  }
-  console.log('✅ Firebase Storage configuré');
+  console.log('👤 Utilisateur authentifié:', auth.currentUser.uid);
 
   // Variables utilisées à la fois dans le try et le catch
   let uniqueFileName: string = '';
   let uploadPath: string = '';
   let processedFile: File = file;
+
+  // Helper: convert file/blob to base64 string for proxy upload
+  async function fileToBase64(f: File): Promise<string> {
+    const buf = await f.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+
+  // Helper: build Cloud Functions upload proxy URL (emulator or production)
+  function getUploadProxyUrl(): string {
+    const projectId = String((app.options as any)?.projectId || 'ostheo-app');
+    const useEmulator = String((import.meta as any).env?.VITE_FIREBASE_USE_EMULATOR ?? 'false') === 'true';
+    if (useEmulator) {
+      // Functions emulator default: http://localhost:5001/{project}/europe-west1/{function}
+      return `http://localhost:5001/${projectId}/europe-west1/uploadDocumentProxy`;
+    }
+    return `https://europe-west1-${projectId}.cloudfunctions.net/uploadDocumentProxy`;
+  }
 
   try {
     // Étape 1: Validation
@@ -443,6 +337,18 @@ export async function uploadDocument(
     uniqueFileName = fileName || generateUniqueFileName(file.name, folder);
     uploadPath = `${folder}/${uniqueFileName}`;
 
+    // Détection robuste du contentType (fallback via extension si type MIME manquant ou octet-stream)
+    const ext = (uniqueFileName.split('.').pop() || '').toLowerCase();
+    const fallbackContentType =
+      ext === 'pdf' ? 'application/pdf' :
+      ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' :
+      ext === 'png' ? 'image/png' :
+      'application/octet-stream';
+    const finalContentType =
+      processedFile.type && processedFile.type !== '' && processedFile.type !== 'application/octet-stream'
+        ? processedFile.type
+        : fallbackContentType;
+
     console.log('📍 Chemin d\'upload final:', uploadPath);
 
     onProgress?.({
@@ -451,19 +357,20 @@ export async function uploadDocument(
       fileName: file.name
     });
 
-    // Étape 4: Création de la référence Storage
-    console.log('☁️ Étape 4: Création de la référence Storage');
-    const cleanUploadPath = uploadPath.replace(/\/+/g, '/');
-    console.log('📍 Chemin nettoyé:', cleanUploadPath);
+    // Étape 4: Vérification de la configuration Storage
+    if (!storage) {
+      const error = 'Firebase Storage non configuré';
+      console.error('❌', error);
+      throw new Error(error);
+    }
 
-    const storageRef = ref(storage, cleanUploadPath);
-    console.log('✅ Référence Storage créée:', storageRef.fullPath);
-
+    // Étape 5: Upload vers Firebase Storage
+    console.log('☁️ Étape 4: Upload vers Firebase Storage');
+    const storageRef = ref(storage, uploadPath.replace(/\/+/, '/'));
+    
     // Métadonnées personnalisées
     const metadata = {
-      contentType: (processedFile.type && processedFile.type !== 'application/octet-stream')
-        ? processedFile.type
-        : inferContentTypeFromName(file.name),
+      contentType: finalContentType,
       customMetadata: {
         originalName: file.name,
         uploadedBy: auth.currentUser.uid,
@@ -473,90 +380,56 @@ export async function uploadDocument(
       }
     };
 
-    console.log('📋 Métadonnées préparées:', metadata);
-    console.log('📤 Début de l\'upload vers:', storageRef.fullPath);
+    console.log('📤 Upload en cours vers:', storageRef.fullPath);
 
     const forceDirect = String((import.meta as any).env?.VITE_FORCE_DIRECT_UPLOAD ?? '').toLowerCase() === 'true';
     const preferDirectInDev = (import.meta as any).env?.DEV && !forceDirect ? true : forceDirect;
 
-    console.log('🔧 Stratégie d\'upload:', {
-      forceDirect,
-      preferDirectInDev,
-      isDev: (import.meta as any).env?.DEV
-    });
-
     let snapshot: any;
-    let uploadAttempt = 0;
-    const maxAttempts = 2;
-
-    // Tentative d'upload avec retry
-    while (!snapshot && uploadAttempt < maxAttempts) {
-      uploadAttempt++;
-      console.log(`🔄 Tentative d'upload ${uploadAttempt}/${maxAttempts}`);
-
+    if (preferDirectInDev) {
+      // Tentative directe non résumable (fiable ≤10MB, évite les handshakes en dev)
       try {
-        if (preferDirectInDev || uploadAttempt > 1) {
-          // Tentative directe non résumable (fiable ≤ 10MB, évite les handshakes en dev)
-          console.log('➡️ Upload direct via uploadBytes');
-          snapshot = await uploadBytes(storageRef, processedFile, metadata);
-          console.log('✅ Upload direct réussi');
-          break;
-        } else {
-          // Utiliser uploadBytesResumable pour progression fine
-          console.log('➡️ Upload résumable via uploadBytesResumable');
-          const uploadTask = uploadBytesResumable(storageRef, processedFile, metadata);
-
-          snapshot = await new Promise<any>((resolve, reject) => {
-            uploadTask.on(
-              'state_changed',
-              (snapshot) => {
-                const progress = 40 + ((snapshot.bytesTransferred / snapshot.totalBytes) * 50);
-                onProgress?.({ progress, status: 'uploading', fileName: file.name });
-                console.log(`📊 Progression: ${Math.round(progress)}% (${snapshot.bytesTransferred}/${snapshot.totalBytes} octets)`);
-              },
-              (error) => {
-                console.error(`❌ Erreur durant l\'upload résumable (tentative ${uploadAttempt}):`, {
-                  code: error.code,
-                  message: error.message,
-                  serverResponse: (error as any).serverResponse
-                });
-                reject(error);
-              },
-              () => {
-                console.log('✅ Upload terminé avec succès (résumable)');
-                resolve(uploadTask.snapshot);
-              }
-            );
-          });
-          break;
-        }
-      } catch (uploadErr: any) {
-        console.warn(`⚠️ Upload échoué (tentative ${uploadAttempt}/${maxAttempts}):`, {
-          code: uploadErr?.code,
-          message: uploadErr?.message,
-          serverResponse: uploadErr?.serverResponse
+        console.log('➡️ Upload direct via uploadBytes (dev/préférence)');
+        snapshot = await uploadBytes(storageRef, processedFile, metadata);
+      } catch (directErr: any) {
+        console.warn('⚠️ Upload direct échoué, bascule vers résumable:', {
+          code: directErr?.code,
+          message: directErr?.message,
+          serverResponse: directErr?.serverResponse
         });
-
-        // Si c'était la dernière tentative, propager l'erreur
-        if (uploadAttempt >= maxAttempts) {
-          throw uploadErr;
-        }
-
-        // Attendre un peu avant de réessayer
-        console.log('⏳ Attente de 1 seconde avant retry...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
     if (!snapshot) {
-      throw new Error('Échec de l\'upload après ' + maxAttempts + ' tentatives');
+      // Utiliser uploadBytesResumable pour progression fine
+      const uploadTask = uploadBytesResumable(storageRef, processedFile, metadata);
+      snapshot = await new Promise<any>((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            const progress = 40 + ((snapshot.bytesTransferred / snapshot.totalBytes) * 50);
+            onProgress?.({ progress, status: 'uploading', fileName: file.name });
+            console.log(`📊 Progression: ${Math.round(progress)}% (${snapshot.bytesTransferred}/${snapshot.totalBytes} octets)`);
+          },
+          (error) => {
+            console.error('❌ Erreur durant l\'upload (résumable):', {
+              code: error.code,
+              message: error.message,
+              serverResponse: (error as any).serverResponse
+            });
+            reject(error);
+          },
+          () => {
+            console.log('✅ Upload terminé avec succès (résumable)');
+            resolve(uploadTask.snapshot);
+          }
+        );
+      });
     }
 
-    console.log('✅ Upload terminé avec succès!');
-    console.log('📊 Snapshot info:', {
+    console.log('✅ Upload terminé, snapshot:', {
       bytesTransferred: snapshot.totalBytes,
-      fullPath: snapshot.ref.fullPath,
-      bucket: snapshot.ref.bucket
+      fullPath: snapshot.ref.fullPath
     });
 
     onProgress?.({
@@ -567,53 +440,36 @@ export async function uploadDocument(
 
     // Étape 6: Obtenir l'URL de téléchargement
     console.log('🔗 Étape 5: Génération de l\'URL de téléchargement');
-    try {
-      const downloadURL = await getDownloadURL(snapshot.ref);
-      console.log('✅ URL générée avec succès');
-      console.log('🔗 URL:', downloadURL.substring(0, 100) + '...');
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    console.log('✅ URL générée:', downloadURL);
 
-      onProgress?.({
-        progress: 100,
-        status: 'complete',
-        fileName: file.name
-      });
+    onProgress?.({
+      progress: 100,
+      status: 'complete',
+      fileName: file.name
+    });
 
-      const result: UploadResult = {
-        url: downloadURL,
-        fileName: uniqueFileName,
-        fileType: processedFile.type,
-        fileSize: processedFile.size,
-        uploadPath,
-        uploadedAt: new Date().toISOString()
-      };
+    const result: UploadResult = {
+      url: downloadURL,
+      fileName: uniqueFileName,
+      fileType: processedFile.type,
+      fileSize: processedFile.size,
+      uploadPath,
+      uploadedAt: new Date().toISOString()
+    };
 
-      console.log('🎉 Upload complété avec succès!');
-      console.log('📦 Résultat:', {
-        fileName: result.fileName,
-        fileSize: result.fileSize,
-        fileType: result.fileType
-      });
-      console.groupEnd();
-      return result;
-    } catch (urlError: any) {
-      console.error('❌ Erreur lors de la génération de l\'URL:', urlError);
-      throw new Error('Impossible de générer l\'URL de téléchargement: ' + (urlError.message || 'Erreur inconnue'));
-    }
+    console.log('🎉 Upload terminé avec succès:', result);
+    return result;
 
   } catch (error: any) {
-    console.group('💥 ERREUR UPLOAD');
-    console.error('Type d\'erreur:', error?.constructor?.name || 'Unknown');
-    console.error('Code:', error?.code);
-    console.error('Message:', error?.message);
-    console.error('Réponse serveur:', error?.serverResponse);
-    console.error('Stack:', error?.stack);
+    console.error('💥 Erreur lors de l\'upload:', error);
 
-    // Log des informations de contexte
-    console.log('📍 Contexte de l\'erreur:', {
-      uploadPath,
-      fileName: file.name,
-      fileSize: file.size,
-      userId: auth.currentUser?.uid
+    // Log détaillé de l'erreur
+    console.error('Détails de l\'erreur:', {
+      code: error?.code,
+      message: error?.message,
+      serverResponse: error?.serverResponse,
+      stack: error?.stack
     });
 
     // Détecter un cas de précondition (412) et retenter automatiquement
@@ -631,11 +487,21 @@ export async function uploadDocument(
 
         onProgress?.({ progress: 45, status: 'uploading', fileName: file.name });
 
+        // Recalculer un contentType robuste pour le retry
+        const extRetry = (uniqueFileName.split('.').pop() || '').toLowerCase();
+        const fallbackRetryContentType =
+          extRetry === 'pdf' ? 'application/pdf' :
+          extRetry === 'jpg' || extRetry === 'jpeg' ? 'image/jpeg' :
+          extRetry === 'png' ? 'image/png' :
+          'application/octet-stream';
+        const effectiveContentType =
+          processedFile.type && processedFile.type !== '' && processedFile.type !== 'application/octet-stream'
+            ? processedFile.type
+            : fallbackRetryContentType;
+
         // Fallback non-résumable (suffisant pour ≤10MB)
         const snapshot = await uploadBytes(storageRef, processedFile, {
-          contentType: (processedFile.type && processedFile.type !== 'application/octet-stream')
-            ? processedFile.type
-            : inferContentTypeFromName(file.name),
+          contentType: effectiveContentType,
           customMetadata: {
             originalName: file.name,
             uploadedBy: auth.currentUser!.uid,
@@ -679,10 +545,20 @@ export async function uploadDocument(
 
         onProgress?.({ progress: 50, status: 'uploading', fileName: file.name });
 
-        const snapshot = await uploadBytes(storageRef, processedFile, {
-          contentType: (processedFile.type && processedFile.type !== 'application/octet-stream')
+        // Recalculer un contentType robuste pour le fallback
+        const extRetry = (uniqueFileName.split('.').pop() || '').toLowerCase();
+        const fallbackRetryContentType =
+          extRetry === 'pdf' ? 'application/pdf' :
+          extRetry === 'jpg' || extRetry === 'jpeg' ? 'image/jpeg' :
+          extRetry === 'png' ? 'image/png' :
+          'application/octet-stream';
+        const effectiveContentType =
+          processedFile.type && processedFile.type !== '' && processedFile.type !== 'application/octet-stream'
             ? processedFile.type
-            : inferContentTypeFromName(file.name),
+            : fallbackRetryContentType;
+
+        const snapshot = await uploadBytes(storageRef, processedFile, {
+          contentType: effectiveContentType,
           customMetadata: {
             originalName: file.name,
             uploadedBy: auth.currentUser!.uid,
@@ -712,6 +588,69 @@ export async function uploadDocument(
       }
     }
 
+    // Final fallback: proxy upload via Cloud Function to bypass CORS/preflight blocks
+    const looksLikeCors = msg.includes('cors') || msg.includes('preflight') || msg.includes('err_failed') || msg.includes('failed to fetch');
+    if (looksLikeCors) {
+      try {
+        console.warn('⚠️ CORS/ERR_FAILED détecté. Fallback via Cloud Function proxy.');
+        uniqueFileName = fileName || generateUniqueFileName(file.name, folder);
+        uploadPath = `${folder}/${uniqueFileName}`;
+        const ext = (uniqueFileName.split('.').pop() || '').toLowerCase();
+        const fallbackContentType =
+          processedFile.type && processedFile.type !== '' && processedFile.type !== 'application/octet-stream'
+            ? processedFile.type
+            : (ext === 'pdf' ? 'application/pdf'
+              : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg'
+              : (ext === 'png') ? 'image/png'
+              : 'application/octet-stream');
+
+        const base64 = await fileToBase64(processedFile);
+        const proxyUrl = getUploadProxyUrl();
+        const token = await auth.currentUser!.getIdToken();
+
+        const resp = await fetch(proxyUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            path: uploadPath,
+            base64,
+            contentType: fallbackContentType,
+            customMetadata: {
+              originalName: file.name,
+              uploadedBy: auth.currentUser!.uid,
+              uploadedAt: new Date().toISOString(),
+              originalSize: String(file.size),
+              processedSize: String(processedFile.size),
+              via: 'proxy'
+            }
+          })
+        });
+
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(`Proxy upload failed: ${resp.status} ${text}`);
+        }
+        const data = await resp.json();
+
+        onProgress?.({ progress: 100, status: 'complete', fileName: file.name });
+
+        return {
+          url: String(data.downloadUrl || ''),
+          fileName: uniqueFileName,
+          fileType: fallbackContentType,
+          fileSize: processedFile.size,
+          uploadPath,
+          uploadedAt: new Date().toISOString()
+        };
+      } catch (proxyError: any) {
+        console.error('❌ Fallback proxy upload échoué:', proxyError);
+        error = proxyError;
+      }
+    }
+
     // Mapper l'erreur Firebase vers un message utilisateur clair
     let errorMessage = mapStorageErrorToMessage(error);
 
@@ -733,7 +672,6 @@ export async function uploadDocument(
       fileName: file.name
     });
 
-    console.groupEnd();
     throw new Error(errorMessage);
   }
 }

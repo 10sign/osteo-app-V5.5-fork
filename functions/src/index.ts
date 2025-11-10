@@ -2,6 +2,7 @@ import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import nodemailer from 'nodemailer';
 import PDFDocument = require('pdfkit');
+import { randomUUID } from 'crypto';
 
 admin.initializeApp();
 
@@ -114,6 +115,70 @@ export const pdfGenerator = functions.https.onRequest(async (req: any, res: any)
 
     doc.end();
     doc.pipe(res);
+  } catch (err: any) {
+    if (err?.message === 'UNAUTHENTICATED') {
+      res.status(401).json({ error: 'Unauthenticated' });
+      return;
+    }
+    res.status(500).json({ error: 'Internal Server Error', details: err?.message });
+  }
+});
+
+// CORS helper: allow simple cross-origin requests from local dev and app
+function setCors(res: any) {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+}
+
+// Upload proxy to bypass client-side CORS/preflight/network blocks
+export const uploadDocumentProxy = functions.https.onRequest(async (req: any, res: any) => {
+  setCors(res);
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+  try {
+    const uid = await requireAuth(req);
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method Not Allowed' });
+      return;
+    }
+
+    const { path, base64, contentType, customMetadata } = req.body || {};
+    if (!path || !base64) {
+      res.status(400).json({ error: 'Missing required fields: path, base64' });
+      return;
+    }
+
+    // Enforce that users can only write under their own namespace
+    if (!String(path).startsWith(`users/${uid}/`)) {
+      res.status(403).json({ error: 'Forbidden: invalid storage path for user' });
+      return;
+    }
+
+    const buffer = Buffer.from(base64, 'base64');
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(String(path));
+    const token = randomUUID();
+
+    const metadata: any = {
+      contentType: contentType || 'application/octet-stream',
+      metadata: {
+        firebaseStorageDownloadTokens: token,
+        ...(customMetadata && typeof customMetadata === 'object' ? customMetadata : {}),
+      },
+    };
+
+    await file.save(buffer, metadata);
+
+    const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(String(path))}?alt=media&token=${token}`;
+    res.status(200).json({
+      path,
+      downloadUrl,
+      size: buffer.length,
+      contentType: metadata.contentType,
+    });
   } catch (err: any) {
     if (err?.message === 'UNAUTHENTICATED') {
       res.status(401).json({ error: 'Unauthenticated' });
