@@ -2,5 +2,17 @@
   "status": "commited",
   "type": "frontend",
   "scope": "codebase",
-  "localEndpoint": "http://localhost:5175"
+  "localEndpoint": "http://localhost:5175",
+  "loginUser": "10signcom@gmail.com",
+  "loginPassword": "Nidnorg1962@",
+  "executionArgs": {
+    "projectName": "osteo-app-v5.2",
+    "projectPath": "/Users/nidnorg480/Documents/osteo-app-v5.2",
+    "testIds": [],
+    "additionalInstruction": "",
+    "envs": {
+      "API_KEY": "sk-user-NgH3R4IpbHcr4k0ZM0cACjNsv5tSlDJ9wjVAFD38Q8HPTJTsQyVJOMC0xBHxE_RTRFs4K9gqDyTI7-hGU27NsPj59bqXmNpkElzzyFjITOl7VQIJiQn2EEhr2wfAa0kXyBE"
+    }
+  },
+  "proxy": "http://b7745ae4-24db-4d80-bccd-630138e44249:YH4nYlEEBZoKDJBAdyxHiuq35FjSPLuk@tun.testsprite.com:8080"
 }

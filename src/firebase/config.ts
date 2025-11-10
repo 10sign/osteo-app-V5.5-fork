@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps } from "firebase/app";
 import { getAuth, setPersistence, browserLocalPersistence, connectAuthEmulator } from "firebase/auth";
 import { getFirestore, initializeFirestore, enableMultiTabIndexedDbPersistence, setLogLevel, CACHE_SIZE_UNLIMITED, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
@@ -38,8 +38,8 @@ const hdsConfig = {
   complianceVersion: 'HDS-2022-01'
 };
 
-// Initialisation de Firebase
-const app = initializeApp(firebaseConfig);
+// Initialisation de Firebase (anti-double init via getApps)
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
 
 const isDev = import.meta.env.DEV;
 // Important: interpret env flags as explicit strings, not Boolean(string)
@@ -68,10 +68,10 @@ const useEmulator = String(import.meta.env.VITE_FIREBASE_USE_EMULATOR ?? "false"
   console.groupEnd();
 })();
 
-// Journalisation détaillée en développement
+// Journalisation en développement (réduit pour éviter le bruit des erreurs réseau Listen)
 if (import.meta.env.DEV) {
-  setLogLevel('debug');
-  console.log('🔥 Firebase debug logging enabled');
+  setLogLevel('error');
+  console.log('🔥 Firebase logging set to error level in dev');
   console.log('🔒 HDS compliance mode:', hdsConfig.enabled ? 'ENABLED' : 'DISABLED');
 }
 
@@ -97,6 +97,9 @@ const db = (() => {
         experimentalForceLongPolling: forceLongPolling,
         experimentalAutoDetectLongPolling: autoDetectLongPolling,
       });
+      if (forceLongPolling && !autoDetectLongPolling) {
+        console.log('📡 Firestore dev mode with long polling enabled');
+      }
     }
     return instance;
   } catch (err) {
