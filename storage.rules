@@ -1,0 +1,81 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Auth utils
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    function isAdmin() {
+      return isAuthenticated() &&
+        request.auth.token.email == 'grondin.stephane@gmail.com';
+    }
+    function isSpecificUser(email) {
+      return isAuthenticated() && request.auth.token.email == email;
+    }
+
+    // Validation fichier (types/tailles/extensions/longueur)
+    function isValidFileType() {
+      return request.resource.contentType != null &&
+        (
+          // Autoriser uniquement PDF/JPG/PNG
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType.matches('application/pdf') ||
+          // Fallback: certains navigateurs envoient application/octet-stream
+          request.resource.contentType == 'application/octet-stream'
+        );
+    }
+
+    // Autoriser contentType vide ou générique si l'extension est correcte
+    function isLooseTypeCheck() {
+      return (request.resource.contentType == null || request.resource.contentType == 'application/octet-stream')
+        && request.resource.name.matches('.*\\.(pdf|jpg|jpeg|png)$');
+    }
+
+    // Condition unique utilisée dans tous les match pour write/delete
+    function isPermittedFile() {
+      // Taille max 10MB pour cohérence avec le front
+      return isValidFileSize() && isReasonableName() && hasValidExtension() && (isValidFileType() || isLooseTypeCheck());
+    }
+    function isValidFileSize() {
+      return request.resource.size <= 10 * 1024 * 1024; // 10 MB
+    }
+    function hasValidExtension() {
+      // Vérifie l’extension du nom complet (chemin inclus)
+      return request.resource.name.matches('.*\\.(pdf|jpg|jpeg|png)$');
+    }
+    function isReasonableName() {
+      // Longueur raisonnable pour chemin + nom (évite bloquer "/")
+      return request.resource.name.size() <= 1024;
+    }
+
+    // Documents de consultation
+    match /users/{userId}/consultations/{consultationId}/documents/{allPaths=**} {
+      allow read: if isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr');
+      allow write, delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr'))
+        && isPermittedFile();
+    }
+
+    // Documents patients
+    match /users/{userId}/patients/{patientId}/{allPaths=**} {
+      allow read: if isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr');
+      allow write, delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr'))
+        && isPermittedFile();
+    }
+
+    // Autres documents utilisateur (cabinet, factures, etc.)
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr');
+      allow write, delete: if (isOwner(userId) || isAdmin() || isSpecificUser('julie.boddaert@hotmail.fr'))
+        && isPermittedFile();
+    }
+
+    // Blocage du reste
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Synchronisation Console</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2563eb;
+            margin-top: 0;
+        }
+        .instruction {
+            background: #eff6ff;
+            border-left: 4px solid #2563eb;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .warning {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #dc2626;
+        }
+        .code-block {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+        }
+        .step {
+            margin: 25px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+        .step::before {
+            content: attr(data-step);
+            position: absolute;
+            left: 0;
+            top: 0;
+            background: #2563eb;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+        .console-output {
+            background: #1e293b;
+            color: #10b981;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            margin: 20px 0;
+            min-height: 100px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🔧 Test de Synchronisation Console</h1>
+
+        <p>
+            Cette page vous permet de tester le script de synchronisation des consultations initiales.
+            Le script est automatiquement disponible dans la console développeur de l'application principale.
+        </p>
+
+        <div class="warning">
+            <strong>⚠️ ATTENTION</strong><br>
+            Cette opération va <strong>ÉCRASER</strong> les données des consultations initiales avec les données du dossier patient.
+            Cette action est <strong>IRRÉVERSIBLE</strong>.
+        </div>
+
+        <div class="instruction">
+            <strong>📋 Instructions</strong><br>
+            Pour utiliser le script de synchronisation dans l'application OsteoApp :
+        </div>
+
+        <div class="step" data-step="1">
+            <strong>Ouvrez l'application OsteoApp</strong><br>
+            <span style="color: #64748b;">Connectez-vous normalement à votre compte</span>
+        </div>
+
+        <div class="step" data-step="2">
+            <strong>Ouvrez la console développeur</strong><br>
+            <span style="color: #64748b;">Appuyez sur <code>F12</code> (Windows/Linux) ou <code>Cmd+Option+I</code> (Mac)</span>
+        </div>
+
+        <div class="step" data-step="3">
+            <strong>Vérifiez que le script est chargé</strong><br>
+            <span style="color: #64748b;">Vous devriez voir ce message :</span>
+            <div class="code-block">🔧 Script de synchronisation manuelle disponible. Utilisez: runManualSync("email@example.com")</div>
+        </div>
+
+        <div class="step" data-step="4">
+            <strong>Exécutez le script</strong><br>
+            <span style="color: #64748b;">Copiez et collez cette commande dans la console :</span>
+            <div class="code-block">await runManualSync('julie.boddaert@hotmail.fr')</div>
+            <span style="color: #64748b;">Remplacez l'email par celui de l'ostéopathe concerné</span>
+        </div>
+
+        <div class="step" data-step="5">
+            <strong>Lisez le rapport</strong><br>
+            <span style="color: #64748b;">Le script affichera un rapport détaillé avec :</span>
+            <ul style="margin-top: 10px; color: #64748b;">
+                <li>Nombre de patients traités</li>
+                <li>Nombre de consultations mises à jour</li>
+                <li>Liste des champs modifiés pour chaque patient</li>
+                <li>Erreurs éventuelles</li>
+            </ul>
+        </div>
+
+        <div class="instruction">
+            <strong>✅ Champs Synchronisés</strong><br>
+            Les champs suivants de la consultation initiale seront écrasés :
+            <ul style="margin-top: 10px;">
+                <li>Traitement en cours</li>
+                <li>Motif de consultation</li>
+                <li>Antécédents médicaux</li>
+                <li>Historique médical</li>
+                <li>Traitement ostéopathique</li>
+                <li>Symptômes</li>
+            </ul>
+        </div>
+
+        <div class="instruction">
+            <strong>🔍 Exemple de Sortie Console</strong>
+            <div class="console-output">🚀 DÉMARRAGE DE LA SYNCHRONISATION MANUELLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Utilisateur trouvé: Julie Boddaert (abc123...)
+
+📊 5 patient(s) trouvé(s)
+
+👤 Patient: Margaux Cresson
+  📋 Consultation initiale: xyz789...
+  ✅ 5 champs mis à jour: currentTreatment, consultationReason...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 RÉSUMÉ DE LA SYNCHRONISATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Patients traités: 5
+✅ Consultations mises à jour: 5
+❌ Erreurs: 0
+
+✅ SYNCHRONISATION TERMINÉE</div>
+        </div>
+
+        <div class="warning">
+            <strong>🐛 Dépannage</strong><br>
+            <ul style="margin-top: 10px;">
+                <li>Si le message "Script disponible" n'apparaît pas, actualisez la page</li>
+                <li>Si vous avez une erreur "runManualSync is not defined", vérifiez que vous êtes sur l'application OsteoApp</li>
+                <li>Si vous avez une erreur de permission, vérifiez que vous êtes connecté</li>
+            </ul>
+        </div>
+
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+            <p style="color: #64748b; font-size: 14px;">
+                📖 Pour plus d'informations, consultez le fichier <code>SYNCHRONISATION-CONSOLE.md</code>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        console.log('📄 Page de test chargée');
+        console.log('💡 Cette page est uniquement à titre informatif.');
+        console.log('🔧 Pour utiliser le script, ouvrez l\'application OsteoApp et suivez les instructions ci-dessus.');
+    </script>
+</body>
+</html>
