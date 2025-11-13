@@ -89,4 +89,27 @@
     { "path": "functions" }
   ],
   "notes": "Manifeste MCP nettoyé et aligné sur le workspace local (ports, chemins)."
+  ,
+  "mcpServers": {
+    "firebase": {
+      "command": "node",
+      "args": [
+        "/Users/nidnorg480/Documents/osteo-app-V5.3-repo/scripts/mcp-firebase-server.cjs"
+      ],
+      "env": {
+        "GOOGLE_APPLICATION_CREDENTIALS": "/Users/nidnorg480/.config/firebase/ostheo-app-firebase-adminsdk-fbsvc-718e752243.json",
+        "FIREBASE_PROJECT_ID": "ostheo-app"
+      }
+    },
+    "firebase-emulator": {
+      "command": "node",
+      "args": [
+        "/Users/nidnorg480/Documents/osteo-app-V5.3-repo/scripts/mcp-firebase-server.cjs"
+      ],
+      "env": {
+        "FIRESTORE_EMULATOR_HOST": "localhost:8080",
+        "FIREBASE_PROJECT_ID": "demo-emulator"
+      }
+    }
+  }
 }
