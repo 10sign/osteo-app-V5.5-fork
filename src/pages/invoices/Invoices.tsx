@@ -12,7 +12,11 @@ import {
   MoreVertical,
   RefreshCw,
   Search,
-  Filter
+  Filter,
+  Calendar,
+  CreditCard,
+  Clock,
+  X
 } from 'lucide-react';
 import { collection, query, where, doc, getDoc, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { setupSafeSnapshot } from '../../utils/firestoreListener';
@@ -46,6 +50,7 @@ const Invoices: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [selectedInvoiceNumber, setSelectedInvoiceNumber] = useState<string>('');
+  const [isViewInvoiceModalOpen, setIsViewInvoiceModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
@@ -312,6 +317,46 @@ const Invoices: React.FC = () => {
   };
 
   const isSmallScreen = windowWidth < 768;
+  const viewingInvoice = selectedInvoiceId ? invoices.find(i => i.id === selectedInvoiceId) : null;
+
+  const downloadInvoicePdf = () => {
+    if (!viewingInvoice) return;
+    const printWin = window.open('', '_blank');
+    if (!printWin) return;
+    const issued = viewingInvoice.issueDate ? new Date(viewingInvoice.issueDate).toLocaleDateString('fr-FR') : '';
+    const due = viewingInvoice.dueDate ? new Date(viewingInvoice.dueDate).toLocaleDateString('fr-FR') : '';
+    const html = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Facture ${viewingInvoice.number}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; padding: 24px; color: #111827; }
+          h1 { font-size: 20px; margin: 0 0 8px; }
+          .meta { margin-bottom: 16px; font-size: 14px; color: #374151; }
+          .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; }
+        </style>
+      </head>
+      <body>
+        <h1>Facture ${viewingInvoice.number}</h1>
+        <div class="meta">
+          <div>Patient: ${viewingInvoice.patientName || '—'}</div>
+          <div>Émise le: ${issued || '—'}${due ? ` · Échéance: ${due}` : ''}</div>
+          <div>Total: <strong>${viewingInvoice.total} €</strong></div>
+          <div>Statut: ${getStatusText(viewingInvoice.status)}</div>
+        </div>
+        <div class="card">
+          Cette facture a été exportée depuis la liste. Pour un PDF détaillé avec les lignes, ouvrez la facture depuis la fiche patient.
+        </div>
+        <script>window.onload = () => { window.print(); setTimeout(() => window.close(), 300); };</script>
+      </body>
+      </html>
+    `;
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  };
 
   if (loading) {
     return (
@@ -498,13 +543,16 @@ const Invoices: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex justify-end space-x-3">
-                          <Link 
-                            to={`/invoices/${invoice.id}`} 
+                          <button 
                             className="text-primary-600 hover:text-primary-700 flex items-center"
+                            onClick={() => {
+                              setSelectedInvoiceId(invoice.id);
+                              setIsViewInvoiceModalOpen(true);
+                            }}
                           >
                             <Eye size={16} className="mr-1" />
                             Voir
-                          </Link>
+                          </button>
                           <button 
                             className="text-gray-600 hover:text-gray-900 flex items-center"
                             onClick={() => handleEditInvoice(invoice.id)}
@@ -575,13 +623,16 @@ const Invoices: React.FC = () => {
                   </div>
                   
                   <div className="flex justify-between items-center">
-                    <Link 
-                      to={`/invoices/${invoice.id}`} 
+                    <button 
                       className="text-primary-600 hover:text-primary-700 text-sm flex items-center"
+                      onClick={() => {
+                        setSelectedInvoiceId(invoice.id);
+                        setIsViewInvoiceModalOpen(true);
+                      }}
                     >
                       <Eye size={14} className="mr-1" />
                       Voir
-                    </Link>
+                    </button>
                     
                     <div className="flex space-x-2">
                       <button 
@@ -662,6 +713,82 @@ const Invoices: React.FC = () => {
         isLoading={isDeleting}
         invoiceNumber={selectedInvoiceNumber}
       />
+
+      {isViewInvoiceModalOpen && viewingInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => {
+              setIsViewInvoiceModalOpen(false);
+              setSelectedInvoiceId(null);
+            }}
+          />
+          <div
+            className="relative w-[calc(100%-2rem)] md:w-[900px] h-[70vh] bg-white rounded-xl shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <div className="flex items-center min-w-0">
+                <Eye size={18} className="text-primary-600 mr-2" />
+                <span className="text-sm font-medium text-gray-900 truncate">
+                  {`Facture ${viewingInvoice.number}`}
+                </span>
+                <span className={`ml-3 px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(viewingInvoice.status)}`}>
+                  {getStatusText(viewingInvoice.status)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<Download size={14} />}
+                  onClick={downloadInvoicePdf}
+                >
+                  Télécharger
+                </Button>
+              <button
+                onClick={() => {
+                  setIsViewInvoiceModalOpen(false);
+                  setSelectedInvoiceId(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Fermer"
+              >
+                <X size={18} />
+              </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden bg-gray-50">
+              <div className="w-full h-full overflow-auto p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4 text-sm text-gray-600">
+                    <div className="flex items-center">
+                      <Calendar size={14} className="mr-1" />
+                      <span>Émise le {formatDate(viewingInvoice.issueDate)}</span>
+                    </div>
+                    {viewingInvoice.dueDate && (
+                      <div className="flex items-center">
+                        <Clock size={14} className="mr-1" />
+                        <span>Échéance le {formatDate(viewingInvoice.dueDate)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center">
+                      <CreditCard size={14} className="mr-1" />
+                      <span className="font-medium">{viewingInvoice.total} €</span>
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-700 truncate max-w-[40%]">
+                    {viewingInvoice.patientName}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">
+                  Cette facture s'ouvre désormais dans un modal harmonisé. Pour accéder aux détails complets, utilisez le bouton Modifier.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

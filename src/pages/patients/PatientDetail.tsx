@@ -20,7 +20,11 @@ import {
   CreditCard,
   Info,
   RefreshCw,
-  Image as ImageIcon
+  Image as ImageIcon,
+  X,
+  ZoomIn,
+  ZoomOut,
+  RefreshCcw
 } from 'lucide-react';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { setupSafeSnapshot } from '../../utils/firestoreListener';
@@ -37,6 +41,7 @@ import EditConsultationModal from '../../components/modals/EditConsultationModal
 import ViewConsultationModal from '../../components/modals/ViewConsultationModal';
 import DeleteConsultationModal from '../../components/modals/DeleteConsultationModal';
 import { Patient, Consultation, Invoice } from '../../types';
+import { isImageFile } from '../../utils/documentStorage';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { HDSCompliance } from '../../utils/hdsCompliance';
@@ -72,6 +77,7 @@ const PatientDetail: React.FC = () => {
   const [isEditConsultationModalOpen, setIsEditConsultationModalOpen] = useState(false);
   const [isViewConsultationModalOpen, setIsViewConsultationModalOpen] = useState(false);
   const [isDeleteConsultationModalOpen, setIsDeleteConsultationModalOpen] = useState(false);
+  const [isViewInvoiceModalOpen, setIsViewInvoiceModalOpen] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [selectedConsultationId, setSelectedConsultationId] = useState<string | null>(null);
   const [invoiceToDelete, setInvoiceToDelete] = useState<{ id: string; number: string } | null>(null);
@@ -87,6 +93,82 @@ const PatientDetail: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
+  const [viewingDocument, setViewingDocument] = useState<any>(null);
+  const [viewerLoading, setViewerLoading] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const viewingInvoice = selectedInvoiceId ? invoices.find(i => i.id === selectedInvoiceId) : null;
+
+  const downloadInvoicePdf = (inv: Invoice) => {
+    const printWin = window.open('', '_blank');
+    if (!printWin) return;
+    const patientName = `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim();
+    const issued = inv.issueDate ? new Date(inv.issueDate).toLocaleDateString('fr-FR') : '';
+    const due = inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('fr-FR') : '';
+    const itemsRows = (inv.items || [])
+      .map(
+        (it) => `
+        <tr>
+          <td>${it.description}</td>
+          <td style="text-align:center;">${it.quantity}</td>
+          <td style="text-align:right;">${it.unitPrice} €</td>
+          <td style="text-align:right;">${it.amount} €</td>
+        </tr>`
+      )
+      .join('');
+    const html = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Facture ${inv.number}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; padding: 24px; color: #111827; }
+          h1 { font-size: 20px; margin: 0 0 8px; }
+          .meta { margin-bottom: 16px; font-size: 14px; color: #374151; }
+          .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+          th, td { border-bottom: 1px solid #f3f4f6; padding: 8px; font-size: 13px; }
+          th { background: #f9fafb; text-align: left; color: #6b7280; text-transform: uppercase; font-weight: 600; }
+          .totals { margin-top: 12px; float: right; font-size: 14px; }
+          .totals div { display:flex; justify-content: space-between; gap: 24px; }
+        </style>
+      </head>
+      <body>
+        <h1>Facture ${inv.number}</h1>
+        <div class="meta">
+          <div>Patient: ${patientName || '—'}</div>
+          <div>Émise le: ${issued || '—'}${due ? ` · Échéance: ${due}` : ''}</div>
+          <div>Total: <strong>${inv.total} €</strong></div>
+        </div>
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Prestation</th>
+                <th style="text-align:center;">Qté</th>
+                <th style="text-align:right;">PU</th>
+                <th style="text-align:right;">Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsRows}
+            </tbody>
+          </table>
+          <div class="totals">
+            <div><span>Sous-total</span><span>${inv.subtotal} €</span></div>
+            <div><span>TVA</span><span>${inv.tax} €</span></div>
+            <div style="font-weight:700;"><span>Total</span><span>${inv.total} €</span></div>
+          </div>
+        </div>
+        ${inv.notes ? `<div style="margin-top:16px;font-size:13px;color:#374151;"><strong>Notes:</strong> ${inv.notes}</div>` : ''}
+        <script>window.onload = () => { window.print(); setTimeout(() => window.close(), 300); };</script>
+      </body>
+      </html>
+    `;
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  };
 
   // Mise à jour de l'heure actuelle toutes les secondes
   useEffect(() => {
@@ -1564,7 +1646,11 @@ const PatientDetail: React.FC = () => {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => window.open(docMeta.url, '_blank')}
+                                    onClick={() => {
+                                      setZoom(1);
+                                      setViewerLoading(true);
+                                      setViewingDocument(docMeta);
+                                    }}
                                     leftIcon={<Eye size={12} />}
                                     className="text-xs"
                                   >
@@ -1652,15 +1738,17 @@ const PatientDetail: React.FC = () => {
                         </div>
                       </div>
                       <div className="flex space-x-2">
-                        <Link to={`/invoices/${invoice.id}`}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            leftIcon={<Eye size={16} />}
-                          >
-                            Voir
-                          </Button>
-                        </Link>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<Eye size={16} />}
+                          onClick={() => {
+                            setSelectedInvoiceId(invoice.id);
+                            setIsViewInvoiceModalOpen(true);
+                          }}
+                        >
+                          Voir
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
@@ -1749,6 +1837,120 @@ const PatientDetail: React.FC = () => {
         invoiceNumber={invoiceToDelete?.number || ''}
       />
 
+      {isViewInvoiceModalOpen && viewingInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => {
+              setIsViewInvoiceModalOpen(false);
+              setSelectedInvoiceId(null);
+            }}
+          />
+          <div
+            className="relative w-[calc(100%-2rem)] md:w-[900px] h-[80vh] bg-white rounded-xl shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <div className="flex items-center min-w-0">
+                <Eye size={18} className="text-primary-600 mr-2" />
+                <span className="text-sm font-medium text-gray-900 truncate">
+                  {`Facture ${viewingInvoice.number}`}
+                </span>
+                <span className={`ml-3 px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(viewingInvoice.status)}`}>
+                  {getStatusText(viewingInvoice.status)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<Download size={14} />}
+                  onClick={() => downloadInvoicePdf(viewingInvoice)}
+                >
+                  Télécharger
+                </Button>
+              <button
+                onClick={() => {
+                  setIsViewInvoiceModalOpen(false);
+                  setSelectedInvoiceId(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Fermer"
+              >
+                <X size={18} />
+              </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden bg-gray-50">
+              <div className="w-full h-full overflow-auto p-4">
+                <div className="mb-4 flex items-center space-x-4 text-sm text-gray-600">
+                  <div className="flex items-center">
+                    <Calendar size={14} className="mr-1" />
+                    <span>Émise le {formatDate(viewingInvoice.issueDate)}</span>
+                  </div>
+                  {viewingInvoice.dueDate && (
+                    <div className="flex items-center">
+                      <Clock size={14} className="mr-1" />
+                      <span>Échéance le {formatDate(viewingInvoice.dueDate)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center">
+                    <CreditCard size={14} className="mr-1" />
+                    <span className="font-medium">{viewingInvoice.total} €</span>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow border border-gray-200">
+                  <table className="min-w-full">
+                    <thead>
+                      <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-4 py-2">Prestation</th>
+                        <th className="px-4 py-2">Qté</th>
+                        <th className="px-4 py-2">PU</th>
+                        <th className="px-4 py-2 text-right">Montant</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {viewingInvoice.items.map((item, index) => (
+                        <tr key={index}>
+                          <td className="px-4 py-2">
+                            <div className="text-sm font-medium text-gray-900">{item.description}</div>
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-700">{item.quantity}</td>
+                          <td className="px-4 py-2 text-sm text-gray-700">{item.unitPrice} €</td>
+                          <td className="px-4 py-2 text-sm font-medium text-right">{item.amount} €</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={3} className="px-4 pt-4 text-right font-medium">Sous-total</td>
+                        <td className="px-4 pt-4 text-right font-medium">{viewingInvoice.subtotal} €</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={3} className="px-4 pt-2 text-right font-medium">TVA</td>
+                        <td className="px-4 pt-2 text-right font-medium">{viewingInvoice.tax} €</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={3} className="px-4 pt-4 text-right text-lg font-bold">Total</td>
+                        <td className="px-4 pt-4 text-right text-lg font-bold">{viewingInvoice.total} €</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {viewingInvoice.notes && (
+                  <div className="mt-4">
+                    <h5 className="mb-1 text-sm font-medium text-gray-700">Notes</h5>
+                    <p className="text-gray-900">{viewingInvoice.notes}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <NewConsultationModal
         isOpen={isNewConsultationModalOpen}
         onClose={() => setIsNewConsultationModalOpen(false)}
@@ -1795,6 +1997,83 @@ const PatientDetail: React.FC = () => {
           time: ''
         }}
       />
+
+      {viewingDocument && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => {
+              setViewingDocument(null);
+              setViewerLoading(false);
+              setZoom(1);
+            }}
+          />
+          <div
+            className="relative w-[calc(100%-2rem)] md:w-[900px] h-[80vh] bg-white rounded-xl shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <div className="flex items-center min-w-0">
+                <Eye size={18} className="text-primary-600 mr-2" />
+                <span className="text-sm font-medium text-gray-900 truncate">
+                  {viewingDocument.displayName || viewingDocument.originalName || viewingDocument.name}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {isImageFile(viewingDocument.type || '') && (
+                  <>
+                    <Button variant="ghost" size="sm" leftIcon={<ZoomOut size={14} />} onClick={() => setZoom(Math.max(0.25, parseFloat((zoom - 0.25).toFixed(2))))}>Zoom -</Button>
+                    <Button variant="ghost" size="sm" leftIcon={<ZoomIn size={14} />} onClick={() => setZoom(Math.min(3, parseFloat((zoom + 0.25).toFixed(2))))}>Zoom +</Button>
+                    <Button variant="ghost" size="sm" leftIcon={<RefreshCcw size={14} />} onClick={() => setZoom(1)}>Reset</Button>
+                  </>
+                )}
+                <a href={viewingDocument.url} target="_blank" rel="noopener noreferrer">
+                  <Button variant="secondary" size="sm" leftIcon={<Download size={14} />}>Télécharger</Button>
+                </a>
+                <button
+                  onClick={() => {
+                    setViewingDocument(null);
+                    setViewerLoading(false);
+                    setZoom(1);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                  aria-label="Fermer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden bg-gray-50">
+              {viewerLoading && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600" />
+                </div>
+              )}
+              <div className="w-full h-full overflow-auto">
+                {isImageFile(viewingDocument.type || '') ? (
+                  <div className="w-full h-full flex items-center justify-center p-4">
+                    <img
+                      src={viewingDocument.url}
+                      alt={viewingDocument.displayName || viewingDocument.originalName || viewingDocument.name}
+                      style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
+                      className="max-w-full max-h-full"
+                      onLoad={() => setViewerLoading(false)}
+                      onError={() => setViewerLoading(false)}
+                    />
+                  </div>
+                ) : (
+                  <iframe
+                    src={viewingDocument.url}
+                    title={viewingDocument.displayName || viewingDocument.originalName || viewingDocument.name}
+                    className="w-full h-full"
+                    onLoad={() => setViewerLoading(false)}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, Clock, FileText, User, Eye, AlertCircle, Download, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { X, Calendar, Clock, FileText, User, Eye, AlertCircle, Download, Image as ImageIcon, Trash2, ZoomIn, ZoomOut, RefreshCcw } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ConsultationService } from '../../services/consultationService';
 import { PatientService } from '../../services/patientService';
@@ -66,6 +66,9 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [patientData, setPatientData] = useState<any>(null);
   const [patientLastUpdated, setPatientLastUpdated] = useState<Date | null>(null);
+  const [viewingDocument, setViewingDocument] = useState<DocumentMetadata | null>(null);
+  const [viewerLoading, setViewerLoading] = useState(false);
+  const [zoom, setZoom] = useState(1);
 
   // Load consultation data when modal opens
   useEffect(() => {
@@ -484,6 +487,11 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                                   <p className="text-sm font-medium text-gray-900 truncate">
                                     {document.displayName || document.originalName || document.name}
                                   </p>
+                                  {consultation.isInitialConsultation && document.folder?.includes('/patients/') && (
+                                    <span className="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700">
+                                      Source : dossier patient
+                                    </span>
+                                  )}
                                   <p className="text-xs text-gray-500">
                                     {formatFileSize(document.size)}
                                   </p>
@@ -491,15 +499,19 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                               </div>
 
                               <div className="flex items-center gap-2 flex-shrink-0">
-                                <a
-                                  href={document.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  leftIcon={<Eye size={14} />}
                                   className="text-primary-600 hover:text-primary-700"
-                                  title="Voir le document"
+                                  onClick={() => {
+                                    setZoom(1);
+                                    setViewerLoading(true);
+                                    setViewingDocument(document);
+                                  }}
                                 >
-                                  <Button variant="ghost" size="sm" leftIcon={<Download size={14} />}>Voir</Button>
-                                </a>
+                                  Voir
+                                </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -536,14 +548,95 @@ const ViewConsultationModal: React.FC<ViewConsultationModalProps> = ({
                   <p className="text-gray-500">Consultation non trouvée</p>
                 </div>
               )}
-            </div>
-
+        </div>
+            
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
               <Button variant="primary" onClick={onClose}>
                 Fermer
               </Button>
             </div>
           </motion.div>
+          {viewingDocument && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] flex items-center justify-center"
+            >
+              <div
+                className="absolute inset-0 bg-black/50"
+                onClick={() => {
+                  setViewingDocument(null);
+                  setViewerLoading(false);
+                  setZoom(1);
+                }}
+              />
+              <div
+                className="relative w-[calc(100%-2rem)] md:w-[900px] h-[80vh] bg-white rounded-xl shadow-2xl flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+                  <div className="flex items-center min-w-0">
+                    <Eye size={18} className="text-primary-600 mr-2" />
+                    <span className="text-sm font-medium text-gray-900 truncate">
+                      {viewingDocument.displayName || viewingDocument.originalName || viewingDocument.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isImageFile(viewingDocument.type) && (
+                      <>
+                        <Button variant="ghost" size="sm" leftIcon={<ZoomOut size={14} />} onClick={() => setZoom(Math.max(0.25, parseFloat((zoom - 0.25).toFixed(2))))}>Zoom -</Button>
+                        <Button variant="ghost" size="sm" leftIcon={<ZoomIn size={14} />} onClick={() => setZoom(Math.min(3, parseFloat((zoom + 0.25).toFixed(2))))}>Zoom +</Button>
+                        <Button variant="ghost" size="sm" leftIcon={<RefreshCcw size={14} />} onClick={() => setZoom(1)}>Reset</Button>
+                      </>
+                    )}
+                    <a href={viewingDocument.url} target="_blank" rel="noopener noreferrer">
+                      <Button variant="secondary" size="sm" leftIcon={<Download size={14} />}>Télécharger</Button>
+                    </a>
+                    <button
+                      onClick={() => {
+                        setViewingDocument(null);
+                        setViewerLoading(false);
+                        setZoom(1);
+                      }}
+                      className="text-gray-400 hover:text-gray-600"
+                      aria-label="Fermer"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-hidden bg-gray-50">
+                  {viewerLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600" />
+                    </div>
+                  )}
+                  <div className="w-full h-full overflow-auto">
+                    {isImageFile(viewingDocument.type) ? (
+                      <div className="w-full h-full flex items-center justify-center p-4">
+                        <img
+                          src={viewingDocument.url}
+                          alt={viewingDocument.displayName || viewingDocument.originalName || viewingDocument.name}
+                          style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
+                          className="max-w-full max-h-full"
+                          onLoad={() => setViewerLoading(false)}
+                          onError={() => setViewerLoading(false)}
+                        />
+                      </div>
+                    ) : (
+                      <iframe
+                        src={viewingDocument.url}
+                        title={viewingDocument.displayName || viewingDocument.originalName || viewingDocument.name}
+                        className="w-full h-full"
+                        onLoad={() => setViewerLoading(false)}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
         </div>
       )}
     </AnimatePresence>
