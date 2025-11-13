@@ -12,7 +12,10 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:watch": "vitest --watch"
+    "test:watch": "vitest --watch",
+    "mcp:firebase": "node scripts/mcp-firebase-server.cjs",
+    "emulators:start": "npx firebase-tools emulators:start --only firestore --project demo-emulator",
+    "mcp:firebase:emulator": "FIRESTORE_EMULATOR_HOST=localhost:8080 FIREBASE_PROJECT_ID=demo-emulator node scripts/mcp-firebase-server.cjs"
   },
   "dependencies": {
     "browser-image-compression": "^2.0.2",
@@ -54,5 +57,9 @@
     "vite": "^5.4.2",
     "vite-plugin-pwa": "^0.19.0",
     "vitest": "^3.2.4"
+  },
+  "optionalDependencies": {
+    "@modelcontextprotocol/sdk": "^1.21.1",
+    "firebase-admin": "^12.7.0"
   }
 }

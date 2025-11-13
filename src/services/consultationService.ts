@@ -128,6 +128,26 @@ export class ConsultationService {
           console.warn('⚠️ Erreur lors du chargement des documents pour la consultation:', docSnapshot.id, docError);
           consultation.documents = [];
         }
+
+        // Fallback pour consultation initiale: inclure documents du dossier patient si aucun document de consultation
+        if (
+          consultation.isInitialConsultation &&
+          (!consultation.documents || consultation.documents.length === 0) &&
+          consultation.patientId
+        ) {
+          try {
+            const patientFolder = `users/${auth.currentUser.uid}/patients/${consultation.patientId}/documents`;
+            const patientDocs = await listDocuments(patientFolder);
+            const mappedDocs = patientDocs.map(d => ({
+              ...d,
+              displayName: d.displayName || `[Dossier patient] ${d.originalName || d.name}`
+            }));
+            consultation.documents = mappedDocs;
+            console.log('📁 Fallback patient: documents inclus pour la consultation initiale:', mappedDocs.length);
+          } catch (fallbackErr) {
+            console.warn('⚠️ Fallback patient échoué pour consultation initiale:', docSnapshot.id, fallbackErr);
+          }
+        }
         
         consultations.push(consultation);
       }
@@ -219,6 +239,29 @@ export class ConsultationService {
           consultation.documents = [];
         }
       }
+<<<<<<< HEAD
+=======
+
+      // ✅ Fallback supplémentaire pour consultation initiale: inclure documents du dossier patient si toujours vide
+      if (
+        consultation.isInitialConsultation &&
+        (!consultation.documents || consultation.documents.length === 0) &&
+        consultation.patientId
+      ) {
+        try {
+          const patientFolder = `users/${auth.currentUser.uid}/patients/${consultation.patientId}/documents`;
+          const patientDocs = await listDocuments(patientFolder);
+          const mappedDocs = patientDocs.map(d => ({
+            ...d,
+            displayName: d.displayName || `[Dossier patient] ${d.originalName || d.name}`
+          }));
+          consultation.documents = mappedDocs;
+          console.log('📁 Fallback patient (GET BY ID): documents inclus:', mappedDocs.length);
+        } catch (fallbackErr) {
+          console.warn('⚠️ Fallback patient échoué (GET BY ID):', docSnap.id, fallbackErr);
+        }
+      }
+>>>>>>> osteo-app-V5.3
       
       // Journalisation de l'accès aux données
       await AuditLogger.log(
