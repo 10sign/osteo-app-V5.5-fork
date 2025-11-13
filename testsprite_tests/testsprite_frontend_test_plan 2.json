@@ -1,0 +1,366 @@
+[
+  {
+    "id": "TC001",
+    "title": "Consultation list loads correctly with descending date sorting",
+    "description": "Verify that the consultation list loads fully and displays consultations sorted by descending date, showing date, time, patient, type, status, and summary correctly.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the consultations list page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that the list is fully loaded with no partial or incomplete data"
+      },
+      {
+        "type": "assertion",
+        "description": "Check that consultations are sorted by descending date (most recent first)"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify each consultation item shows date, time, patient name, consultation type, status, and summary correctly"
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "Consultation detail view displays loading, error, and correct data states",
+    "description": "Verify the detailed consultation view handles loading and error states properly and displays accurate consultation information including ID, patient, date/time, reasons, notes, treatment, practitioner, duration, and price.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Select a consultation item from the list to navigate to its detail view"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a loading indicator is shown initially while data is fetched"
+      },
+      {
+        "type": "assertion",
+        "description": "Simulate a server error response and verify an appropriate error message is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "For valid data, verify all consultation fields are displayed correctly: ID, patient, date/time, reasons, notes, treatment, practitioner, duration, price"
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Consultation creation form - patient selection search functionality",
+    "description": "Verify the search-enabled patient selection in the consultation creation form works correctly, returning relevant patients and allowing selection.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the consultation creation form"
+      },
+      {
+        "type": "action",
+        "description": "Begin typing a patient's name in the patient search field"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify patient suggestions are displayed matching the search input"
+      },
+      {
+        "type": "action",
+        "description": "Select a patient from the search results"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the selected patient is correctly set in the form"
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Consultation creation form client-side validation for mandatory fields",
+    "description": "Verify that the client-side validation prevents form submission if mandatory fields such as patient, date, time, duration, and type are not provided.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Open the consultation creation form without entering any data"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to submit the form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify validation error messages are shown for mandatory fields: patient, date, time, duration, type"
+      },
+      {
+        "type": "action",
+        "description": "Fill some but not all mandatory fields"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to submit the form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the form still prevents submission and relevant validation errors are shown"
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Consultation creation form client-side validation for date/time, duration, and price constraints",
+    "description": "Verify that the form validates dates and times for validity, duration is positive, and price is zero or positive, preventing invalid submissions.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "In the consultation creation form, input an invalid date or time format"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to submit the form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the form shows validation error messages for invalid date/time"
+      },
+      {
+        "type": "action",
+        "description": "Input zero or negative duration value"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to submit the form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify validation error message is shown for duration requiring positive value"
+      },
+      {
+        "type": "action",
+        "description": "Input negative price value"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to submit the form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify validation error message is shown for non-negative price requirement"
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Server-side validation error responses displayed clearly on consultation creation form",
+    "description": "Ensure that server-side validation errors returned on submission are correctly mapped and shown in the UI with clear messages next to related fields.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Fill the consultation creation form with valid client-side data that will trigger server-side validation errors (e.g. conflicting appointment, invalid references)"
+      },
+      {
+        "type": "action",
+        "description": "Submit the form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify structured server error responses are received and displayed clearly and accurately beside relevant form fields"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no generic error message is shown without mapping field errors"
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Successful consultation creation redirects to detail view with confirmation toast",
+    "description": "Upon successful form submission, verify the application redirects to the new consultation detail view and shows a success toast notification.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Fill the consultation creation form with valid data"
+      },
+      {
+        "type": "action",
+        "description": "Submit the form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user is redirected to the detailed consultation page of the newly created consultation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a toast notification indicating successful creation is shown"
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Navigation from consultation list to detail view by clicking items",
+    "description": "Check that clicking a consultation item in the list navigates the user to the detailed view of that consultation.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Visit the consultations list page"
+      },
+      {
+        "type": "action",
+        "description": "Click on the first consultation item in the list"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify navigation to the detail page of the clicked consultation occurred"
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Retry logic works on limited network errors during consultation operations",
+    "description": "Ensure that when transient network errors occur during consultations list load or creation, the system retries the operation up to the configured limit before showing an error.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Simulate a limited network error during consultation list loading"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the system automatically retries the load operation up to the retry limit"
+      },
+      {
+        "type": "assertion",
+        "description": "If retries fail, verify a clear error message is shown with option to retry manually"
+      },
+      {
+        "type": "action",
+        "description": "Simulate a network error during consultation creation submission"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the retry logic triggers automatically within allowed limits"
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "Accessibility and localization of messages follow ARIA standards",
+    "description": "Verify that all user messages including validation errors, loading, errors, and toast notifications are ARIA-compliant and localizable, allowing screen readers to announce them properly and translations to appear.",
+    "category": "ui",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Trigger validation errors in consultation form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify error messages have correct ARIA attributes and are readable by screen readers"
+      },
+      {
+        "type": "action",
+        "description": "Trigger loading and error messages in consultation detail and list views"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify these messages use ARIA-live regions or equivalent for accessibility"
+      },
+      {
+        "type": "action",
+        "description": "Switch application locale/language"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify all messages and labels are translated accordingly"
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Unit tests cover consultation formatters, validators, and backend error handlers",
+    "description": "Verify unit test coverage includes consultation-related data formatters, client-side validators, and backend error response handlers to prevent regressions.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Run unit tests for consultation formatter utilities"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify all expected formatting functions return correct values and cover edge cases"
+      },
+      {
+        "type": "action",
+        "description": "Run unit tests for consultation client-side validation logic"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify validation rules correctly validate mandatory fields, data formats, and numeric constraints"
+      },
+      {
+        "type": "action",
+        "description": "Run unit tests for backend error response handlers"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify mapping of server error responses to UI error display behaves as expected"
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "End-to-end tests for successful consultation creation and backend error handling",
+    "description": "Perform comprehensive end-to-end testing for successful consultation creation flow and handling various backend errors, ensuring smooth user experience and proper error displays.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Start end-to-end test environment"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to consultation creation form"
+      },
+      {
+        "type": "action",
+        "description": "Fill in valid data and submit"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify consultation is created and user redirected with success notification"
+      },
+      {
+        "type": "action",
+        "description": "Repeat with data triggering server-side validation errors"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify server errors returned and displayed correctly on form"
+      },
+      {
+        "type": "action",
+        "description": "Simulate backend service unavailability"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify appropriate error message shown and retry allowed"
+      }
+    ]
+  }
+]

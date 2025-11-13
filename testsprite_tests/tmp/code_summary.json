@@ -1,0 +1,128 @@
+{
+  "tech_stack": [
+    "TypeScript",
+    "React (Vite)",
+    "Firebase (Firestore, Storage)",
+    "Cloud Functions (Node/TypeScript)",
+    "TailwindCSS",
+    "Vitest"
+  ],
+  "features": [
+    {
+      "name": "Authentification et contexte utilisateur",
+      "description": "Gestion de l’état utilisateur, connexion/déconnexion, intégration Firebase Auth et configuration du SDK Firebase.",
+      "files": [
+        "src/context/AuthContext.tsx",
+        "src/services/authService.ts",
+        "src/firebase/config.ts",
+        "src/pages/auth",
+        "src/components/auth"
+      ]
+    },
+    {
+      "name": "Gestion patients",
+      "description": "Pages et composants pour la gestion des patients, lecture/écriture Firestore, cache patient.",
+      "files": [
+        "src/pages/patients",
+        "src/components/patient",
+        "src/services/patientService.ts",
+        "src/utils/patientCache.ts"
+      ]
+    },
+    {
+      "name": "Consultations",
+      "description": "Flux de consultations, services associés, synchronisation et migrations liées aux consultations.",
+      "files": [
+        "src/pages/consultations",
+        "src/services/consultationService.ts",
+        "src/services/consultationMigrationService.ts",
+        "src/services/initialConsultationSyncService.ts",
+        "src/services/initialConsultationIntegrityService.ts"
+      ]
+    },
+    {
+      "name": "Calendrier et rendez-vous",
+      "description": "Composants calendrier et service de gestion des rendez-vous.",
+      "files": [
+        "src/components/calendar",
+        "src/services/appointmentService.ts"
+      ]
+    },
+    {
+      "name": "Facturation et factures",
+      "description": "Pages de facturation et service de génération/gestion des factures.",
+      "files": [
+        "src/pages/invoices",
+        "src/services/invoiceService.ts"
+      ]
+    },
+    {
+      "name": "Tableau de bord",
+      "description": "Page Dashboard avec indicateurs et service de données.",
+      "files": [
+        "src/pages/Dashboard.tsx",
+        "src/services/dashboardService.ts"
+      ]
+    },
+    {
+      "name": "Téléversement de documents (Storage)",
+      "description": "Upload PDF/JPG/PNG vers Firebase Storage, validation fichiers, métadonnées et UI de gestion.",
+      "files": [
+        "src/utils/documentStorage.ts",
+        "src/utils/fileUpload.ts",
+        "src/components/ui/DocumentUploadManager.tsx",
+        "storage.rules"
+      ]
+    },
+    {
+      "name": "Sécurité, chiffrement et conformité HDS",
+      "description": "Utilitaires de chiffrement et conformité Hébergement de Données de Santé.",
+      "files": [
+        "src/utils/encryption.ts",
+        "src/utils/hdsCompliance.ts"
+      ]
+    },
+    {
+      "name": "Services de synchronisation et migrations",
+      "description": "Synchronisations bidirectionnelles, migrations historiques, détection de duplicats, utilitaires d’intégrité.",
+      "files": [
+        "src/services/bidirectionalSyncService.ts",
+        "src/services/dataMigrationService.ts",
+        "src/services/duplicateCleanupService.ts",
+        "src/services/migrationDetectionService.ts",
+        "src/scripts"
+      ]
+    },
+    {
+      "name": "Intégration Cloud Functions",
+      "description": "Code Functions backend (TypeScript) pour tâches server-side.",
+      "files": [
+        "functions/src/index.ts",
+        "functions/package.json",
+        "functions/tsconfig.json"
+      ]
+    },
+    {
+      "name": "Style, UI et configuration outil",
+      "description": "Styles Tailwind, composants UI, config Vite, Vitest et ESLint.",
+      "files": [
+        "tailwind.config.js",
+        "src/styles/animatedGradient.css",
+        "src/components/ui",
+        "vite.config.ts",
+        "vitest.config.ts",
+        "eslint.config.js"
+      ]
+    },
+    {
+      "name": "Tests et configuration test",
+      "description": "Tests d’intégration/unitaires et setup de test.",
+      "files": [
+        "tests/integration/patient-consultation.flow.test.ts",
+        "tests/sync.initialConsultation.test.ts",
+        "tests/validation.consultation.test.ts",
+        "src/test/setup.ts"
+      ]
+    }
+  ]
+}

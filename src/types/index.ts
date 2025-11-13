@@ -1,0 +1,324 @@
+import { DocumentMetadata } from '../utils/documentStorage';
+
+// User related types
+export interface User {
+  uid: string;
+  email: string;
+  displayName?: string;
+  photoURL?: string;
+}
+
+export interface UserProfile {
+  uid: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  specialties: string[];
+  schedule?: Schedule;
+  rates?: Rate[];
+}
+
+export interface Practice {
+  id: string;
+  name: string;
+  logo?: string;
+  address: Address;
+  ownerId: string;
+}
+
+export interface Address {
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+}
+
+export interface Schedule {
+  monday?: DaySchedule;
+  tuesday?: DaySchedule;
+  wednesday?: DaySchedule;
+  thursday?: DaySchedule;
+  friday?: DaySchedule;
+  saturday?: DaySchedule;
+  sunday?: DaySchedule;
+}
+
+export interface DaySchedule {
+  isOpen: boolean;
+  slots: TimeSlot[];
+}
+
+export interface TimeSlot {
+  start: string; // format: "HH:MM"
+  end: string;   // format: "HH:MM"
+}
+
+export interface Rate {
+  type: string;
+  amount: number;
+  currency: string;
+  duration: number; // in minutes
+}
+
+// Document related types
+export interface PatientDocument {
+  id: string;
+  name: string;
+  originalName: string;
+  url: string;
+  type: string;
+  size: number;
+  category: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  folder: string;
+}
+
+// Patient related types
+export interface Patient {
+  id: string;
+  firstName: string;
+  lastName: string;
+  profession?: string;
+  gender: 'male' | 'female' | 'other';
+  dateOfBirth: string; // format: "YYYY-MM-DD"
+  email?: string; // Optional
+  phone?: string;
+  address?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    country?: string;
+  };
+  insurance?: Insurance;
+  medicalHistory?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  osteopathId: string;
+  tags?: string[];
+  documentUrl?: string | null;
+  isTestData?: boolean;
+  nextAppointment?: string; // format: "YYYY-MM-DDThh:mm:ss"
+  // Harmonisation: utiliser les métadonnées de documents communes
+  // pour aligner avec les consultations et les composants d'upload
+  documents?: DocumentMetadata[];
+  
+  // Champs pour le tri
+  createdAtDate?: Date; // Champ calculé pour le tri
+  updatedAtDate?: Date; // Champ calculé pour le tri
+  
+  // Nouveaux champs
+  currentTreatment?: string; // Traitement effectué
+  consultationReason?: string; // Motif de consultation
+  medicalAntecedents?: string; // Antécédents médicaux
+  treatmentHistory?: TreatmentHistoryEntry[]; // Historique des traitements
+  osteopathicTreatment?: string; // Traitement ostéopathique
+}
+
+
+// Nouvel interface pour l'historique des traitements
+export interface TreatmentHistoryEntry {
+  date: string; // format: "YYYY-MM-DD"
+  treatment: string;
+  provider?: string;
+  notes?: string;
+}
+
+// Form data types
+export interface PatientFormData {
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  gender: 'male' | 'female' | 'other';
+  email?: string; // Optional
+  phone?: string;
+  profession?: string;
+  address?: string; // Optional
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  insurance?: string;
+  insuranceNumber?: string;
+  medicalHistory?: string;
+  notes?: string;
+  nextAppointment?: string;
+  nextAppointmentTime?: string; // format: "HH:mm"
+  
+  // Nouveaux champs
+  currentTreatment?: string;
+  consultationReason?: string;
+  medicalAntecedents?: string;
+  treatmentHistory?: TreatmentHistoryEntry[];
+  osteopathicTreatment?: string; // Traitement ostéopathique
+}
+
+export interface Insurance {
+  provider: string;
+  policyNumber: string;
+  expiryDate?: string;
+}
+
+// Appointment related types
+export interface Appointment {
+  id: string;
+  patientId: string;
+  practitionerId: string;
+  date: string; // format: "YYYY-MM-DD"
+  startTime: string; // format: "HH:MM"
+  endTime: string;   // format: "HH:MM"
+  status: 'scheduled' | 'confirmed' | 'cancelled' | 'completed';
+  type: string;
+  notes?: string;
+  reminderSent: boolean;
+  createdAt: string;
+  updatedAt: string;
+  isHistorical?: boolean; // Indique si c'est un rendez-vous historique
+}
+
+// Invoice related types
+export interface Invoice {
+  id: string;
+  patientId: string;
+  appointmentId?: string;
+  practitionerId: string;
+  number: string;
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  issueDate: string;
+  dueDate: string;
+  items: InvoiceItem[];
+  subtotal: number;
+  tax: number;
+  total: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InvoiceItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  taxRate: number;
+  amount: number;
+}
+
+// Document related types
+export interface Document {
+  id: string;
+  patientId: string;
+  name: string;
+  type: 'pdf' | 'image' | 'other';
+  url: string;
+  size: number;
+  uploadedAt: string;
+  uploadedBy: string;
+  notes?: string;
+}
+
+// Authentication types
+export interface AuthFormData {
+  email: string;
+  password: string;
+}
+
+export interface RegisterFormData extends AuthFormData {
+  firstName: string;
+  lastName: string;
+  confirmPassword: string;
+}
+
+// Consultation related types
+export interface Consultation {
+  id: string;
+  patientId: string;
+  patientName: string;
+  osteopathId: string;
+  date: Date;
+  reason?: string;
+  treatment?: string;
+  notes?: string;
+  duration: number;
+  price: number;
+  status: 'draft' | 'completed' | 'cancelled';
+  appointmentId?: string;
+  examinations?: string[];
+  prescriptions?: string[];
+  createdAt: Date;
+  updatedAt: Date;
+
+  // Champs cliniques du patient (snapshot au moment de la consultation)
+  patientFirstName?: string;
+  patientLastName?: string;
+  patientDateOfBirth?: string;
+  patientGender?: 'male' | 'female' | 'other';
+  patientPhone?: string;
+  patientEmail?: string;
+  patientProfession?: string;
+  patientAddress?: string;
+  patientInsurance?: string;
+  patientInsuranceNumber?: string;
+
+  // Champs cliniques spécifiques (obligatoires pour la sauvegarde)
+  currentTreatment: string;
+  consultationReason: string;
+  medicalAntecedents: string;
+  medicalHistory: string;
+  osteopathicTreatment: string;
+  symptoms: string[];
+  treatmentHistory?: TreatmentHistoryEntry[];
+
+  // Documents de la consultation
+  documents?: DocumentMetadata[];
+
+  // Flag pour identifier la consultation initiale créée automatiquement lors de la création du dossier patient
+  // Cette consultation est la seule à être pré-remplie automatiquement avec les données du dossier patient
+  // Les consultations manuelles, même avec des dates plus anciennes, auront ce flag à false
+  isInitialConsultation?: boolean;
+}
+
+export interface ConsultationFormData {
+  patientId: string;
+  patientName: string;
+  date: Date | string;
+  appointmentId?: string;
+  reason?: string;
+  treatment?: string;
+  notes?: string;
+  duration: number;
+  price: number;
+  status: 'draft' | 'completed' | 'cancelled';
+  examinations?: string[];
+  prescriptions?: string[];
+
+  // Champs cliniques du patient (snapshot)
+  patientFirstName?: string;
+  patientLastName?: string;
+  patientDateOfBirth?: string;
+  patientGender?: string;
+  patientPhone?: string;
+  patientEmail?: string;
+  patientProfession?: string;
+  patientAddress?: string;
+  patientInsurance?: string;
+  patientInsuranceNumber?: string;
+
+  // Champs cliniques spécifiques (obligatoires pour la sauvegarde)
+  currentTreatment: string;
+  consultationReason: string;
+  medicalAntecedents: string;
+  medicalHistory: string;
+  osteopathicTreatment: string;
+  symptoms: string[];
+  treatmentHistory?: TreatmentHistoryEntry[];
+
+  // Documents de consultation
+  documents?: DocumentMetadata[];
+
+  // Flag pour identifier la consultation initiale créée automatiquement lors de la création du dossier patient
+  isInitialConsultation?: boolean;
+}

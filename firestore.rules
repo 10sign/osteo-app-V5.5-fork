@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isAuthenticated() &&
+             (request.auth.token.email == 'grondin.stephane@gmail.com' ||
+              request.auth.token.email == 'julie.boddaert@hotmail.fr');
+    }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    function isSelfOrAdmin(userId) {
+      return isOwner(userId) || isAdmin();
+    }
+
+    // users: lecture nécessaire pour les filtres/administration, écriture limitée
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isSelfOrAdmin(userId);
+    }
+
+    // patients
+    match /patients/{patientId} {
+      // lecture autorisée au propriétaire (osteopathId) ou admin
+      allow read: if (isAuthenticated() && resource.data.osteopathId == request.auth.uid) || isAdmin();
+
+      // création: l’osteopathId du document créé doit correspondre au user courant, ou admin
+      allow create: if (isAuthenticated() && request.resource.data.osteopathId == request.auth.uid) || isAdmin();
+
+      // mise à jour / suppression: propriétaire (via resource.data) ou admin
+      allow update, delete: if (isAuthenticated() && resource.data.osteopathId == request.auth.uid) || isAdmin();
+
+      // sous-collection: documents (métadonnées Firestore des fichiers du patient)
+      match /documents/{docId} {
+        allow read, write, delete: if (
+          (isAuthenticated() && get(/databases/$(database)/documents/patients/$(patientId)).data.osteopathId == request.auth.uid)
+          || isAdmin()
+        );
+      }
+    }
+
+    // consultations
+    match /consultations/{consultationId} {
+      allow read: if (isAuthenticated() && resource.data.osteopathId == request.auth.uid) || isAdmin();
+      allow create: if (isAuthenticated() && request.resource.data.osteopathId == request.auth.uid) || isAdmin();
+      allow update, delete: if (isAuthenticated() && resource.data.osteopathId == request.auth.uid) || isAdmin();
+    }
+
+    // invoices
+    match /invoices/{invoiceId} {
+      allow read: if (isAuthenticated() && resource.data.osteopathId == request.auth.uid) || isAdmin();
+      allow create: if (isAuthenticated() && request.resource.data.osteopathId == request.auth.uid) || isAdmin();
+      allow update, delete: if (isAuthenticated() && resource.data.osteopathId == request.auth.uid) || isAdmin();
+    }
+
+    // appointments
+    match /appointments/{appointmentId} {
+      allow read: if (isAuthenticated() && resource.data.osteopathId == request.auth.uid) || isAdmin();
+      allow create: if (isAuthenticated() && request.resource.data.osteopathId == request.auth.uid) || isAdmin();
+      allow update, delete: if (isAuthenticated() && resource.data.osteopathId == request.auth.uid) || isAdmin();
+    }
+
+    // beta_waitlist: opérations d’admin; création possible par utilisateur pour s’inscrire
+    match /beta_waitlist/{entryId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if isAuthenticated();
+    }
+
+    // consultation_backups: utilisés par la migration/sauvegarde
+    match /consultation_backups/{backupId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.osteopathId == request.auth.uid);
+      allow create: if (isAuthenticated() && request.resource.data.osteopathId == request.auth.uid) || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    // practices: doc lié à l’utilisateur
+    match /practices/{practiceId} {
+      allow read, write: if isSelfOrAdmin(practiceId);
+    }
+
+    // activity_logs: création par tout utilisateur, lecture/gestion réservée aux admins
+    match /activity_logs/{logId} {
+      allow create: if isAuthenticated();
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Refuser le reste
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
