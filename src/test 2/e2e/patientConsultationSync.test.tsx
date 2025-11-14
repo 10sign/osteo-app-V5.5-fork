@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+<<<<<<< HEAD
 import userEvent from '@testing-library/user-event'
+=======
+>>>>>>> ac9ed1c (fix(lint): remove unused success and clean e2e typings)
 import { BrowserRouter } from 'react-router-dom'
 import { createPatientWithClinicalData } from '../../test/factories/patientFactory'
 import { createConsultationWithEncryptedData } from '../../test/factories/consultationFactory'
@@ -42,7 +45,11 @@ vi.mock('../../utils/hdsCompliance', () => ({
 }))
 
 // Mock components
-const MockNewConsultationModal = ({ isOpen, onClose, patientId }: any) => {
+<<<<<<< HEAD
+const MockNewConsultationModal = ({ isOpen, onClose, patientId }: { isOpen: boolean; onClose: () => void; patientId: string }) => {
+=======
+const MockNewConsultationModal = ({ isOpen, onClose, patientId }: { isOpen: boolean; onClose: () => void; patientId: string }) => {
+>>>>>>> ac9ed1c (fix(lint): remove unused success and clean e2e typings)
   if (!isOpen) return null
   
   return (
@@ -130,7 +137,7 @@ describe('Patient-Consultation Sync E2E Tests', () => {
 
   describe('Manual consultation creation with patient data prefill', () => {
     it('should prefill consultation fields with patient clinical data', async () => {
-      const patientData = createPatientWithClinicalData()
+      
       mockGetPatient.mockResolvedValue(patientData)
 
       render(
@@ -225,7 +232,10 @@ describe('Patient-Consultation Sync E2E Tests', () => {
 
   describe('User modification preservation', () => {
     it('should not overwrite user modifications during migration', async () => {
+<<<<<<< HEAD
       const patientData = createPatientWithClinicalData()
+=======
+>>>>>>> ac9ed1c (fix(lint): remove unused success and clean e2e typings)
       const userModifiedConsultation = {
         id: 'consultation-123',
         patientId: 'patient-456',

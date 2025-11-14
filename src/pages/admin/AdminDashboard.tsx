@@ -27,10 +27,10 @@ import AddUserModal from '../../components/admin/AddUserModal';
 import DataMigrationDashboard from '../../components/admin/DataMigrationDashboard';
 import SubstituteManagement from '../../components/admin/SubstituteManagement';
 import RetroactiveInvoiceGenerator from '../../components/admin/RetroactiveInvoiceGenerator';
-// Analytics supprimés: retirer les imports et utiliser des stubs locaux
-const trackEvent = (..._args: any[]) => {};
-const trackMatomoEvent = (..._args: any[]) => {};
-const trackGAEvent = (..._args: any[]) => {};
+// Analytics supprimés: stubs locaux
+const trackEvent = (...args: unknown[]) => { void args; };
+const trackMatomoEvent = (...args: unknown[]) => { void args; };
+const trackGAEvent = (...args: unknown[]) => { void args; };
 import { collection, query, getDocs, getCountFromServer } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import EncryptionDiagnostic from '../../components/ui/EncryptionDiagnostic';
@@ -39,6 +39,7 @@ import { DataMigrationService } from '../../services/dataMigrationService';
 import InitialConsultationFlagPanel from '../../components/admin/InitialConsultationFlagPanel';
 import MarkInitialConsultationsPanel from '../../components/admin/MarkInitialConsultationsPanel';
 import SyncAllPatientsPanel from '../../components/admin/SyncAllPatientsPanel';
+import FirstConsultationSyncPanel from '../../components/admin/FirstConsultationSyncPanel';
 
 const AdminDashboard: React.FC = () => {
   const { user, logout, hasPermission } = useAuth();
@@ -55,7 +56,6 @@ const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [showEncryptionDiagnostic, setShowEncryptionDiagnostic] = useState(false);
   const [showDataRepairTool, setShowDataRepairTool] = useState(false);
   const [showRetroactiveInvoiceGenerator, setShowRetroactiveInvoiceGenerator] = useState(false);
@@ -293,6 +293,9 @@ const AdminDashboard: React.FC = () => {
 
               {/* Panneau de marquage des premières consultations */}
               <MarkInitialConsultationsPanel />
+
+              {/* Synchronisation rétroactive (mon compte / tous) */}
+              <FirstConsultationSyncPanel />
 
               {/* Outil de génération rétroactive de factures */}
               <div className="bg-white rounded-lg shadow p-6">
@@ -653,7 +656,6 @@ const AdminDashboard: React.FC = () => {
             onClose={() => setShowFirstConsultationSync(false)}
             onSuccess={() => {
               setShowFirstConsultationSync(false);
-              setSuccess('Premières consultations synchronisées avec succès.');
             }}
           />
         </div>
