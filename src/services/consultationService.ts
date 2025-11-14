@@ -239,8 +239,6 @@ export class ConsultationService {
           consultation.documents = [];
         }
       }
-<<<<<<< HEAD
-=======
 
       // ✅ Fallback supplémentaire pour consultation initiale: inclure documents du dossier patient si toujours vide
       if (
@@ -261,7 +259,6 @@ export class ConsultationService {
           console.warn('⚠️ Fallback patient échoué (GET BY ID):', docSnap.id, fallbackErr);
         }
       }
->>>>>>> osteo-app-V5.3
       
       // Journalisation de l'accès aux données
       await AuditLogger.log(

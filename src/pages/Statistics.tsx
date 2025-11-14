@@ -5,9 +5,7 @@ import {
   FileText, 
   TrendingUp, 
   TrendingDown,
-  Filter,
   Download,
-  Eye,
   Clock,
   Euro,
   UserCheck,
@@ -15,13 +13,17 @@ import {
   AlertCircle,
   BarChart3,
   PieChart,
-  Activity
+  Activity,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
+import { setupSafeSnapshot } from '../utils/firestoreListener';
 import { Button } from '../components/ui/Button';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, addWeeks,
-  addMonths, subWeeks, subMonths, subDays, isWithinInterval, isFuture, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  addMonths, subWeeks, subMonths, isWithinInterval,
+  startOfQuarter, endOfQuarter, startOfYear, endOfYear, subQuarters, subYears } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 interface PatientStats {
@@ -83,7 +85,9 @@ const Statistics: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [selectedPeriod, setSelectedPeriod] = useState('month');
+  const [selectedMonth, setSelectedMonth] = useState<Date>(startOfMonth(new Date()));
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
+  const [isCalculating, setIsCalculating] = useState(false);
 
   // Mise à jour de l'heure actuelle toutes les secondes
   useEffect(() => {
@@ -106,6 +110,70 @@ const Statistics: React.FC = () => {
   // Initial load
   useEffect(() => {
     loadAllStats();
+  }, [selectedPeriod]);
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    let unsubscribe: () => void = () => {};
+    (async () => {
+      const invoicesRef = collection(db, 'invoices');
+      const q = query(invoicesRef, where('osteopathId', '==', auth.currentUser!.uid));
+      unsubscribe = await setupSafeSnapshot(q, () => {
+        setIsCalculating(true);
+        loadInvoiceStats().finally(() => setIsCalculating(false));
+      }, (err) => {
+        console.error('Invoice listener error:', err);
+      });
+    })();
+    return () => unsubscribe();
+  }, [selectedMonth, selectedPeriod]);
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    let unsubscribe: () => void = () => {};
+    (async () => {
+      const patientsRef = collection(db, 'patients');
+      const q = query(patientsRef, where('osteopathId', '==', auth.currentUser!.uid));
+      unsubscribe = await setupSafeSnapshot(q, () => {
+        setIsCalculating(true);
+        loadPatientStats().finally(() => setIsCalculating(false));
+      }, (err) => {
+        console.error('Patient listener error:', err);
+      });
+    })();
+    return () => unsubscribe();
+  }, [selectedMonth, selectedPeriod]);
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    let unsubscribe: () => void = () => {};
+    (async () => {
+      const appointmentsRef = collection(db, 'appointments');
+      const q = query(appointmentsRef, where('osteopathId', '==', auth.currentUser!.uid));
+      unsubscribe = await setupSafeSnapshot(q, () => {
+        setIsCalculating(true);
+        loadAppointmentStats().finally(() => setIsCalculating(false));
+      }, (err) => {
+        console.error('Appointment listener error:', err);
+      });
+    })();
+    return () => unsubscribe();
+  }, [selectedPeriod]);
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    let unsubscribe: () => void = () => {};
+    (async () => {
+      const consultationsRef = collection(db, 'consultations');
+      const q = query(consultationsRef, where('osteopathId', '==', auth.currentUser!.uid));
+      unsubscribe = await setupSafeSnapshot(q, () => {
+        setIsCalculating(true);
+        loadPatientStats().finally(() => setIsCalculating(false));
+      }, (err) => {
+        console.error('Consultation listener error:', err);
+      });
+    })();
+    return () => unsubscribe();
   }, [selectedPeriod]);
 
   const loadAllStats = async () => {
@@ -134,7 +202,8 @@ const Statistics: React.FC = () => {
 
     const patients = snapshot.docs.map(doc => doc.data());
     const now = new Date();
-    const monthStart = startOfMonth(now);
+    const baseDate = selectedPeriod === 'month' ? selectedMonth : now;
+    const monthStart = startOfMonth(baseDate);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     // Calculate age groups
@@ -150,8 +219,10 @@ const Statistics: React.FC = () => {
     let newThisMonth = 0;
 
     patients.forEach(patient => {
-      // Gender distribution
-      genderCount[patient.gender as keyof typeof genderCount]++;
+      const g = patient.gender;
+      if (g === 'male') genderCount.male++;
+      else if (g === 'female') genderCount.female++;
+      else genderCount.other++;
 
       // Age groups
       if (patient.dateOfBirth) {
@@ -163,8 +234,8 @@ const Statistics: React.FC = () => {
         else ageGroups['65+']++;
       }
 
-      // New patients this month
-      if (patient.createdAt && new Date(patient.createdAt) >= monthStart) {
+      const created = patient.createdAt?.toDate?.() || (patient.createdAt ? new Date(patient.createdAt) : null);
+      if (created && created >= monthStart) {
         newThisMonth++;
       }
     });
@@ -253,36 +324,45 @@ const Statistics: React.FC = () => {
 
     const invoices = snapshot.docs.map(doc => doc.data());
     const now = new Date();
-    const currentMonthStart = startOfMonth(now);
-    const currentMonthEnd = endOfMonth(now);
-    const previousMonthStart = startOfMonth(subMonths(now, 1));
-    const previousMonthEnd = endOfMonth(subMonths(now, 1));
+    const baseDate = selectedPeriod === 'month' ? selectedMonth : now;
+    const { currentStart, currentEnd, previousStart, previousEnd } = getPeriodRange(selectedPeriod, baseDate);
 
     let currentMonthRevenue = 0;
     let previousMonthRevenue = 0;
     let unpaidAmount = 0;
     let paidInvoices = 0;
 
+    const toNumberSafe = (value: any): number => {
+      if (typeof value === 'number') {
+        return isFinite(value) ? value : 0;
+      }
+      if (typeof value === 'string') {
+        const cleaned = value.replace(/\s|\u00A0/g, '').replace(',', '.');
+        const parsed = parseFloat(cleaned);
+        return isFinite(parsed) ? parsed : 0;
+      }
+      return 0;
+    };
+
     invoices.forEach(invoice => {
       const issueDate = new Date(invoice.issueDate);
+      const total = toNumberSafe(invoice.total);
       
-      // Current month revenue
-      if (isWithinInterval(issueDate, { start: currentMonthStart, end: currentMonthEnd })) {
+      if (isWithinInterval(issueDate, { start: currentStart, end: currentEnd })) {
         if (invoice.status === 'paid') {
-          currentMonthRevenue += invoice.total || 0;
+          currentMonthRevenue += total;
         }
       }
 
-      // Previous month revenue
-      if (isWithinInterval(issueDate, { start: previousMonthStart, end: previousMonthEnd })) {
+      if (isWithinInterval(issueDate, { start: previousStart, end: previousEnd })) {
         if (invoice.status === 'paid') {
-          previousMonthRevenue += invoice.total || 0;
+          previousMonthRevenue += total;
         }
       }
 
       // Unpaid invoices
       if (invoice.status !== 'paid') {
-        unpaidAmount += invoice.total || 0;
+        unpaidAmount += total;
       } else {
         paidInvoices++;
       }
@@ -303,8 +383,42 @@ const Statistics: React.FC = () => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('fr-FR', {
       style: 'currency',
-      currency: 'EUR'
+      currency: 'EUR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(amount);
+  };
+
+  const getPeriodRange = (period: string, baseDate: Date) => {
+    if (period === 'week') {
+      const cs = startOfWeek(baseDate, { weekStartsOn: 1 });
+      const ce = endOfWeek(baseDate, { weekStartsOn: 1 });
+      const ps = startOfWeek(subWeeks(baseDate, 1), { weekStartsOn: 1 });
+      const pe = endOfWeek(subWeeks(baseDate, 1), { weekStartsOn: 1 });
+      return { currentStart: cs, currentEnd: ce, previousStart: ps, previousEnd: pe };
+    }
+    if (period === 'quarter') {
+      const cs = startOfQuarter(baseDate);
+      const ce = endOfQuarter(baseDate);
+      const prev = subQuarters(baseDate, 1);
+      const ps = startOfQuarter(prev);
+      const pe = endOfQuarter(prev);
+      return { currentStart: cs, currentEnd: ce, previousStart: ps, previousEnd: pe };
+    }
+    if (period === 'year') {
+      const cs = startOfYear(baseDate);
+      const ce = endOfYear(baseDate);
+      const prev = subYears(baseDate, 1);
+      const ps = startOfYear(prev);
+      const pe = endOfYear(prev);
+      return { currentStart: cs, currentEnd: ce, previousStart: ps, previousEnd: pe };
+    }
+    const cs = startOfMonth(baseDate);
+    const ce = endOfMonth(baseDate);
+    const prev = subMonths(baseDate, 1);
+    const ps = startOfMonth(prev);
+    const pe = endOfMonth(prev);
+    return { currentStart: cs, currentEnd: ce, previousStart: ps, previousEnd: pe };
   };
 
   const getRevenueChange = () => {
@@ -403,10 +517,18 @@ const Statistics: React.FC = () => {
 
       {/* Patient Statistics */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-          <Users className="mr-2" size={24} />
-          Statistiques Patients
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+            <Users className="mr-2" size={24} />
+            Statistiques Patients
+          </h2>
+          {isCalculating && (
+            <div className="flex items-center text-xs text-gray-500">
+              <div className="w-3 h-3 border-b-2 rounded-full animate-spin border-primary-600 mr-2"></div>
+              Calcul en cours…
+            </div>
+          )}
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl shadow p-6">
@@ -494,10 +616,18 @@ const Statistics: React.FC = () => {
 
       {/* Appointment Statistics */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-          <Calendar className="mr-2" size={24} />
-          Statistiques Agenda
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+            <Calendar className="mr-2" size={24} />
+            Statistiques Agenda
+          </h2>
+          {isCalculating && (
+            <div className="flex items-center text-xs text-gray-500">
+              <div className="w-3 h-3 border-b-2 rounded-full animate-spin border-primary-600 mr-2"></div>
+              Calcul en cours…
+            </div>
+          )}
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl shadow p-6">
@@ -552,10 +682,27 @@ const Statistics: React.FC = () => {
 
       {/* Invoice Statistics */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-          <FileText className="mr-2" size={24} />
-          Statistiques Factures
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+            <FileText className="mr-2" size={24} />
+            Statistiques Factures
+            {selectedPeriod === 'month' && (
+              <div className="flex items-center gap-2 ml-2">
+                <Button variant="ghost" size="sm" onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))} leftIcon={<ChevronLeft size={14} />} />
+                <span className="text-sm text-gray-600">
+                  {format(selectedMonth, 'MMMM yyyy', { locale: fr })}
+                </span>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))} leftIcon={<ChevronRight size={14} />} disabled={addMonths(selectedMonth, 1) > new Date()} />
+              </div>
+            )}
+          </h2>
+          {isCalculating && (
+            <div className="flex items-center text-xs text-gray-500">
+              <div className="w-3 h-3 border-b-2 rounded-full animate-spin border-primary-600 mr-2"></div>
+              Calcul en cours…
+            </div>
+          )}
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl shadow p-6">

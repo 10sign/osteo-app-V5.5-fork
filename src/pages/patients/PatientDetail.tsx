@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Edit, 
@@ -1623,53 +1623,55 @@ const PatientDetail: React.FC = () => {
                           <h5 className="mb-3 text-sm font-medium text-gray-700">Documents de la consultation</h5>
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                             {consultation.documents.map((docMeta, docIndex) => (
-                              <div key={docIndex} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                                <div className="flex items-center space-x-3">
-                                  <div className="flex-shrink-0">
-                                    {docMeta.type?.startsWith('image/') ? (
-                                      <ImageIcon size={20} className="text-blue-500" />
-                                    ) : (
-                                      <FileText size={20} className="text-gray-500" />
-                                    )}
+                              <div key={docIndex} className="p-3 border border-gray-200 rounded-lg overflow-hidden">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="flex items-center space-x-3 min-w-0">
+                                    <div className="flex-shrink-0">
+                                      {docMeta.type?.startsWith('image/') ? (
+                                        <ImageIcon size={20} className="text-blue-500" />
+                                      ) : (
+                                        <FileText size={20} className="text-gray-500" />
+                                      )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <h6 className="text-sm font-medium text-gray-900 truncate">
+                                        {docMeta.originalName || docMeta.name}
+                                      </h6>
+                                      <p className="text-xs text-gray-500 truncate">
+                                        {docMeta.size ? `${(docMeta.size / (1024 * 1024)).toFixed(2)} MB` : 'Taille inconnue'}
+                                        {docMeta.category && ` • ${docMeta.category}`}
+                                      </p>
+                                    </div>
                                   </div>
-                                  <div className="flex-1 min-w-0">
-                                    <h6 className="text-sm font-medium text-gray-900 truncate">
-                                      {docMeta.originalName || docMeta.name}
-                                    </h6>
-                                    <p className="text-xs text-gray-500">
-                                      {docMeta.size ? `${(docMeta.size / (1024 * 1024)).toFixed(2)} MB` : 'Taille inconnue'}
-                                      {docMeta.category && ` • ${docMeta.category}`}
-                                    </p>
+                                  <div className="flex space-x-1 flex-shrink-0">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setZoom(1);
+                                        setViewerLoading(true);
+                                        setViewingDocument(docMeta);
+                                      }}
+                                      leftIcon={<Eye size={12} />}
+                                      className="text-xs"
+                                    >
+                                      Voir
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = docMeta.url;
+                                        link.download = docMeta.originalName || docMeta.name;
+                                        link.click();
+                                      }}
+                                      leftIcon={<Download size={12} />}
+                                      className="text-xs"
+                                    >
+                                      Télécharger
+                                    </Button>
                                   </div>
-                                </div>
-                                <div className="flex space-x-1">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                      setZoom(1);
-                                      setViewerLoading(true);
-                                      setViewingDocument(docMeta);
-                                    }}
-                                    leftIcon={<Eye size={12} />}
-                                    className="text-xs"
-                                  >
-                                    Voir
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                      const link = document.createElement('a');
-                                      link.href = docMeta.url;
-                                      link.download = docMeta.originalName || docMeta.name;
-                                      link.click();
-                                    }}
-                                    leftIcon={<Download size={12} />}
-                                    className="text-xs"
-                                  >
-                                    Télécharger
-                                  </Button>
                                 </div>
                               </div>
                             ))}
