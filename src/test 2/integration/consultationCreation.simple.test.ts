@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createPatientWithClinicalData } from '../factories/patientFactory'
+import { createPatientWithClinicalData } from '../../test/factories/patientFactory'
 
 // Mock Firebase Firestore
 vi.mock('firebase/firestore', () => ({
