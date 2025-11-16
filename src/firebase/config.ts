@@ -15,7 +15,7 @@ const resolvedStorageBucket = (() => {
 })();
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? "AIzaSyD-L4R32GM-QZCOJBLzcfp69LpC7m8488s",
+  apiKey: String(import.meta.env.VITE_FIREBASE_API_KEY ?? ""),
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? "ostheo-app.firebaseapp.com",
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL ?? "https://ostheo-app-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? "ostheo-app",
