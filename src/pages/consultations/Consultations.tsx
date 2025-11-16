@@ -24,6 +24,7 @@ import { setupSafeSnapshot } from '../../utils/firestoreListener';
 import { db, auth } from '../../firebase/config';
 import { ConsultationService } from '../../services/consultationService';
 import { AppointmentService } from '../../services/appointmentService';
+import { AuditLogger, AuditEventType, SensitivityLevel } from '../../utils/auditLogger';
 
 interface Appointment {
   id: string;
@@ -432,6 +433,19 @@ const Consultations: React.FC = () => {
       }
 
       setMappedConsultationsForCalendar(mappedConsultationsData);
+      try {
+        const start = new Date(); start.setHours(0,0,0,0);
+        const end = new Date(start); end.setDate(end.getDate()+1);
+        const todayCount = mappedConsultationsData.filter(a => a.date >= start && a.date < end).length;
+        await AuditLogger.log(
+          AuditEventType.DATA_ACCESS,
+          'consultations/page',
+          'sync_check_today',
+          SensitivityLevel.INTERNAL,
+          'success',
+          { agendaTodayCount: todayCount }
+        );
+      } catch {}
       return mappedConsultationsData;
 
     } catch (error) {

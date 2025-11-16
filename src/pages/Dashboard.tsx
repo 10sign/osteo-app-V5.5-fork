@@ -13,6 +13,10 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { DashboardService } from '../services/dashboardService';
+import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
+import { collection, query, where } from 'firebase/firestore';
+import { setupSafeSnapshot } from '../utils/firestoreListener';
+import { db, auth } from '../firebase/config';
 import HDSComplianceBadge from '../components/ui/HDSComplianceBadge';
 import SubstitutesList from '../components/dashboard/SubstitutesList';
 import MigrationAlertBanner from '../components/ui/MigrationAlertBanner';
@@ -73,6 +77,51 @@ const Dashboard: React.FC = () => {
     loadDashboardStats(true);
   }, []);
 
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    let unsubscribe: () => void = () => {};
+    (async () => {
+      const consultationsRef = collection(db, 'consultations');
+      const q = query(consultationsRef, where('osteopathId', '==', auth.currentUser!.uid));
+      unsubscribe = await setupSafeSnapshot(q, () => {
+        loadDashboardStats(false);
+      }, (err) => {
+        setError('Erreur de synchronisation en temps réel: ' + err.message);
+      });
+    })();
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    let unsubscribe: () => void = () => {};
+    (async () => {
+      const patientsRef = collection(db, 'patients');
+      const q = query(patientsRef, where('osteopathId', '==', auth.currentUser!.uid));
+      unsubscribe = await setupSafeSnapshot(q, () => {
+        loadDashboardStats(false);
+      }, (err) => {
+        setError('Erreur de synchronisation en temps réel: ' + err.message);
+      });
+    })();
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    let unsubscribe: () => void = () => {};
+    (async () => {
+      const invoicesRef = collection(db, 'invoices');
+      const q = query(invoicesRef, where('osteopathId', '==', auth.currentUser!.uid));
+      unsubscribe = await setupSafeSnapshot(q, () => {
+        loadDashboardStats(false);
+      }, (err) => {
+        setError('Erreur de synchronisation en temps réel: ' + err.message);
+      });
+    })();
+    return () => unsubscribe();
+  }, []);
+
   const loadDashboardStats = async (isInitialLoad = false) => {
     try {
       if (isInitialLoad) {
@@ -80,9 +129,89 @@ const Dashboard: React.FC = () => {
       }
       setError(null);
       
+      const previous = { ...stats };
       const dashboardStats = await DashboardService.getDashboardStats();
+      const previousToday = previous.todayAppointments;
       setStats(dashboardStats);
       setLastRefreshTime(new Date());
+      if (dashboardStats.todayAppointments !== previousToday) {
+        await AuditLogger.log(
+          AuditEventType.DATA_ACCESS,
+          'dashboard/today_consultations',
+          'sync_check',
+          SensitivityLevel.INTERNAL,
+          'success',
+          {
+            dashboardCount: dashboardStats.todayAppointments,
+            previousCount: previousToday
+          }
+        );
+      }
+      if (dashboardStats.patientCount !== previous.patientCount) {
+        await AuditLogger.log(
+          AuditEventType.DATA_ACCESS,
+          'dashboard/patient_count',
+          'sync_check',
+          SensitivityLevel.INTERNAL,
+          'success',
+          {
+            dashboardCount: dashboardStats.patientCount,
+            previousCount: previous.patientCount
+          }
+        );
+      }
+      if (dashboardStats.pendingInvoices !== previous.pendingInvoices) {
+        await AuditLogger.log(
+          AuditEventType.DATA_ACCESS,
+          'dashboard/pending_invoices',
+          'sync_check',
+          SensitivityLevel.INTERNAL,
+          'success',
+          {
+            dashboardCount: dashboardStats.pendingInvoices,
+            previousCount: previous.pendingInvoices
+          }
+        );
+      }
+      if (dashboardStats.newPatientsThisMonth !== previous.newPatientsThisMonth) {
+        await AuditLogger.log(
+          AuditEventType.DATA_ACCESS,
+          'dashboard/new_patients_month',
+          'sync_check',
+          SensitivityLevel.INTERNAL,
+          'success',
+          {
+            dashboardCount: dashboardStats.newPatientsThisMonth,
+            previousCount: previous.newPatientsThisMonth
+          }
+        );
+      }
+      if (dashboardStats.invoicesThisMonth !== previous.invoicesThisMonth) {
+        await AuditLogger.log(
+          AuditEventType.DATA_ACCESS,
+          'dashboard/invoices_month',
+          'sync_check',
+          SensitivityLevel.INTERNAL,
+          'success',
+          {
+            dashboardCount: dashboardStats.invoicesThisMonth,
+            previousCount: previous.invoicesThisMonth
+          }
+        );
+      }
+      if (dashboardStats.occupancyRate !== previous.occupancyRate) {
+        await AuditLogger.log(
+          AuditEventType.DATA_ACCESS,
+          'dashboard/occupancy_rate',
+          'sync_check',
+          SensitivityLevel.INTERNAL,
+          'success',
+          {
+            dashboardValue: dashboardStats.occupancyRate,
+            previousValue: previous.occupancyRate
+          }
+        );
+      }
       
     } catch (error) {
       console.error('Error loading dashboard stats:', error);

@@ -20,11 +20,13 @@ import {
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { setupSafeSnapshot } from '../utils/firestoreListener';
+import { toDateSafe } from '../utils/dataCleaning';
 import { Button } from '../components/ui/Button';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addMonths, subWeeks, subMonths, isWithinInterval,
   startOfQuarter, endOfQuarter, startOfYear, endOfYear, subQuarters, subYears } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 
 interface PatientStats {
   total: number;
@@ -88,6 +90,29 @@ const Statistics: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState<Date>(startOfMonth(new Date()));
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [isCalculating, setIsCalculating] = useState(false);
+
+  const logChange = async (
+    resource: string,
+    field: string,
+    previousValue: number,
+    currentValue: number
+  ) => {
+    if (previousValue !== currentValue) {
+      await AuditLogger.log(
+        AuditEventType.DATA_ACCESS,
+        resource,
+        'sync_check',
+        SensitivityLevel.INTERNAL,
+        'success',
+        {
+          field,
+          previous: previousValue,
+          current: currentValue,
+          period: selectedPeriod
+        }
+      );
+    }
+  };
 
   // Mise à jour de l'heure actuelle toutes les secondes
   useEffect(() => {
@@ -168,7 +193,7 @@ const Statistics: React.FC = () => {
       const q = query(consultationsRef, where('osteopathId', '==', auth.currentUser!.uid));
       unsubscribe = await setupSafeSnapshot(q, () => {
         setIsCalculating(true);
-        loadPatientStats().finally(() => setIsCalculating(false));
+        Promise.all([loadPatientStats(), loadAppointmentStats()]).finally(() => setIsCalculating(false));
       }, (err) => {
         console.error('Consultation listener error:', err);
       });
@@ -204,6 +229,7 @@ const Statistics: React.FC = () => {
     const now = new Date();
     const baseDate = selectedPeriod === 'month' ? selectedMonth : now;
     const monthStart = startOfMonth(baseDate);
+    const { currentStart, currentEnd } = getPeriodRange(selectedPeriod, baseDate);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     // Calculate age groups
@@ -247,74 +273,101 @@ const Statistics: React.FC = () => {
       where('osteopathId', '==', auth.currentUser!.uid)
     );
     const consultationsSnapshot = await getDocs(consultationsQuery);
-    
-    const uniquePatients = new Set();
+
+    const uniquePatientsLast30Days = new Set<string>();
+    const uniquePatientsInPeriod = new Set<string>();
     consultationsSnapshot.docs.forEach(doc => {
       const consultation = doc.data();
-      const consultationDate = consultation.date?.toDate?.() || new Date(consultation.date);
+      const consultationDate = toDateSafe(consultation.date);
       if (consultationDate >= thirtyDaysAgo) {
-        uniquePatients.add(consultation.patientId);
+        uniquePatientsLast30Days.add(consultation.patientId);
+      }
+      if (isWithinInterval(consultationDate, { start: currentStart, end: currentEnd })) {
+        uniquePatientsInPeriod.add(consultation.patientId);
       }
     });
 
-    setPatientStats({
+    const nextStats: PatientStats = {
       total: patients.length,
-      active: patients.length, // Assuming all patients are active
+      active: uniquePatientsInPeriod.size,
       newThisMonth,
-      seenLast30Days: uniquePatients.size,
+      seenLast30Days: uniquePatientsLast30Days.size,
       byGender: genderCount,
       byAgeGroup: ageGroups
-    });
+    };
+    await logChange('statistics/patients', 'total', patientStats.total, nextStats.total);
+    await logChange('statistics/patients', 'active', patientStats.active, nextStats.active);
+    await logChange('statistics/patients', 'newThisMonth', patientStats.newThisMonth, nextStats.newThisMonth);
+    await logChange('statistics/patients', 'seenLast30Days', patientStats.seenLast30Days, nextStats.seenLast30Days);
+    setPatientStats(nextStats);
   };
 
   const loadAppointmentStats = async () => {
-    const appointmentsRef = collection(db, 'appointments');
-    const q = query(appointmentsRef, where('osteopathId', '==', auth.currentUser!.uid));
+    const consultationsRef = collection(db, 'consultations');
+    const q = query(consultationsRef, where('osteopathId', '==', auth.currentUser!.uid));
     const snapshot = await getDocs(q);
 
-    const appointments = snapshot.docs.map(doc => doc.data());
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+    const baseDate = selectedPeriod === 'month' ? selectedMonth : now;
+    const { currentStart, currentEnd } = getPeriodRange(selectedPeriod, baseDate);
 
     let todayCount = 0;
-    let thisWeekCount = 0;
-    let cancelledCount = 0;
-    let totalAppointments = appointments.length;
+    let periodCount = 0;
+    let cancelledCountInPeriod = 0;
+    let totalInPeriod = 0;
 
-    appointments.forEach(appointment => {
-      const appointmentDate = appointment.date?.toDate?.() || new Date(appointment.date);
-      
-      // Today's appointments
-      if (appointmentDate.toDateString() === today.toDateString()) {
+    snapshot.docs.forEach(doc => {
+      const consultation = doc.data();
+      const consultationDate = toDateSafe(consultation.date);
+
+      if (consultationDate.toDateString() === today.toDateString()) {
         todayCount++;
       }
 
-      // This week's appointments
-      if (isWithinInterval(appointmentDate, { start: weekStart, end: weekEnd })) {
-        thisWeekCount++;
-      }
-
-      // Cancelled appointments
-      if (appointment.status === 'cancelled') {
-        cancelledCount++;
+      if (isWithinInterval(consultationDate, { start: currentStart, end: currentEnd })) {
+        periodCount++;
+        totalInPeriod++;
+        if (consultation.status === 'cancelled') {
+          cancelledCountInPeriod++;
+        }
       }
     });
 
-    // Calculate occupancy rate (simplified - assuming 8 hours * 5 days = 40 slots per week)
-    const totalWeeklySlots = 40;
-    const occupancyRate = totalWeeklySlots > 0 ? (thisWeekCount / totalWeeklySlots) * 100 : 0;
-    const cancellationRate = totalAppointments > 0 ? (cancelledCount / totalAppointments) * 100 : 0;
+    const slotsPerDay = 11;
+    const workingDays = getWorkingDaysInRange(currentStart, currentEnd);
+    const totalSlots = workingDays * slotsPerDay;
+    const occupancyRate = totalSlots > 0 ? (periodCount / totalSlots) * 100 : 0;
+    const cancellationRate = totalInPeriod > 0 ? (cancelledCountInPeriod / totalInPeriod) * 100 : 0;
 
-    setAppointmentStats({
+    const nextAppStats: AppointmentStats = {
       today: todayCount,
-      thisWeek: thisWeekCount,
+      thisWeek: periodCount,
       occupancyRate: Math.min(occupancyRate, 100),
       cancellationRate,
-      totalSlots: totalWeeklySlots,
-      bookedSlots: thisWeekCount
-    });
+      totalSlots,
+      bookedSlots: periodCount
+    };
+    await logChange('statistics/appointments', 'today', appointmentStats.today, nextAppStats.today);
+    await logChange('statistics/appointments', 'countPeriod', appointmentStats.thisWeek, nextAppStats.thisWeek);
+    await logChange('statistics/appointments', 'occupancyRate', appointmentStats.occupancyRate, nextAppStats.occupancyRate);
+    await logChange('statistics/appointments', 'cancellationRate', appointmentStats.cancellationRate, nextAppStats.cancellationRate);
+    await logChange('statistics/appointments', 'totalSlots', appointmentStats.totalSlots, nextAppStats.totalSlots);
+    await logChange('statistics/appointments', 'bookedSlots', appointmentStats.bookedSlots, nextAppStats.bookedSlots);
+    setAppointmentStats(nextAppStats);
+  };
+
+  const getWorkingDaysInRange = (start: Date, end: Date) => {
+    const days = [] as Date[];
+    let d = new Date(start.getTime());
+    while (d <= end) {
+      days.push(new Date(d.getTime()));
+      d.setDate(d.getDate() + 1);
+    }
+    return days.filter(day => {
+      const dow = day.getDay();
+      return dow !== 0 && dow !== 6;
+    }).length;
   };
 
   const loadInvoiceStats = async () => {
@@ -370,14 +423,21 @@ const Statistics: React.FC = () => {
 
     const collectionRate = invoices.length > 0 ? (paidInvoices / invoices.length) * 100 : 0;
 
-    setInvoiceStats({
+    const nextInvoiceStats: InvoiceStats = {
       currentMonthRevenue,
       previousMonthRevenue,
       unpaidAmount,
       collectionRate,
       totalInvoices: invoices.length,
       paidInvoices
-    });
+    };
+    await logChange('statistics/invoices', 'currentMonthRevenue', invoiceStats.currentMonthRevenue, nextInvoiceStats.currentMonthRevenue);
+    await logChange('statistics/invoices', 'previousMonthRevenue', invoiceStats.previousMonthRevenue, nextInvoiceStats.previousMonthRevenue);
+    await logChange('statistics/invoices', 'unpaidAmount', invoiceStats.unpaidAmount, nextInvoiceStats.unpaidAmount);
+    await logChange('statistics/invoices', 'collectionRate', invoiceStats.collectionRate, nextInvoiceStats.collectionRate);
+    await logChange('statistics/invoices', 'totalInvoices', invoiceStats.totalInvoices, nextInvoiceStats.totalInvoices);
+    await logChange('statistics/invoices', 'paidInvoices', invoiceStats.paidInvoices, nextInvoiceStats.paidInvoices);
+    setInvoiceStats(nextInvoiceStats);
   };
 
   const formatCurrency = (amount: number) => {
@@ -458,6 +518,14 @@ const Statistics: React.FC = () => {
       minute: '2-digit',
       second: '2-digit'
     });
+  };
+
+  const getAppointmentsPeriodLabel = () => {
+    if (selectedPeriod === 'week') return "RDV cette semaine";
+    if (selectedPeriod === 'month') return "RDV ce mois";
+    if (selectedPeriod === 'quarter') return "RDV ce trimestre";
+    if (selectedPeriod === 'year') return "RDV cette année";
+    return "RDV";
   };
 
   if (loading) {
@@ -645,7 +713,7 @@ const Statistics: React.FC = () => {
           <div className="bg-white rounded-xl shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">RDV cette semaine</p>
+                <p className="text-sm text-gray-600">{getAppointmentsPeriodLabel()}</p>
                 <p className="text-2xl font-bold text-gray-900">{appointmentStats.thisWeek}</p>
               </div>
               <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
