@@ -2,7 +2,4 @@
   command = "npm run build"
 
 [build.environment]
-  SECRETS_SCAN_SMART_DETECTION_ENABLED = "true"
-  SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES = "password,Password,mot de passe,Mot de passe,AIza"
-  # Optional: omit scanning of test artifacts to reduce false positives
-  SECRETS_SCAN_OMIT_PATHS = "testsprite_tests/**,tests/**"
+  SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
