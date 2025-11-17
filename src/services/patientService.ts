@@ -208,7 +208,7 @@ export class PatientService {
           patientId,
           { ...decryptedPatientData, id: patientId },
           effectiveOsteopathId,
-          { includeEmpty: false }
+          { includeEmpty: true }
         );
 
         if (syncResult.success) {

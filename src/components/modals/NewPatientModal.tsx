@@ -1055,7 +1055,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
                     <label htmlFor="nextAppointment" className="block mb-1 text-sm font-medium text-gray-700">
-                      Prochain rendez-vous
+                      Date de consultation
                     </label>
                     <input
                       type="date"
@@ -1068,7 +1068,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
 
                   <div>
                     <label htmlFor="nextAppointmentTime" className="block mb-1 text-sm font-medium text-gray-700">
-                      Heure du rendez-vous
+                      Heure de consultation
                     </label>
                     <input
                       type="time"

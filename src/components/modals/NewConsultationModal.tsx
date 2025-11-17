@@ -215,7 +215,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
         return;
       }
 
-      // Si un patient est pré-sélectionné, on n'a pas besoin de charger tous les patients
+      // Si un patient est pré-sélectionné
       if (preselectedPatientId) {
         setIsPatientPreselected(true);
         try {
@@ -557,7 +557,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
                     <label htmlFor="date" className="block mb-1 text-sm font-medium text-gray-700">
-                      Date *
+                      Date de consultation
                     </label>
                     <input
                       type="date"
@@ -572,7 +572,7 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
 
                   <div>
                     <label htmlFor="time" className="block mb-1 text-sm font-medium text-gray-700">
-                      Heure *
+                      Heure de consultation
                     </label>
                     <input
                       type="time"
@@ -898,7 +898,8 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                       className={`input w-full ${errors.duration ? 'border-error focus:border-error focus:ring-error' : ''}`}
                       {...register('duration', { 
                         required: 'Ce champ est requis',
-                        min: { value: 15, message: 'Durée minimum 15 minutes' }
+                        min: { value: 15, message: 'Durée minimum 15 minutes' },
+                        valueAsNumber: true
                       })}
                     />
                     {errors.duration && (
@@ -918,7 +919,8 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                       className={`input w-full ${errors.price ? 'border-error focus:border-error focus:ring-error' : ''}`}
                       {...register('price', { 
                         required: 'Ce champ est requis',
-                        min: { value: 0, message: 'Le tarif doit être positif' }
+                        min: { value: 0, message: 'Le tarif doit être positif' },
+                        valueAsNumber: true
                       })}
                     />
                     {errors.price && (

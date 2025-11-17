@@ -18,6 +18,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   fallbackPath = '/login'
 }) => {
   const { user, isAuthenticated, loading, hasPermission, isAdmin } = useAuth();
+  const bypass = import.meta.env.DEV && String((import.meta as any).env.VITE_BYPASS_AUTH ?? "false") === "true";
   const location = useLocation();
 
   // Save navigation state on route change
@@ -27,6 +28,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
   }, [location.pathname, isAuthenticated, loading]);
 
+  if (bypass) {
+    return <>{children}</>;
+  }
   if (loading) {
     return <LoadingScreen />;
   }

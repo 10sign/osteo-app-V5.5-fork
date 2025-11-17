@@ -542,7 +542,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div>
                         <label htmlFor="date" className="block mb-1 text-sm font-medium text-gray-700">
-                          Date * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
+                          Date de consultation {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                         </label>
                         <input
                           type="date"
@@ -558,7 +558,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
 
                       <div>
                         <label htmlFor="time" className="block mb-1 text-sm font-medium text-gray-700">
-                          Heure * {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
+                          Heure de consultation {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
                         </label>
                         <input
                           type="time"
@@ -980,7 +980,8 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                           className={`input w-full ${errors.duration ? 'border-error focus:border-error focus:ring-error' : ''} ${consultationData?.isInitialConsultation ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                           {...register('duration', {
                             required: 'Ce champ est requis',
-                            min: { value: 15, message: 'Durée minimum 15 minutes' }
+                            min: { value: 15, message: 'Durée minimum 15 minutes' },
+                            valueAsNumber: true
                           })}
                           disabled={consultationData?.isInitialConsultation}
                         />
@@ -1001,7 +1002,8 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                           className={`input w-full ${errors.price ? 'border-error focus:border-error focus:ring-error' : ''} ${consultationData?.isInitialConsultation ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                           {...register('price', {
                             required: 'Ce champ est requis',
-                            min: { value: 0, message: 'Le tarif doit être positif' }
+                            min: { value: 0, message: 'Le tarif doit être positif' },
+                            valueAsNumber: true
                           })}
                           disabled={consultationData?.isInitialConsultation}
                         />

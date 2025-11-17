@@ -74,12 +74,14 @@ export class InitialConsultationSyncService {
 
         // Construire les données de consultation à partir du dossier patient
         const now = new Date();
+        const maybeNext = (patientData as any).nextAppointment;
+        const scheduled = maybeNext ? toDateSafe(maybeNext, now) : now;
         const patientName = `${patientData.firstName || ''} ${patientData.lastName || ''}`.trim();
 
         const newConsultation: ConsultationFormData = {
           patientId,
           patientName: patientName || 'Patient',
-          date: now,
+          date: scheduled,
           reason: (patientData as any).consultationReason || 'Première consultation',
           treatment: (patientData as any).osteopathicTreatment || 'Évaluation initiale et anamnèse',
           notes: (patientData as any).notes || 'Consultation initiale créée automatiquement depuis le dossier patient.',
@@ -109,6 +111,7 @@ export class InitialConsultationSyncService {
           osteopathicTreatment: (patientData as any).osteopathicTreatment || '',
           symptoms: Array.isArray(patientData.tags) ? patientData.tags : [],
           treatmentHistory: [],
+          documents: Array.isArray((patientData as any).documents) ? (patientData as any).documents : [],
 
           // Flag initiale
           isInitialConsultation: true

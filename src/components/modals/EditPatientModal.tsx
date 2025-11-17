@@ -886,11 +886,11 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                 </div>
 
                 <div>
-                  <label htmlFor="nextAppointment" className="block text-sm font-medium text-gray-700 mb-1">
-                    Jour et heure de consultation
-                  </label>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
+                      <label htmlFor="nextAppointment" className="block text-sm font-medium text-gray-700 mb-1">
+                        Date de consultation
+                      </label>
                       <input
                         type="date"
                         id="nextAppointment"
@@ -911,6 +911,9 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
                       )}
                     </div>
                     <div>
+                      <label htmlFor="nextAppointmentTime" className="block text-sm font-medium text-gray-700 mb-1">
+                        Heure de consultation
+                      </label>
                       <input
                         type="time"
                         id="nextAppointmentTime"
