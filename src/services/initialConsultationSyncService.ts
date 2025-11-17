@@ -6,7 +6,7 @@
  */
 
 import { collection, query, where, orderBy, limit, getDocs, doc, Timestamp, getDoc, addDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase/config';
+import { db } from '../firebase/config';
 import { HDSCompliance } from '../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import { toDateSafe } from '../utils/dataCleaning';
@@ -145,7 +145,8 @@ export class InitialConsultationSyncService {
       result.consultationId = consultationId;
 
       // 2. Préparer les champs à mettre à jour avec les données du patient
-      const fieldsToUpdate = this.prepareFieldsToUpdate(patientData, options?.includeEmpty === true);
+      const includeEmpty = options?.includeEmpty !== false;
+      const fieldsToUpdate = this.prepareFieldsToUpdate(patientData, includeEmpty);
 
       console.log(`  🔍 DEBUG - Données patient reçues:`, {
         currentTreatment: patientData.currentTreatment,
@@ -188,7 +189,7 @@ export class InitialConsultationSyncService {
             patientId,
             osteopathId,
             timestamp: Timestamp.fromDate(new Date()),
-            mode: options?.includeEmpty ? 'mirror_exact' : 'copy_non_empty',
+            mode: includeEmpty ? 'mirror_exact' : 'copy_non_empty',
             before: decryptedBefore,
             plannedUpdates: fieldsToUpdate
           });
@@ -214,7 +215,7 @@ export class InitialConsultationSyncService {
           patientId,
           fieldsUpdated: result.fieldsUpdated,
           source: 'patient_update',
-          mode: options?.includeEmpty ? 'mirror_exact' : 'copy_non_empty'
+          mode: includeEmpty ? 'mirror_exact' : 'copy_non_empty'
         }
       );
 
@@ -295,30 +296,40 @@ export class InitialConsultationSyncService {
    * ✅ CORRECTION: Copie SEULEMENT les champs NON VIDES du dossier patient
    * Ne copie PAS les chaînes vides pour ne pas écraser des données existantes dans la consultation
    */
-  private static prepareFieldsToUpdate(patientData: PatientData, includeEmpty: boolean = false): Record<string, any> {
+  private static prepareFieldsToUpdate(patientData: PatientData, includeEmpty: boolean = true): Record<string, any> {
     const fieldsToUpdate: Record<string, any> = {};
 
     // Champs d'identité du patient (snapshot) - Toujours copier
-    if (patientData.firstName !== undefined) {
-      fieldsToUpdate.patientFirstName = patientData.firstName;
-    }
-    if (patientData.lastName !== undefined) {
-      fieldsToUpdate.patientLastName = patientData.lastName;
-    }
-    if (patientData.dateOfBirth !== undefined) {
-      fieldsToUpdate.patientDateOfBirth = patientData.dateOfBirth;
-    }
-    if (patientData.gender !== undefined) {
-      fieldsToUpdate.patientGender = patientData.gender;
-    }
-    if (patientData.email !== undefined) {
-      fieldsToUpdate.patientEmail = patientData.email;
-    }
-    if (patientData.phone !== undefined) {
-      fieldsToUpdate.patientPhone = patientData.phone;
-    }
-    if (patientData.profession !== undefined) {
-      fieldsToUpdate.patientProfession = patientData.profession;
+    if (includeEmpty) {
+      fieldsToUpdate.patientFirstName = patientData.firstName ?? '';
+      fieldsToUpdate.patientLastName = patientData.lastName ?? '';
+      fieldsToUpdate.patientDateOfBirth = patientData.dateOfBirth ?? '';
+      fieldsToUpdate.patientGender = (patientData.gender as any) ?? '';
+      fieldsToUpdate.patientEmail = patientData.email ?? '';
+      fieldsToUpdate.patientPhone = patientData.phone ?? '';
+      fieldsToUpdate.patientProfession = patientData.profession ?? '';
+    } else {
+      if (patientData.firstName !== undefined) {
+        fieldsToUpdate.patientFirstName = patientData.firstName;
+      }
+      if (patientData.lastName !== undefined) {
+        fieldsToUpdate.patientLastName = patientData.lastName;
+      }
+      if (patientData.dateOfBirth !== undefined) {
+        fieldsToUpdate.patientDateOfBirth = patientData.dateOfBirth;
+      }
+      if (patientData.gender !== undefined) {
+        fieldsToUpdate.patientGender = patientData.gender;
+      }
+      if (patientData.email !== undefined) {
+        fieldsToUpdate.patientEmail = patientData.email;
+      }
+      if (patientData.phone !== undefined) {
+        fieldsToUpdate.patientPhone = patientData.phone;
+      }
+      if (patientData.profession !== undefined) {
+        fieldsToUpdate.patientProfession = patientData.profession;
+      }
     }
 
     // Traiter l'adresse
@@ -359,9 +370,7 @@ export class InitialConsultationSyncService {
     const copyField = (key: keyof PatientData, target: string) => {
       const val = (patientData as any)[key];
       if (includeEmpty) {
-        if (val !== undefined && val !== null) {
-          fieldsToUpdate[target] = val;
-        }
+        fieldsToUpdate[target] = typeof val === 'string' ? (val ?? '') : (val ?? '');
       } else {
         if (typeof val === 'string') {
           if (val && val.trim() !== '') fieldsToUpdate[target] = val;
@@ -379,9 +388,7 @@ export class InitialConsultationSyncService {
 
     // Symptômes (depuis les tags)
     if (includeEmpty) {
-      if (patientData.tags !== undefined && patientData.tags !== null) {
-        fieldsToUpdate.symptoms = patientData.tags || [];
-      }
+      fieldsToUpdate.symptoms = Array.isArray(patientData.tags) ? patientData.tags : [];
     } else if (patientData.tags && Array.isArray(patientData.tags) && patientData.tags.length > 0) {
       fieldsToUpdate.symptoms = patientData.tags;
     }
