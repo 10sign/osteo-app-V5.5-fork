@@ -709,25 +709,6 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                         />
                       </div>
 
-                      {/* Traitement ostéopathique */}
-                      <div className="mb-4">
-                        <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                          Traitement ostéopathique {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
-                          {clinicalFallback.osteopathicTreatment && (
-                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700">
-                              Source : dossier patient
-                            </span>
-                          )}
-                        </label>
-                        <AutoResizeTextarea
-                          id="osteopathicTreatment"
-                          minRows={3}
-                          className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
-                          {...register('osteopathicTreatment')}
-                          placeholder="Décrivez le traitement ostéopathique..."
-                          disabled={consultationData?.isInitialConsultation}
-                        />
-                      </div>
 
                       {/* Symptômes / Syndromes */}
                       <div className="mb-4">
@@ -948,6 +929,26 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
                         className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
                         {...register('notes')}
                         placeholder="Notes additionnelles sur le patient..."
+                        disabled={consultationData?.isInitialConsultation}
+                      />
+                    </div>
+
+                    {/* Traitement ostéopathique */}
+                    <div className="mb-4">
+                      <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
+                        Traitement ostéopathique {consultationData?.isInitialConsultation && <span className="text-xs text-blue-600 font-normal">(🔒 Lecture seule)</span>}
+                        {clinicalFallback.osteopathicTreatment && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700">
+                            Source : dossier patient
+                          </span>
+                        )}
+                      </label>
+                      <AutoResizeTextarea
+                        id="osteopathicTreatment"
+                        minRows={3}
+                        className={`w-full resize-none input ${consultationData?.isInitialConsultation ? 'bg-gray-50 cursor-not-allowed text-gray-700 border-blue-200' : ''}`}
+                        {...register('osteopathicTreatment')}
+                        placeholder="Décrivez le traitement ostéopathique..."
                         disabled={consultationData?.isInitialConsultation}
                       />
                     </div>

@@ -656,19 +656,6 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                     />
                   </div>
 
-                  {/* Traitement ostéopathique */}
-                  <div className="mb-4">
-                    <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                      Traitement ostéopathique
-                    </label>
-                    <AutoResizeTextarea
-                      id="osteopathicTreatment"
-                      minRows={3}
-                      className="w-full resize-none input"
-                      {...register('osteopathicTreatment')}
-                      placeholder="Décrivez le traitement ostéopathique prévu..."
-                    />
-                  </div>
 
                   {/* Symptômes / Syndromes */}
                   <div className="mb-4">
@@ -882,6 +869,19 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
                     className="w-full resize-none input"
                     {...register('notes')}
                     placeholder="Notes additionnelles sur le patient..."
+                  />
+                </div>
+                {/* Traitement ostéopathique */}
+                <div className="mb-4">
+                  <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
+                    Traitement ostéopathique
+                  </label>
+                  <AutoResizeTextarea
+                    id="osteopathicTreatment"
+                    minRows={3}
+                    className="w-full resize-none input"
+                    {...register('osteopathicTreatment')}
+                    placeholder="Décrivez le traitement ostéopathique prévu..."
                   />
                 </div>
 
