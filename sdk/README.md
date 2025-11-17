@@ -14,9 +14,9 @@ npm install @osteoapp/sdk
 import { OsteoAppSDK } from '@osteoapp/sdk';
 
 const sdk = new OsteoAppSDK({
-  apiUrl: 'https://your-osteoapp-api.com',
-  apiKey: 'your-api-key', // Optionnel
-  timeout: 10000, // 10 secondes
+  apiUrl: process.env.OSTEOAPP_API_URL,
+  apiKey: process.env.OSTEOAPP_API_KEY,
+  timeout: 10000,
   retries: 3
 });
 ```
