@@ -5,26 +5,14 @@ import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { enableCryptoEngine, initializeEncryption } from "../utils/encryption";
 
-// Configuration Firebase (utilise les variables VITE_* si présentes)
-// Sécurise la valeur du bucket: accepte *.appspot.com ou *.firebasestorage.app
-const resolvedStorageBucket = (() => {
-  const raw = String(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? "").trim();
-  const valid = raw && (/.+\.appspot\.com$/.test(raw) || /.+\.firebasestorage\.app$/.test(raw));
-  // Fallback sur le bucket officiel fourni par Firebase apps:sdkconfig
-  return valid ? raw : "ostheo-app.firebasestorage.app";
-})();
-
 const firebaseConfig = {
   apiKey: String(import.meta.env.VITE_FIREBASE_API_KEY ?? ""),
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? "ostheo-app.firebaseapp.com",
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL ?? "https://ostheo-app-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? "ostheo-app",
-  // Le bucket Firebase Storage peut être <project-id>.appspot.com ou <project-id>.firebasestorage.app
-  // Fallback aligné sur la configuration officielle retournée par Firebase
-  storageBucket: resolvedStorageBucket,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? "927433064971",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID ?? "1:927433064971:web:6134d2d69194aa2e053d0e",
-  // measurementId supprimé: Analytics non utilisés
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? "",
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL ?? "",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? "",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? "",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? "",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID ?? "",
 };
 
 // Configuration HDS
