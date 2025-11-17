@@ -870,19 +870,7 @@ const [, setClickCount] = useState(0);
                   />
                 </div>
 
-                <div>
-                  <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
-                    Traitement ostéopathique
-                  </label>
-                  <AutoResizeTextarea
-                    id="osteopathicTreatment"
-                    minRows={4}
-                    maxRows={8}
-                    className="w-full resize-none input"
-                    {...register('osteopathicTreatment')}
-                    placeholder="Description du traitement ostéopathique effectué ou à effectuer"
-                  />
-                </div>
+                
 
                 {/* Documents médicaux */}
                 <div className="pt-6 border-t">
@@ -1063,6 +1051,20 @@ const [, setClickCount] = useState(0);
                     className="w-full resize-none input"
                     {...register('notes')}
                     placeholder="Note sur le patient"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
+                    Traitement ostéopathique
+                  </label>
+                  <AutoResizeTextarea
+                    id="osteopathicTreatment"
+                    minRows={4}
+                    maxRows={8}
+                    className="w-full resize-none input"
+                    {...register('osteopathicTreatment')}
+                    placeholder="Description du traitement ostéopathique effectué ou à effectuer"
                   />
                 </div>
 
