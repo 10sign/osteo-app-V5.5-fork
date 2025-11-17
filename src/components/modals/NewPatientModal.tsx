@@ -6,7 +6,6 @@ import { auth } from '../../firebase/config';
 import { Button } from '../ui/Button';
 import { Patient, PatientFormData, TreatmentHistoryEntry } from '../../types';
 // Removed unused validatePatientData import
-import { ConsultationService } from '../../services/consultationService';
 import { InvoiceService } from '../../services/invoiceService';
 import { InitialConsultationSyncService } from '../../services/initialConsultationSyncService';
 import AutoResizeTextarea from '../ui/AutoResizeTextarea';
@@ -51,7 +50,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
   const [success, setSuccess] = useState<string | null>(null);
   const [treatmentHistory, setTreatmentHistory] = useState<TreatmentHistoryEntry[]>([]);
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>([]);
-  const [_clickCount, setClickCount] = useState(0);
+const [, setClickCount] = useState(0);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [hasFormData, setHasFormData] = useState(false);
 
@@ -62,7 +61,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
   });
 
   // Function to initialize form with empty data
-  const initializeFormWithEmptyData = () => {
+  const initializeFormWithEmptyData = React.useCallback(() => {
     console.log('Initializing form with empty data for new patient');
     
     // Initialize with completely empty data for new patient
@@ -89,14 +88,14 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
     console.log('Setting empty form values:', emptyFormData);
     
     try {
-      (Object.entries(emptyFormData) as [keyof PatientFormData, PatientFormData[keyof PatientFormData]][])
-        .forEach(([key, value]) => {
-          setValue(key, value as any);
-        });
+      (Object.keys(emptyFormData) as (keyof PatientFormData)[]).forEach((key) => {
+        const value = emptyFormData[key] as unknown as PatientFormData[keyof PatientFormData];
+        setValue(key, value);
+      });
     } catch (error) {
       console.error('Error setting empty form values:', error);
     }
-  };
+  }, [setValue]);
 
   // Load saved form data when modal opens
   useEffect(() => {
@@ -116,7 +115,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
       
       console.log('New patient modal opened - form initialized with empty data');
     }
-  }, [isOpen, trigger]);
+  }, [isOpen, trigger, initializeFormWithEmptyData]);
 
   // Force validation trigger when form values change
   useEffect(() => {
@@ -298,7 +297,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
     setError(error);
   };
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: PatientFormData) => {
     console.log('Starting patient creation...', { data });
     
     if (!auth.currentUser) {
@@ -321,7 +320,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
       // Extract street from full address (optional)
       const street = data.address || '';
       
-      const patientPayload: Record<string, any> = {
+      const patientPayload: Record<string, unknown> = {
         firstName: data.firstName.trim(),
         lastName: data.lastName.trim(),
         profession: data.profession || '',
@@ -369,7 +368,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
       console.log('About to create patient via PatientService with HDS compliance');
 
       // Création HDS du patient (chiffrement + audit + métadonnées)
-      patientId = await PatientService.createPatient(patientPayload as any);
+      patientId = await PatientService.createPatient(patientPayload as unknown as Patient);
       console.log('Patient successfully created via PatientService with ID:', patientId);
       
       setProgress(80);
@@ -502,7 +501,7 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         onSuccess();
         onClose();
       }, 1500);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating new patient flow:', error);
       // Si le patient a déjà été créé, ne pas afficher une erreur bloquante
       if (patientId) {
@@ -511,7 +510,8 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
         setSuccess('Dossier patient créé. Certaines actions automatiques ont échoué.');
         // Ne pas définir d’erreur globale pour éviter le banner rouge
       } else {
-        setError('Erreur lors de la création du nouveau dossier patient: ' + error.message);
+        const err = error as Error & { message?: string };
+        setError('Erreur lors de la création du nouveau dossier patient: ' + (err?.message ?? String(err)));
       }
     } finally {
       setIsSubmitting(false);
