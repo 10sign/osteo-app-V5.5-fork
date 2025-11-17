@@ -18,7 +18,7 @@ export default defineConfig(({ command, mode }) => {
           skipWaiting: true,
           cleanupOutdatedCaches: true
         },
-        includeAssets: ['logo.svg', 'mask-icon.svg', 'apple-touch-icon.png'],
+        includeAssets: ['logo.svg', 'mask-icon.svg', 'apple-touch-icon.png', 'Icon-logo-osteoapp-bleu.png', 'osteopathe-icone-logo.png'],
         manifest: {
           name: 'OstheoApp - Gestion de cabinet',
           short_name: 'OstheoApp',
@@ -27,9 +27,9 @@ export default defineConfig(({ command, mode }) => {
           background_color: '#ffffff',
           display: 'standalone',
           icons: [
-            { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-            { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-            { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+            { src: 'osteopathe-icone-logo.png', sizes: '192x192', type: 'image/png' },
+            { src: 'Icon-logo-osteoapp-bleu.png', sizes: '512x512', type: 'image/png' },
+            { src: 'Icon-logo-osteoapp-bleu.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
           ]
         }
       })] : [])
