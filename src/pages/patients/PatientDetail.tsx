@@ -266,8 +266,7 @@ const PatientDetail: React.FC = () => {
             const syncResult = await InitialConsultationSyncService.syncInitialConsultationForPatient(
               id,
               { ...(decryptedData as any), id },
-              auth.currentUser.uid,
-              { includeEmpty: false }
+              auth.currentUser.uid
             );
 
             // Créer une facture liée à cette consultation uniquement si une consultation a été créée

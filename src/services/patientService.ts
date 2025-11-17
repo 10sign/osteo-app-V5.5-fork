@@ -207,8 +207,7 @@ export class PatientService {
         const syncResult = await InitialConsultationSyncService.syncInitialConsultationForPatient(
           patientId,
           { ...decryptedPatientData, id: patientId },
-          effectiveOsteopathId,
-          { includeEmpty: true }
+          effectiveOsteopathId
         );
 
         if (syncResult.success) {

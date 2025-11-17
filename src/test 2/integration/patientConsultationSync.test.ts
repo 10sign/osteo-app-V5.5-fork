@@ -48,8 +48,7 @@ describe('InitialConsultationSyncService → Patient ↔ Consultation sync', () 
     const res = await InitialConsultationSyncService.syncInitialConsultationForPatient(
       patientFixture.id,
       patientFixture as any,
-      'osteo-001',
-      { includeEmpty: false }
+      'osteo-001'
     )
 
     expect(res.success).toBe(true)

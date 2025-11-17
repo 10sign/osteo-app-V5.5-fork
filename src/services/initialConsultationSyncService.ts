@@ -11,7 +11,7 @@ import { HDSCompliance } from '../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import { toDateSafe } from '../utils/dataCleaning';
 import { ConsultationService } from './consultationService';
-import { ConsultationFormData } from '../types';
+import { ConsultationFormData, DocumentMetadata } from '../types';
 
 interface SyncResult {
   success: boolean;
@@ -29,8 +29,8 @@ interface PatientData {
   email?: string;
   phone?: string;
   profession?: string;
-  address?: any;
-  insurance?: any;
+  address?: { street?: string } | string;
+  insurance?: { provider?: string } | string;
   insuranceNumber?: string;
   currentTreatment?: string;
   consultationReason?: string;
@@ -39,6 +39,8 @@ interface PatientData {
   osteopathicTreatment?: string;
   tags?: string[];
   notes?: string;
+  documents?: DocumentMetadata[];
+  nextAppointment?: Date | string;
 }
 
 export class InitialConsultationSyncService {
@@ -54,8 +56,7 @@ export class InitialConsultationSyncService {
   static async syncInitialConsultationForPatient(
     patientId: string,
     patientData: PatientData,
-    osteopathId: string,
-    options?: { includeEmpty?: boolean }
+    osteopathId: string
   ): Promise<SyncResult> {
     const result: SyncResult = {
       success: false,
@@ -74,7 +75,7 @@ export class InitialConsultationSyncService {
 
         // Construire les données de consultation à partir du dossier patient
         const now = new Date();
-        const maybeNext = (patientData as any).nextAppointment;
+        const maybeNext = patientData.nextAppointment;
         const scheduled = maybeNext ? toDateSafe(maybeNext, now) : now;
         const patientName = `${patientData.firstName || ''} ${patientData.lastName || ''}`.trim();
 
@@ -82,9 +83,9 @@ export class InitialConsultationSyncService {
           patientId,
           patientName: patientName || 'Patient',
           date: scheduled,
-          reason: (patientData as any).consultationReason || 'Première consultation',
-          treatment: (patientData as any).osteopathicTreatment || 'Évaluation initiale et anamnèse',
-          notes: (patientData as any).notes || 'Consultation initiale créée automatiquement depuis le dossier patient.',
+          reason: patientData.consultationReason || 'Première consultation',
+          treatment: patientData.osteopathicTreatment || 'Évaluation initiale et anamnèse',
+          notes: patientData.notes || 'Consultation initiale créée automatiquement depuis le dossier patient.',
           duration: 60,
           price: 55,
           status: 'completed',
@@ -101,17 +102,17 @@ export class InitialConsultationSyncService {
           patientProfession: patientData.profession || '',
           patientAddress: typeof patientData.address === 'string' ? (patientData.address || '') : (patientData.address?.street || ''),
           patientInsurance: typeof patientData.insurance === 'string' ? (patientData.insurance || '') : (patientData.insurance?.provider || ''),
-          patientInsuranceNumber: (patientData as any).insuranceNumber || '',
+          patientInsuranceNumber: patientData.insuranceNumber || '',
 
           // Champs cliniques du dossier patient
-          currentTreatment: (patientData as any).currentTreatment || '',
-          consultationReason: (patientData as any).consultationReason || '',
-          medicalAntecedents: (patientData as any).medicalAntecedents || '',
-          medicalHistory: (patientData as any).medicalHistory || '',
-          osteopathicTreatment: (patientData as any).osteopathicTreatment || '',
+          currentTreatment: patientData.currentTreatment || '',
+          consultationReason: patientData.consultationReason || '',
+          medicalAntecedents: patientData.medicalAntecedents || '',
+          medicalHistory: patientData.medicalHistory || '',
+          osteopathicTreatment: patientData.osteopathicTreatment || '',
           symptoms: Array.isArray(patientData.tags) ? patientData.tags : [],
           treatmentHistory: [],
-          documents: Array.isArray((patientData as any).documents) ? (patientData as any).documents : [],
+          documents: Array.isArray(patientData.documents) ? patientData.documents : [],
 
           // Flag initiale
           isInitialConsultation: true
@@ -145,8 +146,7 @@ export class InitialConsultationSyncService {
       result.consultationId = consultationId;
 
       // 2. Préparer les champs à mettre à jour avec les données du patient
-      const includeEmpty = options?.includeEmpty !== false;
-      const fieldsToUpdate = this.prepareFieldsToUpdate(patientData, includeEmpty);
+      const fieldsToUpdate = this.prepareFieldsToUpdate(patientData);
 
       console.log(`  🔍 DEBUG - Données patient reçues:`, {
         currentTreatment: patientData.currentTreatment,
@@ -189,7 +189,7 @@ export class InitialConsultationSyncService {
             patientId,
             osteopathId,
             timestamp: Timestamp.fromDate(new Date()),
-            mode: includeEmpty ? 'mirror_exact' : 'copy_non_empty',
+            mode: 'mirror_exact',
             before: decryptedBefore,
             plannedUpdates: fieldsToUpdate
           });
@@ -215,7 +215,7 @@ export class InitialConsultationSyncService {
           patientId,
           fieldsUpdated: result.fieldsUpdated,
           source: 'patient_update',
-          mode: includeEmpty ? 'mirror_exact' : 'copy_non_empty'
+          mode: 'mirror_exact'
         }
       );
 
@@ -296,105 +296,37 @@ export class InitialConsultationSyncService {
    * ✅ CORRECTION: Copie SEULEMENT les champs NON VIDES du dossier patient
    * Ne copie PAS les chaînes vides pour ne pas écraser des données existantes dans la consultation
    */
-  private static prepareFieldsToUpdate(patientData: PatientData, includeEmpty: boolean = true): Record<string, any> {
-    const fieldsToUpdate: Record<string, any> = {};
+  private static prepareFieldsToUpdate(patientData: PatientData): Record<string, unknown> {
+    const fieldsToUpdate: Record<string, unknown> = {};
 
-    // Champs d'identité du patient (snapshot) - Toujours copier
-    if (includeEmpty) {
-      fieldsToUpdate.patientFirstName = patientData.firstName ?? '';
-      fieldsToUpdate.patientLastName = patientData.lastName ?? '';
-      fieldsToUpdate.patientDateOfBirth = patientData.dateOfBirth ?? '';
-      fieldsToUpdate.patientGender = (patientData.gender as any) ?? '';
-      fieldsToUpdate.patientEmail = patientData.email ?? '';
-      fieldsToUpdate.patientPhone = patientData.phone ?? '';
-      fieldsToUpdate.patientProfession = patientData.profession ?? '';
-    } else {
-      if (patientData.firstName !== undefined) {
-        fieldsToUpdate.patientFirstName = patientData.firstName;
-      }
-      if (patientData.lastName !== undefined) {
-        fieldsToUpdate.patientLastName = patientData.lastName;
-      }
-      if (patientData.dateOfBirth !== undefined) {
-        fieldsToUpdate.patientDateOfBirth = patientData.dateOfBirth;
-      }
-      if (patientData.gender !== undefined) {
-        fieldsToUpdate.patientGender = patientData.gender;
-      }
-      if (patientData.email !== undefined) {
-        fieldsToUpdate.patientEmail = patientData.email;
-      }
-      if (patientData.phone !== undefined) {
-        fieldsToUpdate.patientPhone = patientData.phone;
-      }
-      if (patientData.profession !== undefined) {
-        fieldsToUpdate.patientProfession = patientData.profession;
-      }
-    }
+    fieldsToUpdate.patientFirstName = patientData.firstName ?? '';
+    fieldsToUpdate.patientLastName = patientData.lastName ?? '';
+    fieldsToUpdate.patientDateOfBirth = patientData.dateOfBirth ?? '';
+    fieldsToUpdate.patientGender = patientData.gender ? String(patientData.gender) : '';
+    fieldsToUpdate.patientEmail = patientData.email ?? '';
+    fieldsToUpdate.patientPhone = patientData.phone ?? '';
+    fieldsToUpdate.patientProfession = patientData.profession ?? '';
 
-    // Traiter l'adresse
-    if (patientData.address !== undefined || includeEmpty) {
-      const addressString = typeof patientData.address === 'string'
-        ? (patientData.address as string)
-        : (patientData.address?.street || '');
-      if (includeEmpty) {
-        fieldsToUpdate.patientAddress = addressString || '';
-      } else if (addressString && addressString.trim() !== '') {
-        fieldsToUpdate.patientAddress = addressString;
-      }
-    }
+    const addressString = typeof patientData.address === 'string'
+      ? patientData.address
+      : (patientData.address?.street || '');
+    fieldsToUpdate.patientAddress = addressString || '';
 
-    // Traiter l'assurance
-    if (patientData.insurance !== undefined || includeEmpty) {
-      const insuranceString = typeof patientData.insurance === 'string'
-        ? (patientData.insurance as string)
-        : (patientData.insurance?.provider || '');
-      if (includeEmpty) {
-        fieldsToUpdate.patientInsurance = insuranceString || '';
-      } else if (insuranceString && insuranceString.trim() !== '') {
-        fieldsToUpdate.patientInsurance = insuranceString;
-      }
-    }
-    if (includeEmpty) {
-      if (patientData.insuranceNumber !== undefined && patientData.insuranceNumber !== null) {
-        fieldsToUpdate.patientInsuranceNumber = patientData.insuranceNumber || '';
-      }
-    } else if (patientData.insuranceNumber && patientData.insuranceNumber.trim() !== '') {
-      fieldsToUpdate.patientInsuranceNumber = patientData.insuranceNumber;
-    }
+    const insuranceString = typeof patientData.insurance === 'string'
+      ? patientData.insurance
+      : (patientData.insurance?.provider || '');
+    fieldsToUpdate.patientInsurance = insuranceString || '';
+    fieldsToUpdate.patientInsuranceNumber = patientData.insuranceNumber ?? '';
 
-    // ✅ CHAMPS CLINIQUES - COPIE SÉLECTIVE
-    // Copier SEULEMENT les champs qui ont une valeur non vide dans le dossier patient
-    // Ne PAS copier les champs vides pour éviter d'écraser des données existantes
+    fieldsToUpdate.currentTreatment = patientData.currentTreatment ?? '';
+    fieldsToUpdate.consultationReason = patientData.consultationReason ?? '';
+    fieldsToUpdate.medicalAntecedents = patientData.medicalAntecedents ?? '';
+    fieldsToUpdate.medicalHistory = patientData.medicalHistory ?? '';
+    fieldsToUpdate.osteopathicTreatment = patientData.osteopathicTreatment ?? '';
 
-    const copyField = (key: keyof PatientData, target: string) => {
-      const val = (patientData as any)[key];
-      if (includeEmpty) {
-        fieldsToUpdate[target] = typeof val === 'string' ? (val ?? '') : (val ?? '');
-      } else {
-        if (typeof val === 'string') {
-          if (val && val.trim() !== '') fieldsToUpdate[target] = val;
-        } else if (Array.isArray(val)) {
-          if (val.length > 0) fieldsToUpdate[target] = val;
-        }
-      }
-    };
-
-    copyField('currentTreatment', 'currentTreatment');
-    copyField('consultationReason', 'consultationReason');
-    copyField('medicalAntecedents', 'medicalAntecedents');
-    copyField('medicalHistory', 'medicalHistory');
-    copyField('osteopathicTreatment', 'osteopathicTreatment');
-
-    // Symptômes (depuis les tags)
-    if (includeEmpty) {
-      fieldsToUpdate.symptoms = Array.isArray(patientData.tags) ? patientData.tags : [];
-    } else if (patientData.tags && Array.isArray(patientData.tags) && patientData.tags.length > 0) {
-      fieldsToUpdate.symptoms = patientData.tags;
-    }
-
-    // Notes
-    copyField('notes', 'notes');
+    fieldsToUpdate.symptoms = Array.isArray(patientData.tags) ? patientData.tags : [];
+    fieldsToUpdate.notes = patientData.notes ?? '';
+    fieldsToUpdate.documents = Array.isArray(patientData.documents) ? patientData.documents : [];
 
     return fieldsToUpdate;
   }
@@ -466,8 +398,7 @@ export class InitialConsultationSyncService {
           const syncResult = await this.syncInitialConsultationForPatient(
             patientId,
             decryptedPatientData,
-            osteopathId,
-            { includeEmpty: false }
+            osteopathId
           );
 
           result.patientsProcessed++;
@@ -580,8 +511,7 @@ export class InitialConsultationSyncService {
           const syncResult = await this.syncInitialConsultationForPatient(
             patientId,
             decryptedPatientData,
-            osteopathId,
-            { includeEmpty: false }
+            osteopathId
           );
 
           result.patientsProcessed++;
