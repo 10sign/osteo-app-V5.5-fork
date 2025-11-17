@@ -870,6 +870,20 @@ export default function NewPatientModal({ isOpen, onClose, onSuccess }: NewPatie
                   />
                 </div>
 
+                <div>
+                  <label htmlFor="osteopathicTreatment" className="block mb-1 text-sm font-medium text-gray-700">
+                    Traitement ostéopathique
+                  </label>
+                  <AutoResizeTextarea
+                    id="osteopathicTreatment"
+                    minRows={4}
+                    maxRows={8}
+                    className="w-full resize-none input"
+                    {...register('osteopathicTreatment')}
+                    placeholder="Description du traitement ostéopathique effectué ou à effectuer"
+                  />
+                </div>
+
                 {/* Documents médicaux */}
                 <div className="pt-6 border-t">
                   <h3 className="mb-4 text-lg font-medium text-gray-900">Documents médicaux</h3>
