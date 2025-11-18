@@ -3,6 +3,7 @@ import { RefreshCw, CheckCircle, AlertCircle, Info, Users } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { auth } from '../../firebase/config';
 import { InitialConsultationSyncService } from '../../services/initialConsultationSyncService';
+import InitialConsultationIntegrityService from '../../services/initialConsultationIntegrityService';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 
@@ -27,6 +28,16 @@ const FirstConsultationSyncPanel: React.FC = () => {
   const [result, setResult] = useState<SingleResult | null>(null);
   const [allResults, setAllResults] = useState<Record<string, SingleResult> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [integrityResults, setIntegrityResults] = useState<Record<string, {
+    preCheck: {
+      patientsChecked: number;
+      divergentPatients: number;
+      divergences: Array<{ patientId: string; patientName: string; consultationId: string | null; fields: Array<{ field: string; patientValue: any; consultationValue: any }> }>;
+    };
+    corrections: Array<{ patientId: string; patientName: string; consultationId: string; fieldsUpdated: string[] }>;
+    updatedConsultations: number;
+    errors: string[];
+  }> | null>(null);
 
   const handleSync = async () => {
     if (!auth.currentUser) {
@@ -53,6 +64,47 @@ const FirstConsultationSyncPanel: React.FC = () => {
       setError((err as Error).message);
     } finally {
       setIsRunning(false);
+    }
+  };
+
+  const handleIntegrityAll = async (targets?: string[]) => {
+    if (!auth.currentUser) {
+      setError('Vous devez être connecté pour lancer la synchronisation');
+      return;
+    }
+    setIsRunningAll(true);
+    setError(null);
+    setResult(null);
+    setAllResults(null);
+    setIntegrityResults(null);
+    try {
+      let resolvedTargets = targets;
+      if (Array.isArray(targets) && targets.length > 0) {
+        const usersRef = collection(db, 'users');
+        const out: string[] = [];
+        for (const t of targets) {
+          if (t.includes('@')) {
+            const q = query(usersRef, where('email', '==', t));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+              out.push(snap.docs[0].id);
+            }
+          } else {
+            out.push(t);
+          }
+        }
+        resolvedTargets = out;
+      }
+      const res = await InitialConsultationIntegrityService.runIntegrityPassForAllOsteopaths(resolvedTargets);
+      if (res.success) {
+        setIntegrityResults(res.results);
+      } else {
+        setError('Échec du passage d’intégrité');
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIsRunningAll(false);
     }
   };
 
@@ -115,7 +167,7 @@ const FirstConsultationSyncPanel: React.FC = () => {
         usersSnapshot = { empty: false, size: filtered.length, docs: filtered } as unknown as typeof usersSnapshot;
       }
 
-      for (const userDoc of usersSnapshot.docs) {
+      for (const userDoc of (usersSnapshot?.docs ?? [])) {
         const userId = userDoc.id;
         const userData = userDoc.data();
         const osteopathName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userId;
@@ -162,11 +214,17 @@ const FirstConsultationSyncPanel: React.FC = () => {
     try {
       const params = new URLSearchParams(window.location.search);
       const auto = params.get('sync');
+      const integrity = params.get('integrity');
+      const targetsParam = params.get('targets');
+      const targets = targetsParam ? targetsParam.split(',').map(s => s.trim()).filter(Boolean) : undefined;
       if (auto === 'all' && !isRunningAll) {
         handleSyncAll();
       }
       if (auto === 'me' && !isRunning) {
         handleSync();
+      }
+      if (integrity === 'all' && !isRunningAll) {
+        handleIntegrityAll(targets);
       }
     } catch {
       // no-op
@@ -288,6 +346,64 @@ const FirstConsultationSyncPanel: React.FC = () => {
                   <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
                     <p className="text-xs font-medium text-red-900 mb-1">Erreurs:</p>
                     {osteopathResult.errors.map((err, idx) => (
+                      <p key={idx} className="text-xs text-red-800">• {err}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {integrityResults && (
+        <div className="space-y-4">
+          <div className="p-4 border border-green-200 rounded-lg bg-green-50">
+            <div className="flex items-start">
+              <CheckCircle className="flex-shrink-0 mr-3 text-green-600" size={20} />
+              <div className="flex-1">
+                <p className="font-medium text-green-900">Passage d’intégrité global terminé</p>
+                <p className="mt-1 text-sm text-green-800">{Object.keys(integrityResults).length} ostéopathe(s) traité(s)</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {Object.entries(integrityResults).map(([osteopathId, data]) => (
+              <div key={osteopathId} className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                <div className="flex items-start justify-between mb-2">
+                  <h4 className="font-medium text-gray-900">Ostéopathe: {osteopathId}</h4>
+                  {data.errors.length > 0 ? (
+                    <AlertCircle className="text-yellow-600" size={20} />
+                  ) : (
+                    <CheckCircle className="text-green-600" size={20} />
+                  )}
+                </div>
+                <div className="space-y-1 text-sm text-gray-700">
+                  <p>• {data.preCheck.patientsChecked} patient(s) vérifié(s)</p>
+                  <p>• {data.preCheck.divergentPatients} patient(s) divergents</p>
+                  <p>• {data.updatedConsultations} consultation(s) corrigée(s)</p>
+                </div>
+
+                {data.corrections.length > 0 && (
+                  <div className="mt-3 p-3 bg-white border border-gray-200 rounded">
+                    <h5 className="mb-2 font-medium text-gray-900">Corrections appliquées</h5>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {data.corrections.map((c, idx) => (
+                        <div key={`${c.consultationId}-${idx}`} className="p-2 border border-gray-200 rounded text-sm">
+                          <p className="font-medium text-gray-900">👤 {c.patientName}</p>
+                          <p className="text-gray-600 text-xs">🔖 {c.consultationId}</p>
+                          <p className="text-gray-700 text-xs mt-1">Champs mis à jour: {c.fieldsUpdated.join(', ') || '—'}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {data.errors.length > 0 && (
+                  <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
+                    <p className="text-xs font-medium text-red-900 mb-1">Erreurs</p>
+                    {data.errors.slice(0, 5).map((err, idx) => (
                       <p key={idx} className="text-xs text-red-800">• {err}</p>
                     ))}
                   </div>

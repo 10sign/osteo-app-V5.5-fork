@@ -1,4 +1,5 @@
 import { DocumentMetadata } from '../utils/documentStorage';
+export type { DocumentMetadata } from '../utils/documentStorage';
 
 // User related types
 export interface User {

@@ -200,6 +200,12 @@ export class InitialConsultationSyncService {
 
       // Utiliser l'utilitaire HDS pour garantir updatedBy = utilisateur courant et chiffrement correct
       await HDSCompliance.updateCompliantData('consultations', consultationId, fieldsToUpdate);
+      // Réparer d'éventuels champs corrompus après mise à jour
+      try {
+        await HDSCompliance.repairCorruptedData('consultations', consultationId);
+      } catch (repairErr) {
+        console.warn('Réparation post-mise à jour échouée (non bloquant):', repairErr);
+      }
 
       console.log('  ✅ Consultation initiale synchronisée avec succès');
       result.success = true;
@@ -318,11 +324,21 @@ export class InitialConsultationSyncService {
     fieldsToUpdate.patientInsurance = insuranceString || '';
     fieldsToUpdate.patientInsuranceNumber = patientData.insuranceNumber ?? '';
 
-    fieldsToUpdate.currentTreatment = patientData.currentTreatment ?? '';
-    fieldsToUpdate.consultationReason = patientData.consultationReason ?? '';
-    fieldsToUpdate.medicalAntecedents = patientData.medicalAntecedents ?? '';
-    fieldsToUpdate.medicalHistory = patientData.medicalHistory ?? '';
-    fieldsToUpdate.osteopathicTreatment = patientData.osteopathicTreatment ?? '';
+    fieldsToUpdate.currentTreatment = patientData.currentTreatment !== undefined && patientData.currentTreatment !== null
+      ? String(patientData.currentTreatment)
+      : '';
+    fieldsToUpdate.consultationReason = patientData.consultationReason !== undefined && patientData.consultationReason !== null
+      ? String(patientData.consultationReason)
+      : '';
+    fieldsToUpdate.medicalAntecedents = patientData.medicalAntecedents !== undefined && patientData.medicalAntecedents !== null
+      ? String(patientData.medicalAntecedents)
+      : '';
+    fieldsToUpdate.medicalHistory = patientData.medicalHistory !== undefined && patientData.medicalHistory !== null
+      ? String(patientData.medicalHistory)
+      : '';
+    fieldsToUpdate.osteopathicTreatment = patientData.osteopathicTreatment !== undefined && patientData.osteopathicTreatment !== null
+      ? String(patientData.osteopathicTreatment)
+      : '';
 
     fieldsToUpdate.symptoms = Array.isArray(patientData.tags) ? patientData.tags : [];
     fieldsToUpdate.notes = patientData.notes ?? '';

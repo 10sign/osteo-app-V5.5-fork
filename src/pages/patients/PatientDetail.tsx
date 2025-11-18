@@ -56,7 +56,7 @@ const trackEvent = (..._args: any[]) => {};
 const trackMatomoEvent = (..._args: any[]) => {};
 const trackGAEvent = (..._args: any[]) => {};
 import FieldHistory from '../../components/patient/FieldHistory';
-import { buildFieldHistory } from '../../utils/fieldHistoryBuilder';
+import { buildFieldHistory, getLatestValue } from '../../utils/fieldHistoryBuilder';
 
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -1108,11 +1108,14 @@ const PatientDetail: React.FC = () => {
               const latestConsultation = getLatestConsultation();
               if (!latestConsultation) return null;
 
+              const notesHistory = patient ? buildFieldHistory('notes', patient, consultations) : [];
+              // latestValue: dossier patient en priorité, sinon consultation la plus récente
+              const latestNotes = getLatestValue(notesHistory);
               return (
                 <FieldHistory
                   fieldLabel="Note sur le patient"
-                  currentValue={cleanDecryptedField(latestConsultation.notes || '', false, '')}
-                  history={patient ? buildFieldHistory('notes', patient, consultations) : []}
+                  currentValue={cleanDecryptedField(latestNotes || '', false, '')}
+                  history={notesHistory}
                   emptyMessage="Aucune note sur le patient"
                 />
               );

@@ -1,6 +1,6 @@
 import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { db, auth, hdsConfig } from '../firebase/config';
-import { encryptData, decryptData, pseudonymizeData, isEncrypted, isValidEncryptedFormat, attemptDataRepair, migrateEncryptedData } from './encryption';
+import { encryptData, decryptData, pseudonymizeData, isEncrypted, isValidEncryptedFormat, attemptDataRepair } from './encryption';
 import { AuditLogger, AuditEventType, SensitivityLevel } from './auditLogger';
 
 /**
@@ -523,17 +523,23 @@ export class HDSCompliance {
           const isSensitive = sensitiveFields.includes(key);
           const isAddressObject = key === 'address' && value !== null && typeof value === 'object';
           const isStringValue = typeof value === 'string';
+          const isComplexValue = !isStringValue && value !== undefined && value !== null;
 
-          if (this.isEnabled() && isSensitive && value !== undefined && (isAddressObject || (isStringValue && !isEncrypted(value as string)))) {
-            // Gestion spéciale pour les objets complexes comme address
+          if (this.isEnabled() && isSensitive && value !== undefined) {
             if (isAddressObject) {
               updatesWithEncryption[key] = encryptData(value, userId);
-            } else {
+            } else if (isStringValue) {
               // Chiffrement des champs sensibles (valeur string)
-              updatesWithEncryption[key] = encryptData(value as string, userId);
+              const strVal = value as string;
+              updatesWithEncryption[key] = isEncrypted(strVal) ? strVal : encryptData(strVal, userId);
+            } else if (isComplexValue) {
+              // ✅ Nouveau: chiffrer aussi les valeurs non-string (objets, nombres, tableaux)
+              updatesWithEncryption[key] = encryptData(value, userId);
+            } else {
+              // Valeur null/undefined, conserver telle quelle
+              updatesWithEncryption[key] = value;
             }
           } else {
-            // Conservation des autres champs tels quels
             updatesWithEncryption[key] = value;
           }
         } catch (error) {

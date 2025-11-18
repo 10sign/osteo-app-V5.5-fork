@@ -127,13 +127,74 @@ export class InitialConsultationIntegrityService {
     success: boolean;
     updatedConsultations: number;
     errors: string[];
+    details?: Array<{ patientId: string; patientName: string; consultationId: string; fieldsUpdated: string[] }>;
   }> {
     const res = await InitialConsultationSyncService.syncAllInitialConsultationsRetroactive(osteopathId);
     return {
       success: res.success,
       updatedConsultations: res.consultationsUpdated,
-      errors: res.errors
+      errors: res.errors,
+      details: res.details
     };
+  }
+
+  static async runIntegrityPassForAllOsteopaths(targetOsteopathIds?: string[]): Promise<{
+    success: boolean;
+    results: Record<string, {
+      preCheck: {
+        patientsChecked: number;
+        divergentPatients: number;
+        divergences: Array<{ patientId: string; patientName: string; consultationId: string | null; fields: Array<{ field: string; patientValue: any; consultationValue: any }> }>;
+      };
+      corrections: Array<{ patientId: string; patientName: string; consultationId: string; fieldsUpdated: string[] }>;
+      updatedConsultations: number;
+      errors: string[];
+    }>;
+    osteopathsProcessed: number;
+  }> {
+    const results: Record<string, any> = {};
+    let processed = 0;
+
+    try {
+      let ids: string[] = Array.isArray(targetOsteopathIds) ? [...targetOsteopathIds] : [];
+      if (ids.length === 0) {
+        const usersRef = collection(db, 'users');
+        const allUsersSnapshot = await getDocs(usersRef);
+        const roleVariations = ['osteopath', 'Osteopath', 'OSTEOPATH', 'Ostéopathe', 'osteopathe', 'OSTEOPATHE', 'osteo'];
+        const accepted = new Set(roleVariations.map(v => v.toLowerCase()));
+        ids = allUsersSnapshot.docs
+          .filter(doc => accepted.has(String(doc.data().role || '').toLowerCase()))
+          .map(doc => doc.id);
+      }
+
+      for (const osteopathId of ids) {
+        processed++;
+        const pre = await this.checkDivergencesForOsteopath(osteopathId);
+        const apply = await this.applyCorrectionsForOsteopath(osteopathId);
+        results[osteopathId] = {
+          preCheck: {
+            patientsChecked: pre.patientsChecked,
+            divergentPatients: pre.divergentPatients,
+            divergences: pre.divergences
+          },
+          corrections: apply.details || [],
+          updatedConsultations: apply.updatedConsultations,
+          errors: apply.errors
+        };
+      }
+
+      return { success: true, results, osteopathsProcessed: processed };
+    } catch (error) {
+      await AuditLogger.log(
+        AuditEventType.DATA_ACCESS,
+        'integrity/consultations_initiales',
+        'integrity_run_all',
+        SensitivityLevel.INTERNAL,
+        'failure',
+        { error: (error as Error).message }
+      );
+      return { success: false, results: {}, osteopathsProcessed: processed };
+    }
   }
 }
 

@@ -323,22 +323,16 @@ export function decryptData(encryptedData: string, userId: string): any {
  */
 export function isEncrypted(data: string): boolean {
   if (!data || typeof data !== 'string') return false;
-  
-  // ✅ CORRECTION : Détecter les UUIDs chiffrés (format: 32 caractères hexadécimaux:encryptedData)
-  const uuidPattern = /^[0-9a-f]{32}:/i;
-  if (uuidPattern.test(data)) {
-    return true;
-  }
-  
-  // Vérification basique du format IV:Ciphertext
-  return data.includes(':') && data.length > 40;
+  if (isValidEncryptedFormat(data)) return true;
+  const pattern = /^[0-9a-fA-F]{12,64}:[A-Za-z0-9+/=]{16,}$/;
+  return pattern.test(data);
 }
 
 /**
  * Active le moteur de chiffrement pour Firestore
  * Note: Ceci est une implémentation simplifiée pour démonstration
  */
-export function enableCryptoEngine(db: Firestore): void {
+export function enableCryptoEngine(_db: Firestore): void {
   console.log('🔒 Enabling crypto engine for Firestore');
   
   // En production, on intercepterait les opérations Firestore
@@ -384,7 +378,7 @@ export function generatePseudoId(realId: string, context: string): string {
 /**
  * Tente de réparer des données chiffrées corrompues
  */
-export function attemptDataRepair(encryptedData: string, userId: string): string | null {
+export function attemptDataRepair(encryptedData: string, _userId: string): string | null {
   try {
     // Vérifier si les données sont déjà au format d'erreur
     if (encryptedData.startsWith('[DECRYPTION_ERROR:') || 

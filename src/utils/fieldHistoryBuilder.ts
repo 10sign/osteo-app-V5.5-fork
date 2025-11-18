@@ -120,7 +120,10 @@ function extractFieldValue(
       }
       break;
     case 'notes':
-      value = data.notes;
+      // Lecture harmonisée avec fallback pour anciennes clés
+      // Canonique: `notes`; fallback: `patientNote`, `patient_notes`, `note_patient`, `patientNotes`, `notePatient`
+      // Cela permet l'affichage correct même si des anciennes consultations utilisaient des clés différentes
+      value = (data as any).notes ?? (data as any).patientNote ?? (data as any).patient_notes ?? (data as any).note_patient ?? (data as any).patientNotes ?? (data as any).notePatient;
       break;
     default:
       return null;
