@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { RefreshCw, CheckCircle, AlertCircle, Info, Users } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { auth } from '../../firebase/config';
@@ -89,9 +89,8 @@ const FirstConsultationSyncPanel: React.FC = () => {
       });
       console.log('🏷️ Rôles trouvés dans la base:', Array.from(roles));
 
-      // Essayer différentes variations du rôle
       let usersSnapshot;
-      const roleVariations = ['Ostéopathe', 'osteopathe', 'OSTEOPATHE', 'Ostéopathe', 'osteo'];
+      const roleVariations = ['osteopath', 'Osteopath', 'OSTEOPATH', 'Ostéopathe', 'osteopathe', 'OSTEOPATHE', 'osteo'];
 
       for (const roleVariation of roleVariations) {
         const usersQuery = query(usersRef, where('role', '==', roleVariation));
@@ -104,9 +103,16 @@ const FirstConsultationSyncPanel: React.FC = () => {
       }
 
       if (!usersSnapshot || usersSnapshot.empty) {
-        console.warn('⚠️ Aucun ostéopathe trouvé dans la base de données');
-        setError(`Aucun ostéopathe trouvé. Rôles disponibles: ${Array.from(roles).join(', ')}`);
-        return;
+        const accepted = new Set(roleVariations.map(v => v.toLowerCase()));
+        const filtered = allUsersSnapshot.docs.filter(doc => {
+          const r = (doc.data().role || '').toLowerCase();
+          return accepted.has(r);
+        });
+        if (filtered.length === 0) {
+          setError(`Aucun ostéopathe trouvé. Rôles disponibles: ${Array.from(roles).join(', ')}`);
+          return;
+        }
+        usersSnapshot = { empty: false, size: filtered.length, docs: filtered } as unknown as typeof usersSnapshot;
       }
 
       for (const userDoc of usersSnapshot.docs) {
@@ -151,6 +157,21 @@ const FirstConsultationSyncPanel: React.FC = () => {
       setIsRunningAll(false);
     }
   };
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const auto = params.get('sync');
+      if (auto === 'all' && !isRunningAll) {
+        handleSyncAll();
+      }
+      if (auto === 'me' && !isRunning) {
+        handleSync();
+      }
+    } catch {
+      // no-op
+    }
+  }, []);
 
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
