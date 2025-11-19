@@ -639,6 +639,9 @@ export class ConsultationService {
         medicalHistory: cleanedUpdateData.medicalHistory,
         osteopathicTreatment: cleanedUpdateData.osteopathicTreatment
       });
+      if (existingData.isInitialConsultation && cleanedUpdateData.date && existingData.date && typeof (cleanedUpdateData.date as any).toMillis === 'function' && typeof (existingData.date as any).toMillis === 'function' && (cleanedUpdateData.date as any).toMillis() !== (existingData.date as any).toMillis()) {
+        throw new Error('La date de la consultation initiale est immuable');
+      }
       
       // ✅ CORRECTION: Préparation des données avec chiffrement HDS (mapping explicite)
       const baseDataForStorage: any = {
@@ -884,6 +887,16 @@ export class ConsultationService {
         console.warn('⚠️ Erreur lors de la suppression de la facture liée:', invoiceError);
         // Ne pas faire échouer la suppression de consultation si la facture échoue
         // La consultation doit être supprimée même si la facture pose problème
+      }
+
+      const appointmentId = data.appointmentId;
+      if (appointmentId) {
+        try {
+          const { AppointmentService } = await import('./appointmentService');
+          await AppointmentService.deleteAppointment(appointmentId);
+        } catch (e) {
+          console.warn('⚠️ Erreur lors de la suppression du rendez-vous lié:', e);
+        }
       }
 
       // Supprimer la consultation
