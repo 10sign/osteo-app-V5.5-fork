@@ -16,15 +16,17 @@ interface FieldHistoryProps {
   currentValue: string;
   history: FieldHistoryEntry[];
   emptyMessage?: string;
+  forceExpanded?: boolean;
 }
 
 export const FieldHistory: React.FC<FieldHistoryProps> = ({
   fieldLabel,
   currentValue,
   history,
-  emptyMessage = 'Aucune donnée disponible'
+  emptyMessage = 'Aucune donnée disponible',
+  forceExpanded = false
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(forceExpanded);
 
   const hasHistory = history && history.length > 1;
   const displayValue = currentValue || emptyMessage;
@@ -36,7 +38,7 @@ export const FieldHistory: React.FC<FieldHistoryProps> = ({
     }
     try {
       return format(date, 'dd/MM/yyyy');
-    } catch (error) {
+    } catch {
       return 'Date invalide';
     }
   };
@@ -63,7 +65,7 @@ export const FieldHistory: React.FC<FieldHistoryProps> = ({
     <div className="p-6 bg-white shadow rounded-xl">
       <div className="flex items-start justify-between">
         <h3 className="text-lg font-medium text-gray-900 mb-3">{fieldLabel}</h3>
-        {hasHistory && (
+        {hasHistory && !forceExpanded && (
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 transition-colors"
@@ -79,7 +81,7 @@ export const FieldHistory: React.FC<FieldHistoryProps> = ({
         {displayValue}
       </div>
 
-      {hasHistory && isExpanded && (
+      {hasHistory && (isExpanded || forceExpanded) && (
         <div className="mt-4 pt-4 border-t border-gray-200">
           <h4 className="text-sm font-medium text-gray-700 mb-3">Évolution chronologique</h4>
           <div className="space-y-3">

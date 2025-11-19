@@ -6,8 +6,6 @@ import {
   Loader2,
   Calendar as CalendarIcon,
   Clock,
-  Edit,
-  Trash2,
   RefreshCw,
   Plus,
   FileText
@@ -17,6 +15,7 @@ import CalendarView from '../../components/calendar/CalendarView';
 import NewConsultationModal from '../../components/modals/NewConsultationModal';
 import EditConsultationModal from '../../components/modals/EditConsultationModal';
 import DeleteConsultationModal from '../../components/modals/DeleteConsultationModal';
+import DeleteAppointmentModal from '../../components/modals/DeleteAppointmentModal';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
@@ -59,14 +58,6 @@ interface Consultation {
   osteopathId: string;
 }
 
-interface Patient {
-  id: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-  email: string;
-}
-
 const Consultations: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -90,9 +81,18 @@ const Consultations: React.FC = () => {
   const [isNewConsultationModalOpen, setIsNewConsultationModalOpen] = useState(false);
   const [isEditConsultationModalOpen, setIsEditConsultationModalOpen] = useState(false);
   const [isDeleteConsultationModalOpen, setIsDeleteConsultationModalOpen] = useState(false);
+  const [isDeleteAppointmentModalOpen, setIsDeleteAppointmentModalOpen] = useState(false);
   const [selectedConsultationId, setSelectedConsultationId] = useState<string | null>(null);
   const [consultationToDelete, setConsultationToDelete] = useState<{
     id: string;
+    patientId: string;
+    patientName: string;
+    date: string;
+    time: string;
+  } | null>(null);
+  const [appointmentToDelete, setAppointmentToDelete] = useState<{
+    id: string;
+    patientId: string;
     patientName: string;
     date: string;
     time: string;
@@ -125,7 +125,7 @@ const Consultations: React.FC = () => {
     }, 3000);
     
     return () => clearInterval(refreshInterval);
-  }, []);
+  }, [handleRefresh]);
 
   // Check for action parameter to open new consultation modal
   useEffect(() => {
@@ -217,7 +217,7 @@ const Consultations: React.FC = () => {
               } else {
                 patientName = appointmentData.patientName || 'Patient supprimé';
               }
-            } catch (patientError) {
+            } catch {
               patientName = appointmentData.patientName || 'Patient inaccessible';
             }
           }
@@ -282,7 +282,7 @@ const Consultations: React.FC = () => {
       console.log('📊 Query returned', snapshot.docs.length, 'documents');
 
       const mappedConsultationsData: Appointment[] = [];
-      const invalidConsultations: any[] = [];
+      const invalidConsultations: { id: string; reason: string; error?: unknown }[] = [];
       for (const docSnapshot of snapshot.docs) {
         try {
           const consultationData = docSnapshot.data();
@@ -445,7 +445,7 @@ const Consultations: React.FC = () => {
           'success',
           { agendaTodayCount: todayCount }
         );
-      } catch {}
+      } catch (e) { void e; }
       return mappedConsultationsData;
 
     } catch (error) {
@@ -453,7 +453,7 @@ const Consultations: React.FC = () => {
       setError('Erreur lors du chargement des consultations: ' + (error as Error).message);
       throw error;
     }
-  }, []);
+  }, [loadAppointments, loadConsultations, loadConsultationsForCalendar, loading]);
 
   // Chargement des consultations
   const loadConsultations = useCallback(async () => {
@@ -517,7 +517,7 @@ const Consultations: React.FC = () => {
               } else {
                 patientName = consultationData.patientName || 'Patient supprimé';
               }
-            } catch (patientError) {
+            } catch {
               patientName = consultationData.patientName || 'Patient inaccessible';
             }
           }
@@ -662,7 +662,7 @@ const Consultations: React.FC = () => {
         setRefreshing(false);
       }
     }
-  }, [loadAppointments, loadConsultations]);
+  }, [loadAppointments, loadConsultations, loadConsultationsForCalendar]);
 
   // Handle patient link click
   // Navigation patient via liens (fonction non utilisée supprimée)
@@ -691,16 +691,31 @@ const Consultations: React.FC = () => {
 
   // Handle appointment delete
   const handleAppointmentDelete = (appointmentId: string) => {
-    // Dans le contexte des consultations, appointmentId est en fait consultationId
+    // Si l'élément est une consultation mappée, supprimer la consultation
     const consultation = consultations.find(c => c.id === appointmentId);
     if (consultation) {
       setConsultationToDelete({
         id: consultation.id,
+        patientId: consultation.patientId,
         patientName: consultation.patientName,
         date: format(consultation.date, 'dd/MM/yyyy', { locale: fr }),
         time: format(consultation.date, 'HH:mm')
       });
       setIsDeleteConsultationModalOpen(true);
+      return;
+    }
+
+    // Sinon, c'est un rendez‑vous autonome sans consultation liée
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (appointment && !appointment.consultationId) {
+      setAppointmentToDelete({
+        id: appointment.id,
+        patientId: appointment.patientId,
+        patientName: appointment.patientName,
+        date: format(appointment.date, 'dd/MM/yyyy', { locale: fr }),
+        time: format(appointment.date, 'HH:mm')
+      });
+      setIsDeleteAppointmentModalOpen(true);
     }
   };
 
@@ -723,10 +738,32 @@ const Consultations: React.FC = () => {
       setIsDeleteConsultationModalOpen(false);
       setConsultationToDelete(null);
       
-      // Le listener onSnapshot va automatiquement recharger les données
+      await handleRefresh(false);
+      
+      await AppointmentService.syncPatientNextAppointment(consultationToDelete.patientId);
     } catch (error) {
       console.error('Error deleting consultation:', error);
       setError('Erreur lors de la suppression de la consultation');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const confirmAppointmentDeletion = async () => {
+    if (!appointmentToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await AppointmentService.deleteAppointment(appointmentToDelete.id);
+
+      setIsDeleteAppointmentModalOpen(false);
+      setAppointmentToDelete(null);
+
+      await handleRefresh(false);
+      await AppointmentService.syncPatientNextAppointment(appointmentToDelete.patientId);
+    } catch (error) {
+      console.error('Error deleting appointment:', error);
+      setError('Erreur lors de la suppression du rendez‑vous');
     } finally {
       setIsDeleting(false);
     }
@@ -977,6 +1014,24 @@ const Consultations: React.FC = () => {
         isLoading={isDeleting}
         consultationInfo={consultationToDelete || {
           id: '',
+          patientId: '',
+          patientName: '',
+          date: '',
+          time: ''
+        }}
+      />
+
+      <DeleteAppointmentModal
+        isOpen={isDeleteAppointmentModalOpen}
+        onClose={() => {
+          setIsDeleteAppointmentModalOpen(false);
+          setAppointmentToDelete(null);
+        }}
+        onConfirm={confirmAppointmentDeletion}
+        isLoading={isDeleting}
+        appointmentInfo={appointmentToDelete || {
+          id: '',
+          patientId: '',
           patientName: '',
           date: '',
           time: ''

@@ -1,9 +1,12 @@
-import { Timestamp } from 'firebase/firestore'
-
-export function ensureInitialConsultationDateImmutability(existingDate: Timestamp | Date | undefined, newDate: Timestamp | Date | undefined, isInitial: boolean): void {
+export function ensureInitialConsultationDateImmutability(existingDate: any, newDate: any, isInitial: boolean): void {
   if (!isInitial) return
   if (!existingDate || !newDate) return
-  const toMs = (d: Timestamp | Date) => (d instanceof Timestamp ? d.toMillis() : d.getTime())
+  const toMs = (d: any) => {
+    if (d && typeof d.toMillis === 'function') return d.toMillis()
+    if (d && typeof d.toDate === 'function') return d.toDate().getTime()
+    if (d instanceof Date) return d.getTime()
+    return Number(d)
+  }
   const a = toMs(existingDate)
   const b = toMs(newDate)
   if (a !== b) {

@@ -48,6 +48,7 @@ import { HDSCompliance } from '../../utils/hdsCompliance';
 import { cleanDecryptedField } from '../../utils/dataCleaning';
 import { PatientService } from '../../services/patientService';
 import { ConsultationService } from '../../services/consultationService';
+import { AppointmentService } from '../../services/appointmentService';
 import { InvoiceService } from '../../services/invoiceService';
 import { InitialConsultationSyncService } from '../../services/initialConsultationSyncService';
 import { patientCache } from '../../utils/patientCache';
@@ -625,6 +626,10 @@ const PatientDetail: React.FC = () => {
         loadPatientData()
       ]);
 
+      if (patient) {
+        await AppointmentService.syncPatientNextAppointment(patient.id);
+      }
+
       console.log('✅ Consultation deleted and patient data refreshed');
     } catch (error) {
       console.error('Error deleting consultation:', error);
@@ -1106,17 +1111,18 @@ const PatientDetail: React.FC = () => {
 
             {(() => {
               const latestConsultation = getLatestConsultation();
-              if (!latestConsultation) return null;
+              if (!latestConsultation && !patient) return null;
 
               const notesHistory = patient ? buildFieldHistory('notes', patient, consultations) : [];
-              // latestValue: dossier patient en priorité, sinon consultation la plus récente
-              const latestNotes = getLatestValue(notesHistory);
+              const onlyInitial = consultations.length === 1 && consultations[0]?.isInitialConsultation === true;
+              const headerNotes = onlyInitial ? (patient?.notes || '') : getLatestValue(notesHistory);
               return (
                 <FieldHistory
                   fieldLabel="Note sur le patient"
-                  currentValue={cleanDecryptedField(latestNotes || '', false, '')}
+                  currentValue={cleanDecryptedField(headerNotes || '', false, '')}
                   history={notesHistory}
                   emptyMessage="Aucune note sur le patient"
+                  forceExpanded={onlyInitial}
                 />
               );
             })()}
