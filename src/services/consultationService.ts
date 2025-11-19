@@ -639,9 +639,8 @@ export class ConsultationService {
         medicalHistory: cleanedUpdateData.medicalHistory,
         osteopathicTreatment: cleanedUpdateData.osteopathicTreatment
       });
-      if (existingData.isInitialConsultation && cleanedUpdateData.date && existingData.date && typeof (cleanedUpdateData.date as any).toMillis === 'function' && typeof (existingData.date as any).toMillis === 'function' && (cleanedUpdateData.date as any).toMillis() !== (existingData.date as any).toMillis()) {
-        throw new Error('La date de la consultation initiale est immuable');
-      }
+      const { ensureInitialConsultationDateImmutability } = await import('../utils/consultationRules');
+      ensureInitialConsultationDateImmutability(existingData.date as any, cleanedUpdateData.date as any, Boolean(existingData.isInitialConsultation));
       
       // ✅ CORRECTION: Préparation des données avec chiffrement HDS (mapping explicite)
       const baseDataForStorage: any = {

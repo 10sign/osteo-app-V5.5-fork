@@ -12,6 +12,7 @@ import { HDSCompliance } from '../../utils/hdsCompliance';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
 import { ConsultationService } from '../../services/consultationService';
+import { buildConsultationUpdatePayload } from '../../utils/consultationMappers';
 
 interface EditConsultationModalProps {
   isOpen: boolean;
@@ -355,8 +356,7 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
     try {
       const consultationDate = new Date(`${data.date}T${data.time}`);
 
-      // Préparer les données de mise à jour COMPLETES
-      const updateData: any = {
+      const formPayload: any = {
         date: consultationDate,
         notes: data.notes,
         duration: data.duration,
@@ -364,24 +364,6 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         status: data.status,
         examinations: data.examinations.map(item => item.value),
         prescriptions: data.prescriptions.map(item => item.value),
-        updatedAt: new Date().toISOString(),
-
-        // Champs d'identité patient (snapshot) - CONSERVER lors de la mise à jour
-        patientId: consultationData.patientId,
-        patientName: consultationData.patientName,
-        patientFirstName: consultationData.patientFirstName || '',
-        patientLastName: consultationData.patientLastName || '',
-        patientDateOfBirth: consultationData.patientDateOfBirth || '',
-        patientGender: consultationData.patientGender || '',
-        patientPhone: consultationData.patientPhone || '',
-        patientProfession: consultationData.patientProfession || '',
-        patientEmail: consultationData.patientEmail || '',
-        patientAddress: consultationData.patientAddress || '',
-        patientInsurance: consultationData.patientInsurance || '',
-        patientInsuranceNumber: consultationData.patientInsuranceNumber || '',
-
-        // Champs cliniques (modifiables)
-        // ✅ CORRECTION: Champs cliniques - FORCER la sauvegarde
         consultationReason: data.consultationReason || '',
         currentTreatment: data.currentTreatment || '',
         medicalAntecedents: data.medicalAntecedents || '',
@@ -389,21 +371,16 @@ const EditConsultationModal: React.FC<EditConsultationModalProps> = ({
         osteopathicTreatment: data.osteopathicTreatment || '',
         symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : [],
         treatmentHistory: consultationData.treatmentHistory || [],
-
-        // Inclure les documents
         documents: consultationDocuments
-      };
+      }
+
+      const updateData = buildConsultationUpdatePayload(consultationData, formPayload, consultationDocuments)
+      updateData.updatedAt = new Date().toISOString()
 
       // ✅ FIX: Ajouter les champs optionnels seulement s'ils existent et ne sont pas undefined/null
-      if (consultationData.appointmentId !== undefined && consultationData.appointmentId !== null) {
-        updateData.appointmentId = consultationData.appointmentId;
-      }
-      if (consultationData.reason !== undefined && consultationData.reason !== null) {
-        updateData.reason = consultationData.reason;
-      }
-      if (consultationData.treatment !== undefined && consultationData.treatment !== null) {
-        updateData.treatment = consultationData.treatment;
-      }
+      if (consultationData.appointmentId !== undefined && consultationData.appointmentId !== null) updateData.appointmentId = consultationData.appointmentId
+      if (consultationData.reason !== undefined && consultationData.reason !== null) updateData.reason = consultationData.reason
+      if (consultationData.treatment !== undefined && consultationData.treatment !== null) updateData.treatment = consultationData.treatment
 
       console.log('💾 Prepared update data (complete):', updateData);
       

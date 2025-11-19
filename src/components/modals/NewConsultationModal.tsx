@@ -12,6 +12,7 @@ import { ConsultationService } from '../../services/consultationService';
 import { AppointmentService } from '../../services/appointmentService';
 import DocumentUploadManager from '../ui/DocumentUploadManager';
 import { DocumentMetadata } from '../../utils/documentStorage';
+import { buildConsultationCreatePayload } from '../../utils/consultationMappers';
 
 interface NewConsultationModalProps {
   isOpen: boolean;
@@ -324,54 +325,48 @@ const NewConsultationModal: React.FC<NewConsultationModalProps> = ({
 
       const appointmentId = await AppointmentService.createAppointment(appointmentData);
 
-      // 2. Créer la consultation avec tous les champs cliniques
-      const consultationData = {
+      const patientSnapshot = {
+        patientFirstName: data.patientFirstName,
+        patientLastName: data.patientLastName,
+        patientDateOfBirth: data.patientDateOfBirth,
+        patientGender: data.patientGender,
+        patientPhone: data.patientPhone,
+        patientEmail: data.patientEmail,
+        patientProfession: data.patientProfession,
+        patientAddress: data.patientAddress,
+        patientInsurance: data.patientInsurance,
+        patientInsuranceNumber: data.patientInsuranceNumber
+      } as any;
+
+      const formPayload = {
         patientId: patientIdToUse,
         patientName: patientNameToUse,
-        osteopathId: auth.currentUser.uid,
         date: consultationDate,
         reason: data.reason,
         treatment: data.treatment,
         notes: data.notes,
         duration: data.duration,
         price: data.price,
-        status: data.status as 'draft' | 'completed' | 'cancelled',
-        examinations: data.examinations.map(item => item.value),
-        prescriptions: data.prescriptions.map(item => item.value),
-        appointmentId: appointmentId,
-
-        // Champs d'identité du patient (snapshot)
-        patientFirstName: data.patientFirstName,
-        patientLastName: data.patientLastName,
-        patientDateOfBirth: data.patientDateOfBirth,
-        patientGender: data.patientGender,
-        patientPhone: data.patientPhone,
-        patientProfession: data.patientProfession,
-        patientEmail: data.patientEmail,
-        patientAddress: data.patientAddress,
-        patientInsurance: data.patientInsurance,
-        patientInsuranceNumber: data.patientInsuranceNumber,
-
-        // ✅ CORRECTION: Champs cliniques (snapshot au moment de la consultation) - FORCER la sauvegarde
-        consultationReason: data.consultationReason || '',
+        status: data.status as any,
+        examinations: data.examinations.map(i => i.value),
+        prescriptions: data.prescriptions.map(i => i.value),
         currentTreatment: data.currentTreatment || '',
+        consultationReason: data.consultationReason || '',
         medicalAntecedents: data.medicalAntecedents || '',
         medicalHistory: data.medicalHistory || '',
         osteopathicTreatment: data.osteopathicTreatment || '',
         symptoms: data.symptoms ? data.symptoms.split(',').map(s => s.trim()).filter(Boolean) : [],
-        treatmentHistory: [],
+        treatmentHistory: []
+      } as any;
 
-        // ✅ FLAG DE CONSULTATION MANUELLE
-        // Les consultations créées manuellement ne sont JAMAIS des consultations initiales
-        // Seule la consultation créée automatiquement lors de la création du patient a ce flag à true
-        isInitialConsultation: false
-      };
-
-      // Inclure les documents dans les données de consultation
-      const consultationDataWithDocuments = {
-        ...consultationData,
-        documents: consultationDocuments
-      };
+      const consultationDataWithDocuments = buildConsultationCreatePayload(
+        formPayload,
+        patientSnapshot,
+        appointmentId,
+        consultationDocuments
+      );
+      (consultationDataWithDocuments as any).osteopathId = auth.currentUser.uid;
+      (consultationDataWithDocuments as any).isInitialConsultation = false;
 
       console.log('🔵 ÉTAPE 0: Documents depuis le modal:', consultationDocuments.length, 'document(s)');
 
