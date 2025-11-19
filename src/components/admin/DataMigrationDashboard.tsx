@@ -18,10 +18,9 @@ import {
 import { Button } from '../ui/Button';
 import { DataMigrationService } from '../../services/dataMigrationService';
 import { auth } from '../../firebase/config';
-// Analytics supprimés: retirer les imports et utiliser des stubs locaux
-const trackEvent = (..._args: any[]) => {};
-const trackMatomoEvent = (..._args: any[]) => {};
-const trackGAEvent = (..._args: any[]) => {};
+const trackEvent = () => {};
+const trackMatomoEvent = () => {};
+const trackGAEvent = () => {};
 import FirstConsultationSyncPanel from './FirstConsultationSyncPanel';
 
 const DataMigrationDashboard: React.FC = () => {
@@ -39,7 +38,10 @@ const DataMigrationDashboard: React.FC = () => {
   const [cleanupStats, setCleanupStats] = useState<any>(null);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [showGlobalReport, setShowGlobalReport] = useState(true);
-  const [step, setStep] = useState<'report' | 'migrate' | 'verify' | 'repair' | 'complete'>('report');
+  const [, setStep] = useState<'report' | 'migrate' | 'verify' | 'repair' | 'complete'>('report');
+  type LegacyMigrationStats = { patientsProcessed: number; updatedPatients: number; updatedConsultations: number; errors: number };
+  const [legacyMigrationStats, setLegacyMigrationStats] = useState<LegacyMigrationStats | null>(null);
+  const [legacyMigrationLoading, setLegacyMigrationLoading] = useState(false);
 
   // Charger le rapport initial
   useEffect(() => {
@@ -686,6 +688,25 @@ const DataMigrationDashboard: React.FC = () => {
                   Supprimer les données de test
                 </Button>
               </div>
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h5 className="font-medium text-gray-800 mb-2 flex items-center">
+                  <ArrowRight size={16} className="mr-2 text-primary-500" />
+                  Migration du modèle legacy des patients
+                </h5>
+                <p className="text-sm text-gray-600 mb-4">
+                  Normalise les anciens dossiers patients et initialise la consultation initiale si nécessaire.
+                </p>
+                <Button
+                  variant="primary"
+                  onClick={migrateLegacyPatientModel}
+                  isLoading={legacyMigrationLoading}
+                  loadingText="Migration legacy en cours..."
+                  disabled={legacyMigrationLoading}
+                  fullWidth
+                >
+                  Migrer les dossiers legacy
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -743,6 +764,39 @@ const DataMigrationDashboard: React.FC = () => {
         </div>
       )}
 
+      {legacyMigrationStats && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Résultats de la migration legacy</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-sm text-gray-500">Patients traités</div>
+              <div className="text-xl font-bold text-primary-600">{legacyMigrationStats.patientsProcessed}</div>
+            </div>
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-sm text-gray-500">Patients mis à jour</div>
+              <div className="text-xl font-bold text-primary-600">{legacyMigrationStats.updatedPatients}</div>
+            </div>
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-sm text-gray-500">Consultations ajustées</div>
+              <div className="text-xl font-bold text-primary-600">{legacyMigrationStats.updatedConsultations}</div>
+            </div>
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-sm text-gray-500">Erreurs</div>
+              <div className="text-xl font-bold text-amber-600">{legacyMigrationStats.errors}</div>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              variant="primary"
+              onClick={loadMigrationReport}
+              leftIcon={<RefreshCw size={16} />}
+            >
+              Actualiser le rapport
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Résultats de nettoyage */}
       {cleanupStats && (
         <div className="bg-white rounded-lg shadow p-6">
@@ -786,3 +840,20 @@ const DataMigrationDashboard: React.FC = () => {
 };
 
 export default DataMigrationDashboard;
+  const migrateLegacyPatientModel = async () => {
+    try {
+      setLegacyMigrationLoading(true);
+      setError(null);
+      setSuccess(null);
+      const results = await DataMigrationService.migrateLegacyPatientModel();
+      setLegacyMigrationStats(results);
+      setSuccess('Migration des dossiers legacy terminée avec succès');
+      setStep('migrate');
+      await loadMigrationReport();
+    } catch (error) {
+      console.error('Error migrating legacy patient model:', error);
+      setError('Erreur lors de la migration des dossiers legacy');
+    } finally {
+      setLegacyMigrationLoading(false);
+    }
+  };

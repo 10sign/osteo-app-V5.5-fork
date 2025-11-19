@@ -14,9 +14,9 @@ import { db, auth } from '../firebase/config';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import { AppointmentService } from './appointmentService';
 // Analytics supprimés: retirer les imports et utiliser des stubs locaux
-const trackEvent = (..._args: any[]) => {};
-const trackMatomoEvent = (..._args: any[]) => {};
-const trackGAEvent = (..._args: any[]) => {};
+const trackEvent = () => {};
+const trackMatomoEvent = () => {};
+const trackGAEvent = () => {};
 
 /**
  * Service pour la migration des données de test vers des données réelles
@@ -120,6 +120,191 @@ export class DataMigrationService {
       trackMatomoEvent('Data', 'Migration Error', (error as Error).message);
       trackGAEvent('data_migration_error', { error_message: (error as Error).message });
       
+      throw error;
+    }
+  }
+
+  /**
+   * Migre les dossiers legacy vers le modèle PatientDoc normalisé
+   */
+  static async migrateLegacyPatientModel(): Promise<{
+    patientsProcessed: number;
+    updatedPatients: number;
+    updatedConsultations: number;
+    errors: number;
+  }> {
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    const results = {
+      patientsProcessed: 0,
+      updatedPatients: 0,
+      updatedConsultations: 0,
+      errors: 0
+    };
+
+    try {
+      const patientsRef = collection(db, 'patients');
+      const patientsQuery = query(
+        patientsRef,
+        where('osteopathId', '==', auth.currentUser.uid)
+      );
+
+      const patientsSnapshot = await getDocs(patientsQuery);
+
+      for (const patientDoc of patientsSnapshot.docs) {
+        results.patientsProcessed++;
+        const patientId = patientDoc.id;
+        const patientData = patientDoc.data();
+
+        try {
+          const consultationsRef = collection(db, 'consultations');
+          const cQuery = query(
+            consultationsRef,
+            where('patientId', '==', patientId),
+            where('osteopathId', '==', auth.currentUser.uid)
+          );
+          const cSnapshot = await getDocs(cQuery);
+
+          type LegacyConsultation = { id: string; date?: unknown; isInitialConsultation?: boolean } & Record<string, unknown>;
+          const consultations: LegacyConsultation[] = cSnapshot.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, unknown>) }));
+
+          const toDate = (val: unknown): Date => {
+            const cast = val as { toDate?: () => Date } | string | Date | null | undefined;
+            if (cast && typeof cast === 'object' && 'toDate' in cast && typeof cast.toDate === 'function') {
+              return cast.toDate();
+            }
+            if (typeof cast === 'string') return new Date(cast);
+            if (cast instanceof Date) return cast;
+            return new Date();
+          };
+          consultations.sort((a: LegacyConsultation, b: LegacyConsultation) => {
+            return toDate(a.date).getTime() - toDate(b.date).getTime();
+          });
+
+          const initial = consultations.find((c) => c.isInitialConsultation === true) || consultations[0];
+
+          const getLegacyNotes = (data: Record<string, unknown> | undefined): string | undefined => {
+            const v = data && (
+              (data['notes'] as unknown) ??
+              (data['patientNote'] as unknown) ??
+              (data['patient_notes'] as unknown) ??
+              (data['note_patient'] as unknown) ??
+              (data['patientNotes'] as unknown) ??
+              (data['notePatient'] as unknown)
+            );
+            return typeof v === 'string' ? v : undefined;
+          };
+
+          const normalize = (v: unknown): string | undefined => {
+            if (v === undefined || v === null) return undefined;
+            const s = Array.isArray(v) ? v.join(', ') : String(v);
+            return s.trim() === '' ? undefined : s;
+          };
+
+          const patientUpdates: Record<string, string> = {};
+
+          const fields: Array<{ key: string; fromPatient?: string; fromConsult?: string }> = [
+            { key: 'currentTreatment', fromPatient: 'currentTreatment', fromConsult: 'currentTreatment' },
+            { key: 'consultationReason', fromPatient: 'consultationReason', fromConsult: 'consultationReason' },
+            { key: 'medicalAntecedents', fromPatient: 'medicalAntecedents', fromConsult: 'medicalAntecedents' },
+            { key: 'medicalHistory', fromPatient: 'medicalHistory', fromConsult: 'medicalHistory' },
+            { key: 'osteopathicTreatment', fromPatient: 'osteopathicTreatment', fromConsult: 'osteopathicTreatment' }
+          ];
+
+          for (const f of fields) {
+            const currentVal = normalize((patientData as Record<string, unknown>)?.[f.fromPatient || f.key]);
+            const consultVal = normalize(initial && (initial as Record<string, unknown>)?.[f.fromConsult || f.key]);
+            if (!currentVal && consultVal) {
+              patientUpdates[f.key] = consultVal;
+            }
+          }
+
+          const patientNotes = normalize((patientData as Record<string, unknown>)?.['notes']);
+          const initialNotes = normalize(getLegacyNotes(initial));
+          if (!patientNotes && initialNotes) {
+            patientUpdates['notes'] = initialNotes;
+          }
+
+          if (Object.keys(patientUpdates).length > 0) {
+            await updateDoc(doc(db, 'patients', patientId), {
+              ...patientUpdates,
+              updatedAt: new Date().toISOString()
+            });
+            results.updatedPatients++;
+          }
+
+          if (!consultations.length) {
+            const consultationData = {
+              patientId,
+              patientName: `${patientData.firstName} ${patientData.lastName}`.trim(),
+              osteopathId: auth.currentUser.uid,
+              date: Timestamp.now(),
+              reason: patientData.consultationReason || 'Consultation initiale',
+              treatment: patientData.currentTreatment || 'Évaluation ostéopathique',
+              notes: patientUpdates['notes'] || patientData.notes || '',
+              duration: 60,
+              price: 60,
+              status: 'completed',
+              currentTreatment: patientData.currentTreatment || '',
+              consultationReason: patientData.consultationReason || '',
+              medicalAntecedents: patientData.medicalAntecedents || '',
+              medicalHistory: patientData.medicalHistory || '',
+              osteopathicTreatment: patientData.osteopathicTreatment || '',
+              examinations: [],
+              prescriptions: [],
+              isInitialConsultation: true,
+              createdAt: Timestamp.now(),
+              updatedAt: Timestamp.now()
+            };
+            await addDoc(collection(db, 'consultations'), consultationData);
+            results.updatedConsultations++;
+            await AppointmentService.syncPatientNextAppointment(patientId);
+          } else if (initial && initial.isInitialConsultation !== true) {
+            try {
+              await updateDoc(doc(db, 'consultations', initial.id), {
+                isInitialConsultation: true,
+                updatedAt: Timestamp.now()
+              });
+              results.updatedConsultations++;
+            } catch (e) { void e; }
+            await AppointmentService.syncPatientNextAppointment(patientId);
+          }
+
+          await AuditLogger.log(
+            AuditEventType.DATA_MODIFICATION,
+            `patients/${patientId}`,
+            'migrate_legacy_patient_model',
+            SensitivityLevel.SENSITIVE,
+            'success'
+          );
+        } catch (error) {
+          console.error(`❌ Erreur migration legacy pour patient ${patientId}:`, error);
+          results.errors++;
+        }
+      }
+
+      await AuditLogger.log(
+        AuditEventType.DATA_MODIFICATION,
+        'patients',
+        'migrate_legacy_patient_model',
+        SensitivityLevel.HIGHLY_SENSITIVE,
+        'success',
+        results
+      );
+
+      return results;
+    } catch (error) {
+      console.error('❌ Failed legacy patient migration:', error);
+      await AuditLogger.log(
+        AuditEventType.DATA_MODIFICATION,
+        'patients',
+        'migrate_legacy_patient_model',
+        SensitivityLevel.HIGHLY_SENSITIVE,
+        'failure',
+        { error: (error as Error).message }
+      );
       throw error;
     }
   }
@@ -420,7 +605,6 @@ export class DataMigrationService {
               return dateB.getTime() - dateA.getTime();
             });
             
-            const consultationToKeep = consultations[0];
             const consultationsToDelete = consultations.slice(1);
             
             // Supprimer les consultations en double
@@ -449,7 +633,7 @@ export class DataMigrationService {
               updatedAt: Timestamp.now()
             };
             
-            const consultationRef = await addDoc(collection(db, 'consultations'), consultationData);
+            await addDoc(collection(db, 'consultations'), consultationData);
             console.log(`✅ Consultation créée pour le patient ${patientName}`);
           }
           
@@ -484,7 +668,6 @@ export class DataMigrationService {
               return dateB.getTime() - dateA.getTime();
             });
             
-            const invoiceToKeep = invoices[0];
             const invoicesToDelete = invoices.slice(1);
             
             // Supprimer les factures en double

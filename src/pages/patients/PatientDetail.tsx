@@ -1054,56 +1054,52 @@ const PatientDetail: React.FC = () => {
             )}
 
             {(() => {
-              const latestConsultation = getLatestConsultation();
-              if (!latestConsultation) return null;
-
+              const history = patient ? buildFieldHistory('currentTreatment', patient, consultations) : [];
+              const value = getLatestValue(history);
               return (
                 <FieldHistory
                   fieldLabel="Traitement effectué"
-                  currentValue={latestConsultation.currentTreatment || ''}
-                  history={patient ? buildFieldHistory('currentTreatment', patient, consultations) : []}
+                  currentValue={cleanDecryptedField(value || '', false, '')}
+                  history={history}
                   emptyMessage="Aucun traitement effectué renseigné"
                 />
               );
             })()}
 
             {(() => {
-              const latestConsultation = getLatestConsultation();
-              if (!latestConsultation) return null;
-
+              const history = patient ? buildFieldHistory('consultationReason', patient, consultations) : [];
+              const value = getLatestValue(history);
               return (
                 <FieldHistory
                   fieldLabel="Motif de consultation"
-                  currentValue={latestConsultation.consultationReason || ''}
-                  history={patient ? buildFieldHistory('consultationReason', patient, consultations) : []}
+                  currentValue={cleanDecryptedField(value || '', false, '')}
+                  history={history}
                   emptyMessage="Aucun motif de consultation renseigné"
                 />
               );
             })()}
 
             {(() => {
-              const latestConsultation = getLatestConsultation();
-              if (!latestConsultation) return null;
-
+              const history = patient ? buildFieldHistory('medicalAntecedents', patient, consultations) : [];
+              const value = getLatestValue(history);
               return (
                 <FieldHistory
                   fieldLabel="Antécédents médicaux"
-                  currentValue={latestConsultation.medicalAntecedents || ''}
-                  history={patient ? buildFieldHistory('medicalAntecedents', patient, consultations) : []}
+                  currentValue={cleanDecryptedField(value || '', false, '')}
+                  history={history}
                   emptyMessage="Aucun antécédent médical renseigné"
                 />
               );
             })()}
 
             {(() => {
-              const latestConsultation = getLatestConsultation();
-              if (!latestConsultation) return null;
-
+              const history = patient ? buildFieldHistory('osteopathicTreatment', patient, consultations) : [];
+              const value = getLatestValue(history);
               return (
                 <FieldHistory
                   fieldLabel="Traitement ostéopathique"
-                  currentValue={latestConsultation.osteopathicTreatment || ''}
-                  history={patient ? buildFieldHistory('osteopathicTreatment', patient, consultations) : []}
+                  currentValue={cleanDecryptedField(value || '', false, '')}
+                  history={history}
                   emptyMessage="Aucun traitement ostéopathique renseigné"
                 />
               );
@@ -1362,14 +1358,13 @@ const PatientDetail: React.FC = () => {
             </div>
 
             {(() => {
-              const latestConsultation = getLatestConsultation();
-              if (!latestConsultation) return null;
-
+              const history = patient ? buildFieldHistory('medicalHistory', patient, consultations) : [];
+              const value = getLatestValue(history);
               return (
                 <FieldHistory
                   fieldLabel="Historique médical général"
-                  currentValue={cleanDecryptedField(latestConsultation.medicalHistory || '', false, '')}
-                  history={patient ? buildFieldHistory('medicalHistory', patient, consultations) : []}
+                  currentValue={cleanDecryptedField(value || '', false, '')}
+                  history={history}
                   emptyMessage="Aucun historique médical renseigné"
                 />
               );
