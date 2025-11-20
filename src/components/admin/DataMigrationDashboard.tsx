@@ -18,9 +18,9 @@ import {
 import { Button } from '../ui/Button';
 import { DataMigrationService } from '../../services/dataMigrationService';
 import { auth } from '../../firebase/config';
-const trackEvent = () => {};
-const trackMatomoEvent = () => {};
-const trackGAEvent = () => {};
+const trackEvent = (..._args: any[]) => {};
+const trackMatomoEvent = (..._args: any[]) => {};
+const trackGAEvent = (..._args: any[]) => {};
 import FirstConsultationSyncPanel from './FirstConsultationSyncPanel';
 
 const DataMigrationDashboard: React.FC = () => {
@@ -42,6 +42,8 @@ const DataMigrationDashboard: React.FC = () => {
   type LegacyMigrationStats = { patientsProcessed: number; updatedPatients: number; updatedConsultations: number; errors: number };
   const [legacyMigrationStats, setLegacyMigrationStats] = useState<LegacyMigrationStats | null>(null);
   const [legacyMigrationLoading, setLegacyMigrationLoading] = useState(false);
+  const [globalLegacyMigrationStats, setGlobalLegacyMigrationStats] = useState<LegacyMigrationStats | null>(null);
+  const [globalLegacyMigrationLoading, setGlobalLegacyMigrationLoading] = useState(false);
 
   // Charger le rapport initial
   useEffect(() => {
@@ -75,6 +77,23 @@ const DataMigrationDashboard: React.FC = () => {
 
     } finally {
       setGlobalReportLoading(false);
+    }
+  };
+
+  const migrateLegacyPatientModelGlobal = async () => {
+    try {
+      setGlobalLegacyMigrationLoading(true);
+      setError(null);
+      setSuccess(null);
+      const results = await DataMigrationService.migrateLegacyPatientModelGlobal();
+      setGlobalLegacyMigrationStats(results);
+      setSuccess('Migration legacy globale terminée avec succès');
+      await loadGlobalMigrationReport();
+    } catch (error) {
+      console.error('Error migrating legacy patient model globally:', error);
+      setError('Erreur lors de la migration legacy globale');
+    } finally {
+      setGlobalLegacyMigrationLoading(false);
     }
   };
 
@@ -315,6 +334,39 @@ const DataMigrationDashboard: React.FC = () => {
         </div>
       )}
 
+      {globalLegacyMigrationStats && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Résultats de la migration legacy (globale)</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-sm text-gray-500">Patients traités</div>
+              <div className="text-xl font-bold text-primary-600">{globalLegacyMigrationStats.patientsProcessed}</div>
+            </div>
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-sm text-gray-500">Patients mis à jour</div>
+              <div className="text-xl font-bold text-primary-600">{globalLegacyMigrationStats.updatedPatients}</div>
+            </div>
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-sm text-gray-500">Consultations ajustées</div>
+              <div className="text-xl font-bold text-primary-600">{globalLegacyMigrationStats.updatedConsultations}</div>
+            </div>
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-sm text-gray-500">Erreurs</div>
+              <div className="text-xl font-bold text-amber-600">{globalLegacyMigrationStats.errors}</div>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              variant="primary"
+              onClick={loadGlobalMigrationReport}
+              leftIcon={<RefreshCw size={16} />}
+            >
+              Actualiser le rapport global
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Affichage des succès */}
       {success && (
         <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center">
@@ -373,7 +425,7 @@ const DataMigrationDashboard: React.FC = () => {
               <div className="text-2xl font-bold text-gray-900">{globalReport.totals.totalAppointments}</div>
             </div>
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <div className="text-sm text-gray-500">Factures totales</div>
+              <div className="text-sm text-gray-500">Factures totaux</div>
               <div className="text-2xl font-bold text-gray-900">{globalReport.totals.totalInvoices}</div>
             </div>
           </div>
@@ -424,6 +476,24 @@ const DataMigrationDashboard: React.FC = () => {
                 </div>
               </div>
             ))}
+          </div>
+          <div className="mt-6 border border-gray-200 rounded-lg p-4">
+            <h5 className="font-medium text-gray-800 mb-2 flex items-center">
+              <ArrowRight size={16} className="mr-2 text-primary-500" />
+              Migration du modèle legacy des patients (tous les ostéopathes)
+            </h5>
+            <p className="text-sm text-gray-600 mb-4">
+              Normalise les anciens dossiers patients pour tous les ostéopathes et initialise la consultation initiale si nécessaire.
+            </p>
+            <Button
+              variant="primary"
+              onClick={migrateLegacyPatientModelGlobal}
+              isLoading={globalLegacyMigrationLoading}
+              loadingText="Migration legacy globale en cours..."
+              disabled={globalLegacyMigrationLoading}
+            >
+              Migrer les dossiers legacy (global)
+            </Button>
           </div>
         </div>
       ) : null}
@@ -766,7 +836,7 @@ const DataMigrationDashboard: React.FC = () => {
 
       {legacyMigrationStats && (
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Résultats de la migration legacy</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Résultats de la migration legacy (mon compte)</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-gray-50 p-3 rounded-lg">
               <div className="text-sm text-gray-500">Patients traités</div>
@@ -840,20 +910,3 @@ const DataMigrationDashboard: React.FC = () => {
 };
 
 export default DataMigrationDashboard;
-  const migrateLegacyPatientModel = async () => {
-    try {
-      setLegacyMigrationLoading(true);
-      setError(null);
-      setSuccess(null);
-      const results = await DataMigrationService.migrateLegacyPatientModel();
-      setLegacyMigrationStats(results);
-      setSuccess('Migration des dossiers legacy terminée avec succès');
-      setStep('migrate');
-      await loadMigrationReport();
-    } catch (error) {
-      console.error('Error migrating legacy patient model:', error);
-      setError('Erreur lors de la migration des dossiers legacy');
-    } finally {
-      setLegacyMigrationLoading(false);
-    }
-  };

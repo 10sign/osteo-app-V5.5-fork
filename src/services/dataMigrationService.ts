@@ -308,10 +308,178 @@ export class DataMigrationService {
       throw error;
     }
   }
-  
+
+  static async migrateLegacyPatientModelGlobal(): Promise<{
+    osteopathsProcessed: number;
+    patientsProcessed: number;
+    updatedPatients: number;
+    updatedConsultations: number;
+    errors: number;
+  }> {
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    const agg = {
+      osteopathsProcessed: 0,
+      patientsProcessed: 0,
+      updatedPatients: 0,
+      updatedConsultations: 0,
+      errors: 0
+    };
+
+    try {
+      const usersRef = collection(db, 'users');
+      const osteosQ = query(usersRef, where('role', '==', 'osteopath'));
+      const osteosSnap = await getDocs(osteosQ);
+
+      for (const userDoc of osteosSnap.docs) {
+        const osteopathId = userDoc.id;
+        agg.osteopathsProcessed++;
+
+        const patientsRef = collection(db, 'patients');
+        const patientsQuery = query(patientsRef, where('osteopathId', '==', osteopathId));
+        const patientsSnapshot = await getDocs(patientsQuery);
+
+        for (const patientDoc of patientsSnapshot.docs) {
+          agg.patientsProcessed++;
+          const patientId = patientDoc.id;
+          const patientData = patientDoc.data();
+
+          try {
+            const consultationsRef = collection(db, 'consultations');
+            const cQuery = query(
+              consultationsRef,
+              where('patientId', '==', patientId),
+              where('osteopathId', '==', osteopathId)
+            );
+            const cSnapshot = await getDocs(cQuery);
+
+            type LegacyConsultation = { id: string; date?: unknown; isInitialConsultation?: boolean } & Record<string, unknown>;
+            const consultations: LegacyConsultation[] = cSnapshot.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, unknown>) }));
+
+            const toDate = (val: unknown): Date => {
+              const cast = val as { toDate?: () => Date } | string | Date | null | undefined;
+              if (cast && typeof cast === 'object' && 'toDate' in cast && typeof cast.toDate === 'function') return cast.toDate();
+              if (typeof cast === 'string') return new Date(cast);
+              if (cast instanceof Date) return cast;
+              return new Date();
+            };
+            consultations.sort((a, b) => toDate(a.date).getTime() - toDate(b.date).getTime());
+
+            const initial = consultations.find((c) => c.isInitialConsultation === true) || consultations[0];
+
+            const normalize = (v: unknown): string | undefined => {
+              if (v === undefined || v === null) return undefined;
+              const s = Array.isArray(v) ? v.join(', ') : String(v);
+              return s.trim() === '' ? undefined : s;
+            };
+
+            const getLegacyNotes = (data: Record<string, unknown> | undefined): string | undefined => {
+              const v = data && (
+                (data['notes'] as unknown) ?? (data['patientNote'] as unknown) ?? (data['patient_notes'] as unknown) ??
+                (data['note_patient'] as unknown) ?? (data['patientNotes'] as unknown) ?? (data['notePatient'] as unknown)
+              );
+              return typeof v === 'string' ? v : undefined;
+            };
+
+            const patientUpdates: Record<string, string> = {};
+            const fields: Array<{ key: string; fromPatient?: string; fromConsult?: string }> = [
+              { key: 'currentTreatment', fromPatient: 'currentTreatment', fromConsult: 'currentTreatment' },
+              { key: 'consultationReason', fromPatient: 'consultationReason', fromConsult: 'consultationReason' },
+              { key: 'medicalAntecedents', fromPatient: 'medicalAntecedents', fromConsult: 'medicalAntecedents' },
+              { key: 'medicalHistory', fromPatient: 'medicalHistory', fromConsult: 'medicalHistory' },
+              { key: 'osteopathicTreatment', fromPatient: 'osteopathicTreatment', fromConsult: 'osteopathicTreatment' }
+            ];
+
+            for (const f of fields) {
+              const currentVal = normalize((patientData as Record<string, unknown>)?.[f.fromPatient || f.key]);
+              const consultVal = normalize(initial && (initial as Record<string, unknown>)?.[f.fromConsult || f.key]);
+              if (!currentVal && consultVal) patientUpdates[f.key] = consultVal;
+            }
+
+            const patientNotes = normalize((patientData as Record<string, unknown>)?.['notes']);
+            const initialNotes = normalize(getLegacyNotes(initial));
+            if (!patientNotes && initialNotes) patientUpdates['notes'] = initialNotes;
+
+            if (Object.keys(patientUpdates).length > 0) {
+              await updateDoc(doc(db, 'patients', patientId), { ...patientUpdates, updatedAt: new Date().toISOString() });
+              agg.updatedPatients++;
+            }
+
+            if (!consultations.length) {
+              const consultationData = {
+                patientId,
+                patientName: `${patientData.firstName} ${patientData.lastName}`.trim(),
+                osteopathId,
+                date: Timestamp.now(),
+                reason: patientData.consultationReason || 'Consultation initiale',
+                treatment: patientData.currentTreatment || 'Évaluation ostéopathique',
+                notes: patientUpdates['notes'] || patientData.notes || '',
+                duration: 60,
+                price: 60,
+                status: 'completed',
+                currentTreatment: patientData.currentTreatment || '',
+                consultationReason: patientData.consultationReason || '',
+                medicalAntecedents: patientData.medicalAntecedents || '',
+                medicalHistory: patientData.medicalHistory || '',
+                osteopathicTreatment: patientData.osteopathicTreatment || '',
+                examinations: [],
+                prescriptions: [],
+                isInitialConsultation: true,
+                createdAt: Timestamp.now(),
+                updatedAt: Timestamp.now()
+              };
+              await addDoc(collection(db, 'consultations'), consultationData);
+              agg.updatedConsultations++;
+              await DataMigrationService.syncNextAppointmentFor(osteopathId, patientId);
+            } else if (initial && initial.isInitialConsultation !== true) {
+              try {
+                await updateDoc(doc(db, 'consultations', initial.id), { isInitialConsultation: true, updatedAt: Timestamp.now() });
+                agg.updatedConsultations++;
+              } catch (e) { void e; }
+              await DataMigrationService.syncNextAppointmentFor(osteopathId, patientId);
+            }
+          } catch (error) {
+            console.error(`❌ Erreur migration legacy globale pour patient ${patientId}:`, error);
+            agg.errors++;
+          }
+        }
+      }
+
+      return agg;
+    } catch (error) {
+      console.error('❌ Failed global legacy patient migration:', error);
+      throw error;
+    }
+  }
+
+  private static async syncNextAppointmentFor(osteopathId: string, patientId: string): Promise<void> {
+    const appointmentsRef = collection(db, 'appointments');
+    const q = query(appointmentsRef, where('patientId', '==', patientId), where('osteopathId', '==', osteopathId));
+    const snapshot = await getDocs(q);
+    const now = new Date();
+    const futureAppointments = snapshot.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .map((a: any) => ({
+        dateObj: (a.date as any)?.toDate?.() || new Date(a.date as string),
+        status: (a as any).status || 'scheduled'
+      }))
+      .filter(a => a.dateObj > now && a.status !== 'cancelled' && a.status !== 'completed')
+      .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
+
+    const patientRef = doc(db, 'patients', patientId);
+    if (futureAppointments.length > 0) {
+      const formatted = futureAppointments[0].dateObj.toISOString().substring(0, 16) + ':00';
+      await updateDoc(patientRef, { nextAppointment: formatted, updatedAt: new Date().toISOString() });
+    } else {
+      await updateDoc(patientRef, { nextAppointment: null, updatedAt: new Date().toISOString() });
+    }
+  }
+
   /**
-   * Migre les patients de test vers des patients réels
-   */
+    * Migre les patients de test vers des patients réels
+    */
   private static async migratePatients(): Promise<{
     updated: number;
     errors: number;
