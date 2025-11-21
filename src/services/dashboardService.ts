@@ -116,10 +116,10 @@ export class DashboardService {
    */
   private static async getTodayAppointments(userId: string): Promise<number> {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
       
       // Récupérer les consultations du jour (pas les appointments)
       const consultationsRef = collection(db, 'consultations');
@@ -129,19 +129,24 @@ export class DashboardService {
       );
       
       const snapshot = await getDocs(q);
-      
-      const todayConsultations = snapshot.docs.filter(doc => {
+
+      const isToday = (d: Date) => d >= start && d < end;
+
+      const count = snapshot.docs.filter(doc => {
         const data = doc.data();
-        const consultationDate = toDateSafe(data.date);
-        if (isNaN(consultationDate.getTime())) {
-          return false;
-        }
+        const createdAt = toDateSafe(data.createdAt);
+        const updatedAt = toDateSafe(data.updatedAt);
         const isReal = data.isTestData !== true;
         const isCompleted = (data.status || 'completed') === 'completed';
-        return isReal && isCompleted && consultationDate >= today && consultationDate < tomorrow;
-      });
-      
-      return todayConsultations.length;
+        const createdToday = !isNaN(createdAt.getTime()) && isToday(createdAt);
+        const updatedToday = !isNaN(updatedAt.getTime()) && isToday(updatedAt);
+        const isInitial = data.isInitialConsultation === true;
+        const updatedEqualsCreated = !isNaN(createdAt.getTime()) && !isNaN(updatedAt.getTime()) && updatedAt.getTime() === createdAt.getTime();
+        const countable = createdToday || (updatedToday && updatedEqualsCreated && !isInitial);
+        return isReal && isCompleted && countable;
+      }).length;
+
+      return count;
     } catch (error) {
       console.error('Error getting today consultations:', error);
       
