@@ -130,15 +130,15 @@ export class DashboardService {
       
       const snapshot = await getDocs(q);
       
-      // Filtrer manuellement par date (conversion unifiée)
       const todayConsultations = snapshot.docs.filter(doc => {
         const data = doc.data();
         const consultationDate = toDateSafe(data.date);
         if (isNaN(consultationDate.getTime())) {
-          console.warn('Invalid date value in consultation:', doc.id, data.date);
           return false;
         }
-        return consultationDate >= today && consultationDate < tomorrow;
+        const isReal = data.isTestData !== true;
+        const isCompleted = (data.status || 'completed') === 'completed';
+        return isReal && isCompleted && consultationDate >= today && consultationDate < tomorrow;
       });
       
       return todayConsultations.length;
