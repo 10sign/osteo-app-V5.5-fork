@@ -85,6 +85,28 @@ const Patients: React.FC = () => {
         }
       });
       
+      const consultationsRef = collection(db, 'consultations');
+      const qc = query(consultationsRef, where('osteopathId', '==', auth.currentUser!.uid));
+      const consultationSnap = await getDocs(qc);
+      const lastByPatient: Record<string, Date> = {};
+      for (const doc of consultationSnap.docs) {
+        const c = doc.data();
+        const rawDate = c.date;
+        const d = rawDate instanceof Date
+          ? rawDate
+          : rawDate && typeof rawDate.toDate === 'function'
+          ? rawDate.toDate()
+          : new Date(rawDate);
+        const pid = c.patientId;
+        if (!pid || isNaN(d.getTime())) continue;
+        const prev = lastByPatient[pid];
+        if (!prev || d > prev) lastByPatient[pid] = d;
+      }
+      patientsList.forEach(p => {
+        const last = lastByPatient[p.id];
+        if (last) p.lastConsultationDate = last;
+      });
+
       console.log('Loaded patients:', patientsList.length);
       setPatients(patientsList);
       
@@ -129,7 +151,7 @@ const Patients: React.FC = () => {
       // Vérifier que le rendez-vous est vraiment dans le futur (pas juste aujourd'hui)
       const now = new Date();
       return appointmentDate > now;
-    } catch (error) {
+    } catch {
       console.error('Error checking upcoming appointment:', date);
       return false;
     }
@@ -163,8 +185,8 @@ const Patients: React.FC = () => {
         ? bDate.getTime() - aDate.getTime() 
         : aDate.getTime() - bDate.getTime();
     } else {
-      const aDate = a.updatedAtDate || a.createdAtDate || new Date(0);
-      const bDate = b.updatedAtDate || b.createdAtDate || new Date(0);
+      const aDate = a.lastConsultationDate || a.updatedAtDate || a.createdAtDate || new Date(0);
+      const bDate = b.lastConsultationDate || b.updatedAtDate || b.createdAtDate || new Date(0);
       return sortDirection === 'desc' 
         ? bDate.getTime() - aDate.getTime() 
         : aDate.getTime() - bDate.getTime();
@@ -178,7 +200,7 @@ const Patients: React.FC = () => {
   const formatBirthDate = (date: string) => {
     try {
       return `Né(e) le ${new Date(date).toLocaleDateString('fr-FR')}`;
-    } catch (error) {
+    } catch {
       console.error('Error formatting birth date:', date);
       return 'Date invalide';
     }
@@ -202,7 +224,7 @@ const Patients: React.FC = () => {
       }
 
       return appointmentDate.toLocaleDateString('fr-FR');
-    } catch (error) {
+    } catch {
       console.error('Error formatting appointment date:', date);
       return 'Date invalide';
     }

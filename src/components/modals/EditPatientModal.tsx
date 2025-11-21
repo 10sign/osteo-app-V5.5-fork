@@ -49,13 +49,13 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
   const [patientDocuments, setPatientDocuments] = useState<DocumentMetadata[]>(
     patient.documents || []
   );
-  const [_clickCount, setClickCount] = useState(0);
+  const [, setClickCount] = useState(0);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const formId = `edit_patient_${patient.id}`;
   
   // État initial pour comparaison
-  const [initialState, _setInitialState] = useState({
+  const [initialState] = useState({
     tags: patient.tags || [],
     treatmentHistory: patient.treatmentHistory || [],
     documents: patient.documents || []
@@ -79,7 +79,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
     }
   };
 
-  const { register, handleSubmit, formState: { errors, isValid, isDirty }, reset, trigger, watch, setValue } = useForm({
+  const { register, handleSubmit, formState: { errors, isValid, isDirty }, reset, trigger, watch } = useForm({
     mode: 'onChange',
     defaultValues: {
       firstName: patient.firstName || '',
@@ -99,7 +99,9 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
       currentTreatment: patient.currentTreatment || '',
       consultationReason: patient.consultationReason || '',
       medicalAntecedents: patient.medicalAntecedents || '',
-      osteopathicTreatment: patient.osteopathicTreatment || ''
+      osteopathicTreatment: patient.osteopathicTreatment || '',
+      updatedAtOverride: '',
+      updatedAtOverrideTime: ''
     }
   });
 
@@ -156,16 +158,13 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
         currentTreatment: patient.currentTreatment || '',
         consultationReason: patient.consultationReason || '',
         medicalAntecedents: patient.medicalAntecedents || '',
-        osteopathicTreatment: patient.osteopathicTreatment || '' // Nouveau champ
+        osteopathicTreatment: patient.osteopathicTreatment || '',
+        updatedAtOverride: '',
+        updatedAtOverrideTime: ''
       };
 
       
-      // Use setValue for each field to ensure proper initialization
-      Object.entries(formData).forEach(([key, value]) => {
-        setValue(key as any, value);
-      });
-      
-      // Also use reset to ensure form state is properly updated
+      // Réinitialiser le formulaire avec les données du patient
       reset(formData);
     } catch (error) {
       console.error('Error setting form values:', error);
@@ -306,7 +305,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
     setError(error);
   };
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: PatientFormData & { updatedAtOverride?: string; updatedAtOverrideTime?: string }) => {
     
     if (!auth.currentUser || !patient) {
       console.error('No authenticated user found');
@@ -320,7 +319,7 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
     
     try {
       const timestamp = Timestamp.now();
-      const updatedData: Record<string, any> = {
+      const updatedData: Partial<Patient> = {
         firstName: data.firstName?.trim() || '',
         lastName: data.lastName?.trim() || '', 
         dateOfBirth: data.dateOfBirth,
@@ -329,22 +328,24 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
         email: data.email,
         phone: data.phone,
         address: {
-          street: data.address,
+          street: data.address || '',
           city: '',
           state: '',
           zipCode: '',
           country: 'France'
         },
         insurance: {
-          provider: data.insurance,
-          policyNumber: data.insuranceNumber
+          provider: data.insurance || '',
+          policyNumber: data.insuranceNumber || ''
         },
         medicalHistory: data.medicalHistory,
         notes: data.notes,
         osteopathicTreatment: data.osteopathicTreatment, // Nouveau champ
         tags: selectedTags,
-        nextAppointment: data.nextAppointment ? `${data.nextAppointment}T${data.nextAppointmentTime || '00:00'}:00` : null,
-        updatedAt: timestamp.toDate().toISOString(),
+        nextAppointment: data.nextAppointment ? `${data.nextAppointment}T${data.nextAppointmentTime || '00:00'}:00` : undefined,
+        updatedAt: (data.updatedAtOverride && (data.updatedAtOverrideTime || '00:00'))
+          ? `${data.updatedAtOverride}T${data.updatedAtOverrideTime || '00:00'}:00`
+          : timestamp.toDate().toISOString(),
         // Nouveaux champs
         currentTreatment: data.currentTreatment,
         consultationReason: data.consultationReason,
@@ -446,6 +447,30 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ isOpen, onClose, on
               </div>
 
               <form id="editPatientForm" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="updatedAtOverride" className="block text-sm font-medium text-gray-700 mb-1">
+                      Date de modification (optionnelle)
+                    </label>
+                    <input
+                      type="date"
+                      id="updatedAtOverride"
+                      className={`input w-full ${errors.updatedAtOverride ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                      {...register('updatedAtOverride')}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="updatedAtOverrideTime" className="block text-sm font-medium text-gray-700 mb-1">
+                      Heure de modification
+                    </label>
+                    <input
+                      type="time"
+                      id="updatedAtOverrideTime"
+                      className={`input w-full ${errors.updatedAtOverrideTime ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                      {...register('updatedAtOverrideTime')}
+                    />
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">

@@ -111,6 +111,7 @@ export interface Patient {
   // Champs pour le tri
   createdAtDate?: Date; // Champ calculé pour le tri
   updatedAtDate?: Date; // Champ calculé pour le tri
+  lastConsultationDate?: Date; // Champ calculé pour le tri
   
   // Nouveaux champs
   currentTreatment?: string; // Traitement effectué
@@ -148,6 +149,8 @@ export interface PatientFormData {
   notes?: string;
   nextAppointment?: string;
   nextAppointmentTime?: string; // format: "HH:mm"
+  updatedAtOverride?: string;
+  updatedAtOverrideTime?: string;
   
   // Nouveaux champs
   currentTreatment?: string;

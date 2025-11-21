@@ -344,9 +344,22 @@ export class PatientService {
       }
 
       // Préparation des mises à jour
+      const providedUpdatedAt = (() => {
+        const raw = (updates as Partial<Patient>).updatedAt as unknown;
+        if (!raw) return null;
+        if (raw instanceof Date) return raw;
+        if (typeof raw === 'string') {
+          const d = new Date(raw);
+          return isNaN(d.getTime()) ? null : d;
+        }
+        return null;
+      })();
+      const safeUpdatedAt = providedUpdatedAt && !isNaN(providedUpdatedAt.getTime())
+        ? providedUpdatedAt.toISOString()
+        : new Date().toISOString();
       const updatesWithMetadata = {
         ...updates,
-        updatedAt: new Date().toISOString()
+        updatedAt: safeUpdatedAt
       };
 
       // Mise à jour avec chiffrement HDS

@@ -10,7 +10,6 @@ import {
   TrendingUp,
   AlertCircle,
   Clock,
-  CheckCircle,
 } from 'lucide-react';
 import { DashboardService } from '../services/dashboardService';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
@@ -32,6 +31,7 @@ const Dashboard: React.FC = () => {
   type DashboardStats = {
     patientCount: number;
     todayAppointments: number;
+    todayAppointmentsBreakdown: { total: number; confirmed: number; completed: number; draft: number; cancelled: number; pending: number };
     pendingInvoices: number;
     newPatientsThisMonth: number;
     occupancyRate: number;
@@ -47,12 +47,15 @@ const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats>({
     patientCount: 0,
     todayAppointments: 0,
+    todayAppointmentsBreakdown: { total: 0, confirmed: 0, completed: 0, draft: 0, cancelled: 0, pending: 0 },
     pendingInvoices: 0,
     newPatientsThisMonth: 0,
     occupancyRate: 0,
     invoicesThisMonth: 0,
     recentNotifications: []
   });
+
+  const [todayFilter, setTodayFilter] = useState<'all' | 'confirmed'>('all');
 
   // Mise à jour de l'heure actuelle toutes les secondes
   useEffect(() => {
@@ -334,7 +337,24 @@ const Dashboard: React.FC = () => {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-gray-600 text-sm font-medium">Consultations aujourd'hui</p>
-              <h3 className="text-3xl font-bold mt-1">{stats.todayAppointments}</h3>
+              <h3 className="text-3xl font-bold mt-1">{todayFilter === 'confirmed' ? stats.todayAppointmentsBreakdown.confirmed : stats.todayAppointments}</h3>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  className={`text-xs px-2 py-1 rounded ${todayFilter === 'all' ? 'bg-secondary-100 text-secondary-700' : 'bg-gray-100 text-gray-600'}`}
+                  onClick={() => setTodayFilter('all')}
+                >
+                  Toutes
+                </button>
+                <button
+                  className={`text-xs px-2 py-1 rounded ${todayFilter === 'confirmed' ? 'bg-secondary-100 text-secondary-700' : 'bg-gray-100 text-gray-600'}`}
+                  onClick={() => setTodayFilter('confirmed')}
+                >
+                  Confirmées
+                </button>
+              </div>
+              <div className="mt-2 text-xs text-gray-500">
+                Confirmées: {stats.todayAppointmentsBreakdown.confirmed} · Brouillons: {stats.todayAppointmentsBreakdown.draft} · Complétées: {stats.todayAppointmentsBreakdown.completed} · Annulées: {stats.todayAppointmentsBreakdown.cancelled}
+              </div>
             </div>
             <div className="w-10 h-10 rounded-lg bg-secondary-100 flex items-center justify-center">
               <Calendar size={20} className="text-secondary-600" />
@@ -433,7 +453,7 @@ const Dashboard: React.FC = () => {
           
           <div className="space-y-3">
             {stats.recentNotifications.length > 0 ? (
-              stats.recentNotifications.map((notification: any) => (
+              stats.recentNotifications.map((notification) => (
                 <div key={notification.id} className="flex items-start p-3 rounded-lg border border-gray-100 hover:bg-gray-50">
                   <div className="mr-3 mt-0.5">
                     {notification.type === 'appointment' && <Clock size={16} className="text-primary-500" />}

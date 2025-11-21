@@ -28,14 +28,14 @@ export class DashboardService {
       // Récupération des compteurs
       const [
         patientCount,
-        todayAppointments,
+        todayBreakdown,
         pendingInvoices,
         newPatientsThisMonth,
         occupancyRate,
         invoicesThisMonth
       ] = await Promise.all([
         this.getPatientCount(effectiveOsteopathId),
-        this.getTodayAppointments(effectiveOsteopathId),
+        this.getTodayAppointmentsBreakdown(effectiveOsteopathId),
         this.getPendingInvoices(effectiveOsteopathId),
         this.getNewPatientsThisMonth(effectiveOsteopathId),
         this.getOccupancyRate(effectiveOsteopathId),
@@ -59,7 +59,8 @@ export class DashboardService {
       
       return {
         patientCount,
-        todayAppointments,
+        todayAppointments: todayBreakdown.total,
+        todayAppointmentsBreakdown: todayBreakdown,
         pendingInvoices,
         newPatientsThisMonth,
         occupancyRate,
@@ -96,9 +97,9 @@ export class DashboardService {
         const q = query(patientsRef, where('osteopathId', '==', userId));
         const snapshot = await getCountFromServer(q);
         return snapshot.data().count;
-      } catch (countError: any) {
+      } catch (countError: unknown) {
         // Si getCountFromServer échoue, utiliser getDocs
-        console.warn('getCountFromServer failed, using getDocs fallback:', countError.message);
+        console.warn('getCountFromServer failed, using getDocs fallback:', (countError as Error)?.message || String(countError));
         const patientsRef = collection(db, 'patients');
         const q = query(patientsRef, where('osteopathId', '==', userId));
         const snapshot = await getDocs(q);
@@ -114,43 +115,48 @@ export class DashboardService {
   /**
    * Récupère les consultations du jour
    */
-  private static async getTodayAppointments(userId: string): Promise<number> {
-    try {
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
-      end.setDate(end.getDate() + 1);
-      
-      // Récupérer les consultations du jour (pas les appointments)
-      const consultationsRef = collection(db, 'consultations');
-      const q = query(
-        consultationsRef,
-        where('osteopathId', '==', userId)
-      );
-      
-      const snapshot = await getDocs(q);
+  // Méthode remplacée par getTodayAppointmentsBreakdown
 
+  private static async getTodayAppointmentsBreakdown(userId: string): Promise<{ total: number; confirmed: number; completed: number; draft: number; cancelled: number; pending: number; }> {
+    try {
+      const consultationsRef = collection(db, 'consultations');
+      const q = query(consultationsRef, where('osteopathId', '==', userId));
+      const snapshot = await getDocs(q);
       const nowLocal = new Date();
       const isToday = (d: Date) => !isNaN(d.getTime()) && d.toDateString() === nowLocal.toDateString();
-
-      const count = snapshot.docs.filter(doc => {
-        const data = doc.data();
-        const createdAt = toDateSafe(data.createdAt);
-        const updatedAt = toDateSafe(data.updatedAt);
-        const isReal = data.isTestData !== true;
-        const createdToday = isToday(createdAt);
-        const updatedToday = isToday(updatedAt);
+      let confirmed = 0;
+      let completed = 0;
+      let draft = 0;
+      let cancelled = 0;
+      let pending = 0;
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+        const date = toDateSafe(data.date);
         const isInitial = data.isInitialConsultation === true;
-        const updatedEqualsCreated = !isNaN(createdAt.getTime()) && !isNaN(updatedAt.getTime()) && updatedAt.getTime() === createdAt.getTime();
-        const countable = (!isInitial && createdToday) || (updatedToday && updatedEqualsCreated && !isInitial);
-        return isReal && countable;
-      }).length;
-
-      return count;
+        const isReal = data.isTestData !== true;
+        if (!isReal || isInitial || !isToday(date)) continue;
+        const status = typeof data.status === 'string' ? data.status : 'draft';
+        if (status === 'confirmed') confirmed++;
+        else if (status === 'completed') completed++;
+        else if (status === 'cancelled') cancelled++;
+        else if (status === 'pending') pending++;
+        else draft++;
+      }
+      const total = confirmed + completed + draft + cancelled + pending;
+      try {
+        await AuditLogger.log(
+          AuditEventType.DATA_ACCESS,
+          'dashboard/today_consultations_breakdown',
+          'compute',
+          SensitivityLevel.INTERNAL,
+          'success',
+          { total, confirmed, completed, draft, cancelled, pending }
+        );
+      } catch { void 0 }
+      return { total, confirmed, completed, draft, cancelled, pending };
     } catch (error) {
-      console.error('Error getting today consultations:', error);
-      
-      return 0;
+      console.error('Error getting today consultations breakdown:', error);
+      return { total: 0, confirmed: 0, completed: 0, draft: 0, cancelled: 0, pending: 0 };
     }
   }
   
@@ -209,9 +215,11 @@ export class DashboardService {
         
         const snapshot = await getCountFromServer(q);
         return snapshot.data().count;
-      } catch (indexError: any) {
+      } catch (indexError: unknown) {
         // Si l'index n'est pas disponible, utiliser une requête simple
-        if (indexError.code === 'failed-precondition' || indexError.message?.includes('index')) {
+        const code = (indexError as { code?: string })?.code;
+        const message = (indexError as Error)?.message || '';
+        if (code === 'failed-precondition' || message.includes('index')) {
           console.warn('Index not available for patients query, using fallback method');
           
           // Requête simple sans orderBy
@@ -230,9 +238,7 @@ export class DashboardService {
             try {
               const creationDate = new Date(createdAt);
               return creationDate >= firstDayOfMonth;
-            } catch (e) {
-              return false;
-            }
+            } catch { return false; }
           });
           
           return newPatients.length;
@@ -313,9 +319,7 @@ export class DashboardService {
         try {
           const date = new Date(issueDate);
           return date >= firstDayOfMonth;
-        } catch (e) {
-          return false;
-        }
+        } catch { return false; }
       });
       
       return monthInvoices.length;
@@ -328,9 +332,9 @@ export class DashboardService {
   /**
    * Récupère les notifications récentes
    */
-  private static async getRecentNotifications(userId: string): Promise<any[]> {
+  private static async getRecentNotifications(userId: string): Promise<{ id: string; type: string; message: string; timeFormatted: string; time: Date }[]> {
     try {
-      const notifications = [];
+      const notifications: { id: string; type: string; message: string; timeFormatted: string; time: Date }[] = [];
       
       // 1. Prochaines consultations
       const now = new Date();
@@ -374,11 +378,10 @@ export class DashboardService {
           
           notifications.push({
             id: doc.id,
-            type: 'consultation',
+            type: 'appointment',
             message: `Consultation avec ${decryptedData.patientName} à ${consultationDate.getHours()}:${String(consultationDate.getMinutes()).padStart(2, '0')}`,
             time: consultationDate,
-            timeFormatted: `${consultationDate.getHours()}:${String(consultationDate.getMinutes()).padStart(2, '0')}`,
-            priority: 'high'
+            timeFormatted: `${consultationDate.getHours()}:${String(consultationDate.getMinutes()).padStart(2, '0')}`
           });
         }
       } catch (appointmentError) {
@@ -409,21 +412,24 @@ export class DashboardService {
             userId
           );
           
-          notifications.push({
-            id: doc.id,
-            type: 'invoice',
-            message: `Facture #${decryptedData.number} en attente de paiement`,
-            time: new Date(decryptedData.issueDate),
-            timeFormatted: 'Hier',
-            priority: 'medium'
-          });
+          {
+            const rawIssueDate = decryptedData.issueDate;
+            const issueDate = rawIssueDate ? new Date(rawIssueDate) : new Date(0);
+            notifications.push({
+              id: doc.id,
+              type: 'invoice',
+              message: `Facture #${decryptedData.number} en attente de paiement`,
+              time: issueDate,
+              timeFormatted: 'Hier'
+            });
+          }
         }
       } catch (invoiceError) {
         console.warn('Could not load invoice notifications:', invoiceError);
       }
       
       // Trier par date
-      notifications.sort((a, b) => a.time > b.time ? -1 : 1);
+      notifications.sort((a, b) => a.time.getTime() > b.time.getTime() ? -1 : 1);
       
       return notifications.slice(0, 5); // Limiter à 5 notifications
     } catch (error) {

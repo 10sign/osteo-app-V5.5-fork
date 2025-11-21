@@ -118,14 +118,7 @@ const Consultations: React.FC = () => {
     return () => clearInterval(clockInterval);
   }, []);
 
-  // Rafraîchissement automatique des données toutes les 3 secondes
-  useEffect(() => {
-    const refreshInterval = setInterval(() => {
-      handleRefresh(false);
-    }, 3000);
-    
-    return () => clearInterval(refreshInterval);
-  }, [handleRefresh]);
+  // Rafraîchissement automatique des données déplacé plus bas après la déclaration de handleRefresh
 
   // Check for action parameter to open new consultation modal
   useEffect(() => {
@@ -141,7 +134,7 @@ const Consultations: React.FC = () => {
   const loadAppointments = useCallback(async () => {
     if (!auth.currentUser) {
       console.log('No authenticated user, skipping appointments load');
-      return;
+      return [];
     }
 
     console.log('🔄 Loading appointments for user:', auth.currentUser.uid);
@@ -261,10 +254,10 @@ const Consultations: React.FC = () => {
   }, []);
 
   // Chargement des consultations (pour l'agenda)
-  const loadConsultationsForCalendar = useCallback(async () => {
+  const loadConsultationsForCalendar = useCallback(async (): Promise<Appointment[]> => {
     if (!auth.currentUser) {
       console.log('No authenticated user, skipping consultations load');
-      return;
+      return [];
     }
 
     console.log('🔄 Loading consultations for calendar for user:', auth.currentUser.uid);
@@ -453,7 +446,7 @@ const Consultations: React.FC = () => {
       setError('Erreur lors du chargement des consultations: ' + (error as Error).message);
       throw error;
     }
-  }, [loadAppointments, loadConsultations, loadConsultationsForCalendar, loading]);
+  }, [loadAppointments, loading]);
 
   // Chargement des consultations
   const loadConsultations = useCallback(async () => {
@@ -576,6 +569,13 @@ const Consultations: React.FC = () => {
         setLoading(false);
       });
 
+    const watchdog = setTimeout(() => {
+      if (loading) {
+        setError("Le chargement de l'agenda prend trop de temps. Veuillez actualiser.");
+        setLoading(false);
+      }
+    }, 10000);
+
     // Configuration du listener en temps réel pour les rendez-vous
     try {
       const appointmentsRef = collection(db, 'appointments');
@@ -634,6 +634,7 @@ const Consultations: React.FC = () => {
         console.log('🔌 Cleaning up listeners');
         appointmentsUnsubscribe();
         consultationsUnsubscribe();
+        clearTimeout(watchdog);
       };
     } catch (err) {
       console.error('❌ Error setting up sync:', err);
@@ -663,6 +664,14 @@ const Consultations: React.FC = () => {
       }
     }
   }, [loadAppointments, loadConsultations, loadConsultationsForCalendar]);
+
+  // Rafraîchissement automatique des données toutes les 3 secondes (après déclaration de handleRefresh)
+  useEffect(() => {
+    const refreshInterval = setInterval(() => {
+      handleRefresh(false);
+    }, 3000);
+    return () => clearInterval(refreshInterval);
+  }, [handleRefresh]);
 
   // Handle patient link click
   // Navigation patient via liens (fonction non utilisée supprimée)
