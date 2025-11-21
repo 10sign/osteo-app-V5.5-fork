@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, Plus, Filter, Tags, Calendar, Users, ArrowDown, ArrowUp, Clock } from 'lucide-react';
+import { Search, Plus, Calendar, Users, ArrowDown, ArrowUp, Clock } from 'lucide-react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../../components/ui/Button';
@@ -15,7 +15,7 @@ const Patients: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [sortBy, setSortBy] = useState<'createdAt' | 'updatedAt'>('updatedAt');
+  const [sortBy, setSortBy] = useState<'createdAt' | 'updatedAt'>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -115,16 +115,7 @@ const Patients: React.FC = () => {
     setSearchTerm(e.target.value);
   };
 
-  const handleSortChange = (sortField: 'createdAt' | 'updatedAt') => {
-    if (sortBy === sortField) {
-      // Si on clique sur le même champ, on inverse la direction
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      // Si on change de champ, on met la direction par défaut (desc)
-      setSortBy(sortField);
-      setSortDirection('desc');
-    }
-  };
+  
 
   const handleFilterChange = (filter: string) => {
     setSelectedFilter(filter);
@@ -271,9 +262,9 @@ const Patients: React.FC = () => {
                     setSortDirection(direction as 'asc' | 'desc');
                   }}
                 >
+                  <option value="createdAt-desc">Créé récemment</option>
                   <option value="updatedAt-desc">Modifié récemment</option>
                   <option value="updatedAt-asc">Modifié anciennement</option>
-                  <option value="createdAt-desc">Créé récemment</option>
                   <option value="createdAt-asc">Créé anciennement</option>
                 </select>
               </div>
