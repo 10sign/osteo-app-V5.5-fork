@@ -130,15 +130,16 @@ export class DashboardService {
       
       const snapshot = await getDocs(q);
 
-      const isToday = (d: Date) => d >= start && d < end;
+      const nowLocal = new Date();
+      const isToday = (d: Date) => !isNaN(d.getTime()) && d.toDateString() === nowLocal.toDateString();
 
       const count = snapshot.docs.filter(doc => {
         const data = doc.data();
         const createdAt = toDateSafe(data.createdAt);
         const updatedAt = toDateSafe(data.updatedAt);
         const isReal = data.isTestData !== true;
-        const createdToday = !isNaN(createdAt.getTime()) && isToday(createdAt);
-        const updatedToday = !isNaN(updatedAt.getTime()) && isToday(updatedAt);
+        const createdToday = isToday(createdAt);
+        const updatedToday = isToday(updatedAt);
         const isInitial = data.isInitialConsultation === true;
         const updatedEqualsCreated = !isNaN(createdAt.getTime()) && !isNaN(updatedAt.getTime()) && updatedAt.getTime() === createdAt.getTime();
         const countable = (!isInitial && createdToday) || (updatedToday && updatedEqualsCreated && !isInitial);
