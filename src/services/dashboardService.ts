@@ -137,13 +137,12 @@ export class DashboardService {
         const createdAt = toDateSafe(data.createdAt);
         const updatedAt = toDateSafe(data.updatedAt);
         const isReal = data.isTestData !== true;
-        const isCompleted = (data.status || 'completed') === 'completed';
         const createdToday = !isNaN(createdAt.getTime()) && isToday(createdAt);
         const updatedToday = !isNaN(updatedAt.getTime()) && isToday(updatedAt);
         const isInitial = data.isInitialConsultation === true;
         const updatedEqualsCreated = !isNaN(createdAt.getTime()) && !isNaN(updatedAt.getTime()) && updatedAt.getTime() === createdAt.getTime();
         const countable = (!isInitial && createdToday) || (updatedToday && updatedEqualsCreated && !isInitial);
-        return isReal && isCompleted && countable;
+        return isReal && countable;
       }).length;
 
       return count;
