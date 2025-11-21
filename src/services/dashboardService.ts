@@ -121,27 +121,22 @@ export class DashboardService {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      // Récupérer les consultations du jour (pas les appointments)
-      const consultationsRef = collection(db, 'consultations');
+      const appointmentsRef = collection(db, 'appointments');
       const q = query(
-        consultationsRef,
+        appointmentsRef,
         where('osteopathId', '==', userId)
       );
-      
       const snapshot = await getDocs(q);
-      
-      const todayConsultations = snapshot.docs.filter(doc => {
+      const todayAppointments = snapshot.docs.filter((doc) => {
         const data = doc.data();
-        const consultationDate = toDateSafe(data.date);
-        if (isNaN(consultationDate.getTime())) {
-          return false;
-        }
+        const d = toDateSafe(data.date);
+        if (isNaN(d.getTime())) return false;
         const isReal = data.isTestData !== true;
-        const isCompleted = (data.status || 'completed') === 'completed';
-        return isReal && isCompleted && consultationDate >= today && consultationDate < tomorrow;
+        const status = data.status || 'confirmed';
+        const isActive = status === 'confirmed' || status === 'completed';
+        return isReal && isActive && d >= today && d < tomorrow;
       });
-      
-      return todayConsultations.length;
+      return todayAppointments.length;
     } catch (error) {
       console.error('Error getting today consultations:', error);
       

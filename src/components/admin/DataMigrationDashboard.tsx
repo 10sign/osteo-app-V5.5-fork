@@ -97,6 +97,23 @@ const DataMigrationDashboard: React.FC = () => {
     }
   };
 
+  const migrateLegacyPatientModel = async () => {
+    try {
+      setLegacyMigrationLoading(true);
+      setError(null);
+      setSuccess(null);
+      const results = await DataMigrationService.migrateLegacyPatientModel();
+      setLegacyMigrationStats(results);
+      setSuccess('Migration legacy terminée avec succès');
+      await loadMigrationReport();
+    } catch (error) {
+      console.error('Error migrating legacy patient model:', error);
+      setError('Erreur lors de la migration legacy');
+    } finally {
+      setLegacyMigrationLoading(false);
+    }
+  };
+
   // Charger le rapport de migration personnel
   const loadMigrationReport = async () => {
     try {
