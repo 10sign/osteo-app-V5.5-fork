@@ -142,7 +142,7 @@ export class DashboardService {
         const updatedToday = !isNaN(updatedAt.getTime()) && isToday(updatedAt);
         const isInitial = data.isInitialConsultation === true;
         const updatedEqualsCreated = !isNaN(createdAt.getTime()) && !isNaN(updatedAt.getTime()) && updatedAt.getTime() === createdAt.getTime();
-        const countable = createdToday || (updatedToday && updatedEqualsCreated && !isInitial);
+        const countable = (!isInitial && createdToday) || (updatedToday && updatedEqualsCreated && !isInitial);
         return isReal && isCompleted && countable;
       }).length;
 
