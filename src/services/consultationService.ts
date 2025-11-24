@@ -970,6 +970,82 @@ export class ConsultationService {
     }
   }
 
+  /**
+   * Reconstruit les consultations manquantes à partir des rendez‑vous
+   */
+  static async recoverMissingConsultationsFromAppointments(): Promise<{ created: number; skipped: number }> {
+    if (!auth.currentUser) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    let created = 0;
+    let skipped = 0;
+
+    try {
+      const appointmentsRef = collection(db, 'appointments');
+      const q = query(appointmentsRef, where('osteopathId', '==', auth.currentUser.uid));
+      const snapshot = await getDocs(q);
+
+      for (const docSnap of snapshot.docs) {
+        const appt = docSnap.data();
+        if (appt.consultationId) { skipped++; continue; }
+
+        const patientId = appt.patientId || '';
+        const patientName = appt.patientName || 'Patient inconnu';
+        const apptDate = appt.date?.toDate?.() || new Date(appt.date);
+        if (!apptDate || isNaN(new Date(apptDate).getTime())) { skipped++; continue; }
+
+        const payload: any = {
+          patientId,
+          patientName,
+          reason: appt.type || 'Consultation ostéopathique',
+          treatment: '',
+          notes: appt.notes || '',
+          duration: appt.duration || 60,
+          price: appt.price || 60,
+          status: appt.status === 'completed' ? 'completed' : 'draft',
+          osteopathId: auth.currentUser.uid,
+          date: apptDate,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        try {
+          const encrypted = HDSCompliance.prepareDataForStorage(payload, 'consultations', auth.currentUser.uid);
+          const newDoc = await addDoc(collection(db, 'consultations'), encrypted);
+          created++;
+          try {
+            await updateDoc(doc(db, 'appointments', docSnap.id), { consultationId: newDoc.id, updatedAt: Timestamp.fromDate(new Date()) });
+          } catch {}
+
+          await AuditLogger.log(
+            AuditEventType.DATA_MODIFICATION,
+            `consultations/${newDoc.id}`,
+            'recover_from_appointment',
+            SensitivityLevel.SENSITIVE,
+            'success',
+            { appointmentId: docSnap.id }
+          );
+        } catch (e) {
+          skipped++;
+          await AuditLogger.log(
+            AuditEventType.DATA_MODIFICATION,
+            'consultations',
+            'recover_from_appointment',
+            SensitivityLevel.SENSITIVE,
+            'failure',
+            { error: (e as Error).message }
+          );
+        }
+      }
+
+      return { created, skipped };
+    } catch (error) {
+      console.error('❌ Échec de la récupération des consultations depuis les rendez‑vous:', error);
+      throw error;
+    }
+  }
+
   // ✅ SUPPRIMÉ : addConsultationToPatientHistoryMethod
   // Cette fonction modifiait automatiquement le dossier patient
   // Les consultations doivent rester des snapshots indépendants

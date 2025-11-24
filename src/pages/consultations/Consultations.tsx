@@ -16,9 +16,9 @@ import NewConsultationModal from '../../components/modals/NewConsultationModal';
 import EditConsultationModal from '../../components/modals/EditConsultationModal';
 import DeleteConsultationModal from '../../components/modals/DeleteConsultationModal';
 import DeleteAppointmentModal from '../../components/modals/DeleteAppointmentModal';
-import { format } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, Timestamp } from 'firebase/firestore';
 import { setupSafeSnapshot } from '../../utils/firestoreListener';
 import { db, auth } from '../../firebase/config';
 import { ConsultationService } from '../../services/consultationService';
@@ -265,9 +265,24 @@ const Consultations: React.FC = () => {
 
     try {
       const consultationsRef = collection(db, 'consultations');
+      // Limiter la fenêtre aux dates visibles pour accélérer
+      let rangeStart: Date;
+      let rangeEnd: Date;
+      if (view === 'day') {
+        rangeStart = startOfDay(currentDate);
+        rangeEnd = endOfDay(currentDate);
+      } else if (view === 'week') {
+        rangeStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+        rangeEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
+      } else {
+        rangeStart = startOfMonth(currentDate);
+        rangeEnd = endOfMonth(currentDate);
+      }
       const consultationsQuery = query(
         consultationsRef,
-        where('osteopathId', '==', auth.currentUser.uid)
+        where('osteopathId', '==', auth.currentUser.uid),
+        where('date', '>=', Timestamp.fromDate(rangeStart)),
+        where('date', '<=', Timestamp.fromDate(rangeEnd))
       );
 
       console.log('📡 Executing consultations query...');
@@ -349,27 +364,8 @@ const Consultations: React.FC = () => {
             continue;
           }
 
-          // Validation du patient
-          let patientExists = true;
-          let patientName = consultationData.patientName || 'Patient inconnu';
-
-          if (consultationData.patientId) {
-            try {
-              const patientDoc = await getDoc(doc(db, 'patients', consultationData.patientId));
-              if (patientDoc.exists()) {
-                const patientData = patientDoc.data();
-                patientName = `${patientData.firstName} ${patientData.lastName}`;
-              } else {
-                console.warn('⚠️ Patient not found for consultation:', docSnapshot.id, consultationData.patientId);
-                patientExists = false;
-                patientName = consultationData.patientName || 'Patient supprimé';
-              }
-            } catch (patientError) {
-              console.warn('⚠️ Error checking patient for consultation:', docSnapshot.id, patientError);
-              patientExists = false;
-              patientName = consultationData.patientName || 'Patient inaccessible';
-            }
-          }
+          // Utiliser le snapshot de nom patient stocké dans la consultation (évite N+1)
+          const patientName = consultationData.patientName || 'Patient inconnu';
 
           // Création de l'objet rendez-vous mappé depuis la consultation
           const mappedAppointment: Appointment = {
@@ -397,7 +393,7 @@ const Consultations: React.FC = () => {
             patient: mappedAppointment.patientName,
             date: mappedAppointment.date.toISOString(),
             status: mappedAppointment.status,
-            patientExists
+            patientExists: true
           });
 
         } catch (error) {
@@ -499,21 +495,7 @@ const Consultations: React.FC = () => {
             continue;
           }
 
-          let patientName = consultationData.patientName || 'Patient inconnu';
-
-          if (consultationData.patientId) {
-            try {
-              const patientDoc = await getDoc(doc(db, 'patients', consultationData.patientId));
-              if (patientDoc.exists()) {
-                const patientData = patientDoc.data();
-                patientName = `${patientData.firstName} ${patientData.lastName}`;
-              } else {
-                patientName = consultationData.patientName || 'Patient supprimé';
-              }
-            } catch {
-              patientName = consultationData.patientName || 'Patient inaccessible';
-            }
-          }
+          const patientName = consultationData.patientName || 'Patient inconnu';
 
           const consultation: Consultation = {
             id: docSnapshot.id,
@@ -665,13 +647,7 @@ const Consultations: React.FC = () => {
     }
   }, [loadAppointments, loadConsultations, loadConsultationsForCalendar]);
 
-  // Rafraîchissement automatique des données toutes les 3 secondes (après déclaration de handleRefresh)
-  useEffect(() => {
-    const refreshInterval = setInterval(() => {
-      handleRefresh(false);
-    }, 3000);
-    return () => clearInterval(refreshInterval);
-  }, [handleRefresh]);
+  // Supprimé: rafraîchissement périodique redondant (onSnapshot suffit pour la synchro)
 
   // Handle patient link click
   // Navigation patient via liens (fonction non utilisée supprimée)

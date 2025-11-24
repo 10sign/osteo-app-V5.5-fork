@@ -55,7 +55,7 @@ const Dashboard: React.FC = () => {
     recentNotifications: []
   });
 
-  const [todayFilter, setTodayFilter] = useState<'all' | 'confirmed'>('all');
+  
 
   // Mise à jour de l'heure actuelle toutes les secondes
   useEffect(() => {
@@ -116,6 +116,22 @@ const Dashboard: React.FC = () => {
     (async () => {
       const invoicesRef = collection(db, 'invoices');
       const q = query(invoicesRef, where('osteopathId', '==', auth.currentUser!.uid));
+      unsubscribe = await setupSafeSnapshot(q, () => {
+        loadDashboardStats(false);
+      }, (err) => {
+        setError('Erreur de synchronisation en temps réel: ' + err.message);
+      });
+    })();
+    return () => unsubscribe();
+  }, []);
+
+  // Temps réel: rendez‑vous
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    let unsubscribe: () => void = () => {};
+    (async () => {
+      const appointmentsRef = collection(db, 'appointments');
+      const q = query(appointmentsRef, where('osteopathId', '==', auth.currentUser!.uid));
       unsubscribe = await setupSafeSnapshot(q, () => {
         loadDashboardStats(false);
       }, (err) => {
@@ -337,24 +353,7 @@ const Dashboard: React.FC = () => {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-gray-600 text-sm font-medium">Consultations aujourd'hui</p>
-              <h3 className="text-3xl font-bold mt-1">{todayFilter === 'confirmed' ? stats.todayAppointmentsBreakdown.confirmed : stats.todayAppointments}</h3>
-              <div className="mt-2 flex items-center gap-2">
-                <button
-                  className={`text-xs px-2 py-1 rounded ${todayFilter === 'all' ? 'bg-secondary-100 text-secondary-700' : 'bg-gray-100 text-gray-600'}`}
-                  onClick={() => setTodayFilter('all')}
-                >
-                  Toutes
-                </button>
-                <button
-                  className={`text-xs px-2 py-1 rounded ${todayFilter === 'confirmed' ? 'bg-secondary-100 text-secondary-700' : 'bg-gray-100 text-gray-600'}`}
-                  onClick={() => setTodayFilter('confirmed')}
-                >
-                  Confirmées
-                </button>
-              </div>
-              <div className="mt-2 text-xs text-gray-500">
-                Confirmées: {stats.todayAppointmentsBreakdown.confirmed} · Brouillons: {stats.todayAppointmentsBreakdown.draft} · Complétées: {stats.todayAppointmentsBreakdown.completed} · Annulées: {stats.todayAppointmentsBreakdown.cancelled}
-              </div>
+              <h3 className="text-3xl font-bold mt-1">{stats.todayAppointments}</h3>
             </div>
             <div className="w-10 h-10 rounded-lg bg-secondary-100 flex items-center justify-center">
               <Calendar size={20} className="text-secondary-600" />

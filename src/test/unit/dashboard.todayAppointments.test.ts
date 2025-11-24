@@ -32,8 +32,8 @@ vi.mock('../../utils/auditLogger', () => ({
 describe('DashboardService.getDashboardStats', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('counts today consultations by consultation date and excludes initial', async () => {
+  it("compte uniquement les rendez‑vous programmés du jour", async () => {
     const stats = await DashboardService.getDashboardStats()
-    expect(stats.todayAppointments).toBe(1)
+    expect(stats.todayAppointments).toBe(2)
   })
 })

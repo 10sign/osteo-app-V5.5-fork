@@ -119,9 +119,6 @@ export class DashboardService {
 
   private static async getTodayAppointmentsBreakdown(userId: string): Promise<{ total: number; confirmed: number; completed: number; draft: number; cancelled: number; pending: number; }> {
     try {
-      const consultationsRef = collection(db, 'consultations');
-      const q = query(consultationsRef, where('osteopathId', '==', userId));
-      const snapshot = await getDocs(q);
       const nowLocal = new Date();
       const isToday = (d: Date) => !isNaN(d.getTime()) && d.toDateString() === nowLocal.toDateString();
       let confirmed = 0;
@@ -129,18 +126,47 @@ export class DashboardService {
       let draft = 0;
       let cancelled = 0;
       let pending = 0;
-      for (const docSnap of snapshot.docs) {
-        const data = docSnap.data();
-        const date = toDateSafe(data.date);
-        const isInitial = data.isInitialConsultation === true;
-        const isReal = data.isTestData !== true;
-        if (!isReal || isInitial || !isToday(date)) continue;
-        const status = typeof data.status === 'string' ? data.status : 'draft';
-        if (status === 'confirmed') confirmed++;
-        else if (status === 'completed') completed++;
-        else if (status === 'cancelled') cancelled++;
-        else if (status === 'pending') pending++;
-        else draft++;
+
+      // Consultations du jour (non initiales) — uniquement celles planifiées/confirmées
+      {
+        const consultationsRef = collection(db, 'consultations');
+        const q = query(consultationsRef, where('osteopathId', '==', userId));
+        const snapshot = await getDocs(q);
+        for (const docSnap of snapshot.docs) {
+          const data = docSnap.data();
+          const date = toDateSafe(data.date);
+          const isInitial = data.isInitialConsultation === true;
+          const isReal = data.isTestData !== true;
+          if (!isReal || isInitial || !isToday(date)) continue;
+          const status = typeof data.status === 'string' ? data.status : 'draft';
+          if (status === 'confirmed') {
+            confirmed++;
+          } else {
+            continue;
+          }
+        }
+      }
+
+      // Rendez‑vous du jour sans consultation liée — uniquement statut "scheduled"
+      {
+        const appointmentsRef = collection(db, 'appointments');
+        const q = query(appointmentsRef, where('osteopathId', '==', userId));
+        const snapshot = await getDocs(q);
+        for (const docSnap of snapshot.docs) {
+          const data = docSnap.data();
+          const date = toDateSafe(data.date);
+          const isReal = data.isTestData !== true;
+          if (!isReal || !isToday(date)) continue;
+          // Éviter le double comptage si la consultation existe déjà
+          if (data.consultationId) continue;
+          const statusRaw = typeof data.status === 'string' ? data.status : 'scheduled';
+          if (statusRaw === 'scheduled') {
+            // On comptabilise les rendez‑vous programmés comme "pending" dans le breakdown
+            pending++;
+          } else {
+            continue;
+          }
+        }
       }
       const total = confirmed + completed + draft + cancelled + pending;
       try {
