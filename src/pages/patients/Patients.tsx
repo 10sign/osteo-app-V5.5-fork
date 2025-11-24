@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Search, Plus, Calendar, Users, ArrowDown, ArrowUp, Clock } from 'lucide-react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../../components/ui/Button';
 import NewPatientModal from '../../components/modals/NewPatientModal';
@@ -31,106 +31,81 @@ const Patients: React.FC = () => {
     }
   }, [location]);
   
-  const loadPatients = async () => {
-    if (!auth.currentUser) return;
+  const startPatientsListener = () => {
+    if (!auth.currentUser) return () => {};
 
     setLoading(true);
     setError(null);
 
-    try {
-      const patientsRef = collection(db, 'patients');
-      // Query for all patients belonging to the current user
-      const q = query(
-        patientsRef,
-        where('osteopathId', '==', auth.currentUser!.uid)
-      );
+    const patientsRef = collection(db, 'patients');
+    const q = query(
+      patientsRef,
+      where('osteopathId', '==', auth.currentUser!.uid)
+    );
 
-      const snapshot = await getDocs(q);
-      const patientsList: Patient[] = [];
-      
-      // Traiter chaque document
-      for (const doc of snapshot.docs) {
-        const data = doc.data();
-        
-        // Skip test data patients (but include patients without isTestData field)
-        if (data.isTestData === true) {
-          continue;
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        try {
+          const patientsList: Patient[] = [];
+
+          for (const docSnap of snapshot.docs) {
+            const data = docSnap.data();
+
+            if (data.isTestData === true) {
+              continue;
+            }
+
+            const decryptedData = HDSCompliance.decryptDataForDisplay(
+              data,
+              'patients',
+              auth.currentUser!.uid
+            );
+
+            const patient = {
+              ...decryptedData,
+              id: docSnap.id
+            } as Patient;
+
+            if (patient.createdAt && typeof patient.createdAt === 'string') {
+              patient.createdAtDate = new Date(patient.createdAt);
+            }
+            if (patient.updatedAt && typeof patient.updatedAt === 'string') {
+              patient.updatedAtDate = new Date(patient.updatedAt);
+            }
+
+            patientsList.push(patient);
+          }
+
+          patientsList.sort((a, b) => a.lastName.localeCompare(b.lastName));
+          setPatients(patientsList);
+          setLoading(false);
+        } catch (e) {
+          console.error('Bulk patients listener error:', e);
+          setError('Erreur lors de la récupération des patients');
+          setLoading(false);
         }
-        
-        // Déchiffrer les données si nécessaire
-        const decryptedData = HDSCompliance.decryptDataForDisplay(
-          data,
-          'patients',
-          auth.currentUser.uid
-        );
-        
-        const patient = {
-          ...decryptedData,
-          id: doc.id
-        } as Patient;
-        
-        patientsList.push(patient);
+      },
+      (err) => {
+        console.error('Bulk patients listener error (onSnapshot):', err);
+        setError('Erreur lors de la récupération des patients');
+        setLoading(false);
       }
-      
-      // ✅ Sort by lastName in memory instead of using orderBy
-      patientsList.sort((a, b) => a.lastName.localeCompare(b.lastName));
+    );
 
-      // Convertir les dates en objets Date pour le tri
-      patientsList.forEach(patient => {
-        if (patient.createdAt && typeof patient.createdAt === 'string') {
-          patient.createdAtDate = new Date(patient.createdAt);
-        }
-        if (patient.updatedAt && typeof patient.updatedAt === 'string') {
-          patient.updatedAtDate = new Date(patient.updatedAt);
-        }
-      });
-      
-      const consultationsRef = collection(db, 'consultations');
-      const qc = query(consultationsRef, where('osteopathId', '==', auth.currentUser!.uid));
-      const consultationSnap = await getDocs(qc);
-      const lastByPatient: Record<string, Date> = {};
-      for (const doc of consultationSnap.docs) {
-        const c = doc.data();
-        const rawDate = c.date;
-        const d = rawDate instanceof Date
-          ? rawDate
-          : rawDate && typeof rawDate.toDate === 'function'
-          ? rawDate.toDate()
-          : new Date(rawDate);
-        const pid = c.patientId;
-        if (!pid || isNaN(d.getTime())) continue;
-        const prev = lastByPatient[pid];
-        if (!prev || d > prev) lastByPatient[pid] = d;
-      }
-      patientsList.forEach(p => {
-        const last = lastByPatient[p.id];
-        if (last) p.lastConsultationDate = last;
-      });
-
-      console.log('Loaded patients:', patientsList.length);
-      setPatients(patientsList);
-      
-    } catch (error) {
-      console.error('Error fetching patients:', error);
-      setError('Erreur lors de la récupération des patients');
-    } finally {
-      setLoading(false);
-    }
+    return unsubscribe;
   };
 
   useEffect(() => {
-    loadPatients();
+    const unsubscribe = startPatientsListener();
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
   }, [refreshTrigger]);
 
   // Fonction pour forcer le rechargement de la liste
   const refreshPatientList = () => {
-    console.log('Refreshing patient list...');
-    // Force immediate refresh with cache invalidation
     setRefreshTrigger(prev => prev + 1);
-    // Also call loadPatients directly for immediate effect
-    setTimeout(() => {
-      loadPatients();
-    }, 100);
   };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -396,7 +371,7 @@ const Patients: React.FC = () => {
                           <div className="flex items-center space-x-2">
                             <Calendar size={16} className="text-primary-500" />
                             <div>
-                              <div className="text-sm text-gray-500">Prochain RDV</div>
+                              <div className="text-sm text-gray-500">Prochaine consultation</div>
                               <div className={`font-medium ${
                                 new Date(patient.nextAppointment).getTime() - new Date().getTime() <= 7 * 24 * 60 * 60 * 1000
                                   ? 'text-primary-600'
@@ -407,7 +382,7 @@ const Patients: React.FC = () => {
                             </div>
                           </div>
                         ) : (
-                          <span className="text-sm text-gray-500">Pas de RDV prévu</span>
+                          <span className="text-sm text-gray-500">Aucune prochaine consultation</span>
                         )}
                       </div>
                     </div>

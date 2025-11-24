@@ -757,6 +757,37 @@ export class ConsultationService {
 
       await updateDoc(docRef, finalDataToStore);
       console.log('✅ Consultation updated successfully in Firestore');
+
+      try {
+        const newDate = finalDataToStore.date || existingData.date;
+        const oldDate = existingData.date;
+        const toMs = (d: any) => {
+          if (d && typeof d.toMillis === 'function') return d.toMillis();
+          if (d && typeof d.toDate === 'function') return d.toDate().getTime();
+          if (d instanceof Date) return d.getTime();
+          return Number(d);
+        };
+        if (toMs(newDate) !== toMs(oldDate)) {
+          await AuditLogger.log(
+            AuditEventType.DATA_MODIFICATION,
+            `consultations/${id}`,
+            'update_date',
+            SensitivityLevel.SENSITIVE,
+            'success',
+            { previousDate: oldDate, newDate }
+          );
+        }
+      } catch {
+      }
+
+      try {
+        const patientIdForSync = (finalDataToStore.patientId ?? existingData.patientId) as string | undefined;
+        if (patientIdForSync) {
+          const { AppointmentService } = await import('./appointmentService');
+          await AppointmentService.syncPatientNextAppointment(patientIdForSync);
+        }
+      } catch (syncHeaderError) {
+      }
       
       // ✅ SYNC BIDIRECTIONNELLE (CONSULTATION INITIALE → PATIENT) NON BLOQUANTE
       try {

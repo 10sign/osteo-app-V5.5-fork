@@ -521,11 +521,11 @@ const Statistics: React.FC = () => {
   };
 
   const getAppointmentsPeriodLabel = () => {
-    if (selectedPeriod === 'week') return "RDV cette semaine";
-    if (selectedPeriod === 'month') return "RDV ce mois";
-    if (selectedPeriod === 'quarter') return "RDV ce trimestre";
-    if (selectedPeriod === 'year') return "RDV cette année";
-    return "RDV";
+    if (selectedPeriod === 'week') return "Consultations cette semaine";
+    if (selectedPeriod === 'month') return "Consultations ce mois";
+    if (selectedPeriod === 'quarter') return "Consultations ce trimestre";
+    if (selectedPeriod === 'year') return "Consultations cette année";
+    return "Consultations";
   };
 
   if (loading) {
@@ -701,7 +701,7 @@ const Statistics: React.FC = () => {
           <div className="bg-white rounded-xl shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">RDV aujourd'hui</p>
+                <p className="text-sm text-gray-600">Consultations aujourd'hui</p>
                 <p className="text-2xl font-bold text-gray-900">{appointmentStats.today}</p>
               </div>
               <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">

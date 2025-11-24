@@ -26,7 +26,7 @@ import {
   ZoomOut,
   RefreshCcw
 } from 'lucide-react';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { setupSafeSnapshot } from '../../utils/firestoreListener';
 import { db, auth } from '../../firebase/config';
 import { Button } from '../../components/ui/Button';
@@ -437,6 +437,7 @@ const PatientDetail: React.FC = () => {
 
     let consultationsUnsubscribe: () => void = () => {};
     let invoicesUnsubscribe: () => void = () => {};
+    let patientUnsubscribe: () => void = () => {};
 
     (async () => {
       // Consultations listener
@@ -470,11 +471,30 @@ const PatientDetail: React.FC = () => {
       }, (err) => {
         console.error('Invoices listener error in PatientDetail:', err);
       });
+
+      // Patient document listener (real-time header sync)
+      const patientRef = doc(db, 'patients', id);
+      patientUnsubscribe = onSnapshot(patientRef, (snap) => {
+        try {
+          if (!snap.exists()) return;
+          const data = snap.data();
+          if (data.osteopathId !== auth.currentUser!.uid) return;
+          const decrypted = HDSCompliance.decryptDataForDisplay(data, 'patients', auth.currentUser!.uid);
+          const updatedPatient: Patient = { ...decrypted, id } as Patient;
+          setPatient(updatedPatient);
+          patientCache.set(id, updatedPatient);
+        } catch (e) {
+          console.error('Patient listener error in PatientDetail:', e);
+        }
+      }, (err) => {
+        console.error('Patient listener error (onSnapshot) in PatientDetail:', err);
+      });
     })();
 
     return () => {
       consultationsUnsubscribe();
       invoicesUnsubscribe();
+       patientUnsubscribe();
     };
   }, [id, loadConsultations, loadInvoices]);
 
@@ -949,7 +969,7 @@ const PatientDetail: React.FC = () => {
                   </span>
                 </div>
               ) : (
-                <span className="text-gray-500">Aucune consultation prévue</span>
+                <span className="text-gray-500">Aucune prochaine consultation</span>
               )}
             </div>
           </div>

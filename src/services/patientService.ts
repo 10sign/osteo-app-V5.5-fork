@@ -377,6 +377,12 @@ export class PatientService {
         { fields: Object.keys(updates) }
       );
 
+      try {
+        const { AppointmentService } = await import('./appointmentService');
+        await AppointmentService.syncPatientNextAppointment(patientId);
+      } catch (syncError) {
+      }
+
       // ✅ SYNCHRONISATION AUTOMATIQUE DE LA CONSULTATION INITIALE
       // Après la mise à jour du patient, synchroniser automatiquement sa consultation initiale
       // avec les nouvelles données du dossier patient

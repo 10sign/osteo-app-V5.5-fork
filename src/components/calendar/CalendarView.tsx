@@ -13,14 +13,10 @@ import {
   addMonths,
   subWeeks,
   subMonths,
-  subDays,
-  isWithinInterval,
-  isFuture,
-  startOfDay,
-  endOfDay
+  subDays
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Clock, User, Edit, Trash2, FileText, Plus, History, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Edit, Trash2, FileText, Plus, History, X } from 'lucide-react';
 import { Button } from '../ui/Button';
 import NewConsultationModal from '../modals/NewConsultationModal';
 
@@ -119,6 +115,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     console.log('Time slot clicked - preselected patient:', preselectedPatientId, preselectedPatientName);
     console.log('Selected slot:', { date: day, hour });
     setIsNewConsultationModalOpen(true);
+    if (onTimeSlotClick) {
+      try {
+        onTimeSlotClick(day, hour);
+      } catch {}
+    }
   };
 
   // Handle new appointment success
@@ -692,7 +693,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                   {appointments.length === 0 && (
                     <div className="w-full h-full min-h-[40px] sm:min-h-[60px] border border-dashed border-gray-200 rounded-lg flex items-center justify-center">
                       <span className="text-xs sm:text-sm text-gray-400">
-                        {isMobileScreen ? "Ajouter RDV" : "Cliquez pour ajouter un rendez-vous"}
+                        {isMobileScreen ? "Ajouter une consultation" : "Cliquez pour ajouter une consultation"}
                       </span>
                     </div>
                   )}
