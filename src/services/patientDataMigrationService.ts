@@ -10,7 +10,7 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { HDSCompliance } from '../utils/hdsCompliance';
+import { HDSCompliance, cleanFirestoreData } from '../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 
 interface MigrationResult {
@@ -154,7 +154,7 @@ export class PatientDataMigrationService {
 
           // Mettre à jour le patient
           const patientRef = doc(db, 'patients', patientId);
-          await updateDoc(patientRef, encryptedData);
+          await updateDoc(patientRef, cleanFirestoreData(encryptedData));
 
           result.patientsUpdated++;
           result.details.push({

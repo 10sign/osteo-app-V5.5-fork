@@ -8,7 +8,8 @@ import {
   updateDoc, 
   deleteDoc,
   addDoc,
-  Timestamp 
+  Timestamp,
+  deleteField 
 } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
@@ -473,7 +474,7 @@ export class DataMigrationService {
       const formatted = futureAppointments[0].dateObj.toISOString().substring(0, 16) + ':00';
       await updateDoc(patientRef, { nextAppointment: formatted, updatedAt: new Date().toISOString() });
     } else {
-      await updateDoc(patientRef, { nextAppointment: null, updatedAt: new Date().toISOString() });
+      await updateDoc(patientRef, { nextAppointment: deleteField(), updatedAt: new Date().toISOString() });
     }
   }
 

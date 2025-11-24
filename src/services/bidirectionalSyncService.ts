@@ -8,7 +8,7 @@
 
 import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { HDSCompliance } from '../utils/hdsCompliance';
+import { HDSCompliance, cleanFirestoreData } from '../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 
 interface SyncResult {
@@ -108,13 +108,8 @@ export class BidirectionalSyncService {
         osteopathId
       );
 
-      // 7. Filtrer les valeurs undefined/null
-      const cleanedUpdates = Object.fromEntries(
-        Object.entries(encryptedUpdates).filter(([_, value]) => value !== undefined && value !== null)
-      );
-
-      // 8. Mettre à jour le patient dans Firestore
-      await updateDoc(patientRef, cleanedUpdates);
+      // 7–8. Nettoyer les données (retire undefined, conserve null) et mettre à jour
+      await updateDoc(patientRef, cleanFirestoreData(encryptedUpdates));
 
       console.log('  ✅ Dossier patient synchronisé avec succès');
       result.success = true;

@@ -1,4 +1,4 @@
-import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, setDoc, deleteField } from 'firebase/firestore';
 import { db, auth, hdsConfig } from '../firebase/config';
 import { encryptData, decryptData, pseudonymizeData, isEncrypted, isValidEncryptedFormat, attemptDataRepair } from './encryption';
 import { AuditLogger, AuditEventType, SensitivityLevel } from './auditLogger';
@@ -38,6 +38,24 @@ function convertTimestampsToISOStrings(obj: any): any {
   
   // Pour les types primitifs, retourner tel quel
   return obj;
+}
+
+export function cleanFirestoreData(data: any): any {
+  if (data === undefined) return undefined;
+  if (data === null) return null;
+  if (Array.isArray(data)) {
+    return data.map((item) => cleanFirestoreData(item)).filter((v) => v !== undefined);
+  }
+  if (typeof data === 'object') {
+    const result: any = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (v === undefined) continue;
+      const cleaned = cleanFirestoreData(v as any);
+      if (cleaned !== undefined) result[k] = cleaned;
+    }
+    return result;
+  }
+  return data;
 }
 
 // Champs sensibles par collection
@@ -558,7 +576,8 @@ export class HDSCompliance {
       };
       
       // Mise à jour dans Firestore
-      await updateDoc(docRef, updatesWithEncryption);
+      const cleanedUpdates = cleanFirestoreData(updatesWithEncryption);
+      await updateDoc(docRef, cleanedUpdates);
       
       // Journalisation de l'opération
       await AuditLogger.log(

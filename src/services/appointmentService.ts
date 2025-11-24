@@ -8,7 +8,8 @@ import {
   query, 
   where, 
   getDocs, 
-  Timestamp 
+  Timestamp,
+  deleteField
 } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
@@ -429,7 +430,7 @@ export class AppointmentService {
       } else {
         // Aucun rendez-vous futur, effacer le champ nextAppointment
         await updateDoc(patientRef, {
-          nextAppointment: null,
+          nextAppointment: deleteField(),
           updatedAt: new Date().toISOString()
         });
         
