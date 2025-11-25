@@ -1,4 +1,4 @@
-import { doc, updateDoc, getDoc, setDoc, deleteField } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { db, auth, hdsConfig } from '../firebase/config';
 import { encryptData, decryptData, pseudonymizeData, isEncrypted, isValidEncryptedFormat, attemptDataRepair } from './encryption';
 import { AuditLogger, AuditEventType, SensitivityLevel } from './auditLogger';

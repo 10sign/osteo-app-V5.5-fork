@@ -143,7 +143,7 @@ export class PatientDataMigrationService {
           }
 
           // Chiffrer les données avant la mise à jour
-          const encryptedData = HDSCompliance.encryptDataForStorage(
+          const encryptedData = HDSCompliance.prepareDataForStorage(
             fieldsToUpdate,
             'patients',
             osteopathId

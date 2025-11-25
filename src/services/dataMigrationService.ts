@@ -15,9 +15,9 @@ import { db, auth } from '../firebase/config';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';
 import { AppointmentService } from './appointmentService';
 // Analytics supprimés: retirer les imports et utiliser des stubs locaux
-const trackEvent = () => {};
-const trackMatomoEvent = () => {};
-const trackGAEvent = () => {};
+const trackEvent = (..._args: unknown[]) => {};
+const trackMatomoEvent = (..._args: unknown[]) => {};
+const trackGAEvent = (..._args: unknown[]) => {};
 
 /**
  * Service pour la migration des données de test vers des données réelles

@@ -6,7 +6,7 @@
  * 2. Consultation initiale → Dossier patient (NOUVEAU)
  */
 
-import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { HDSCompliance, cleanFirestoreData } from '../utils/hdsCompliance';
 import { AuditLogger, AuditEventType, SensitivityLevel } from '../utils/auditLogger';

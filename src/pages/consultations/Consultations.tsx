@@ -280,9 +280,7 @@ const Consultations: React.FC = () => {
       }
       const consultationsQuery = query(
         consultationsRef,
-        where('osteopathId', '==', auth.currentUser.uid),
-        where('date', '>=', Timestamp.fromDate(rangeStart)),
-        where('date', '<=', Timestamp.fromDate(rangeEnd))
+        where('osteopathId', '==', auth.currentUser.uid)
       );
 
       console.log('📡 Executing consultations query...');
@@ -364,7 +362,7 @@ const Consultations: React.FC = () => {
             continue;
           }
 
-          // Utiliser le snapshot de nom patient stocké dans la consultation (évite N+1)
+          
           const patientName = consultationData.patientName || 'Patient inconnu';
 
           // Création de l'objet rendez-vous mappé depuis la consultation
@@ -389,6 +387,10 @@ const Consultations: React.FC = () => {
           };
 
           mappedConsultationsData.push(mappedAppointment);
+          if (mappedAppointment.date < rangeStart || mappedAppointment.date > rangeEnd) {
+            mappedConsultationsData.pop();
+            continue;
+          }
           console.log('✅ Successfully processed consultation:', mappedAppointment.id, {
             patient: mappedAppointment.patientName,
             date: mappedAppointment.date.toISOString(),
