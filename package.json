@@ -59,7 +59,7 @@
     "vitest": "^3.2.4"
   },
   "optionalDependencies": {
-    "@modelcontextprotocol/sdk": "^1.21.1",
+    "@modelcontextprotocol/sdk": "^1.23.0",
     "firebase-admin": "^12.7.0"
   }
 }
