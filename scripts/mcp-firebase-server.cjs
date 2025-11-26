@@ -1,8 +1,18 @@
 const admin = require('firebase-admin')
+let McpServer
+let StdioServerTransport
+try {
+  ({ McpServer } = require('@modelcontextprotocol/sdk/server/mcp'))
+  ({ StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio'))
+} catch (_) {}
 
 async function main() {
-  const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js')
-  const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js')
+  if (!McpServer || !StdioServerTransport) {
+    const mcp = await import('@modelcontextprotocol/sdk/server/mcp.js')
+    const stdio = await import('@modelcontextprotocol/sdk/server/stdio.js')
+    McpServer = mcp.McpServer
+    StdioServerTransport = stdio.StdioServerTransport
+  }
   const projectId = process.env.FIREBASE_PROJECT_ID
   if (!admin.apps.length) {
     admin.initializeApp({ credential: admin.credential.applicationDefault(), projectId })
