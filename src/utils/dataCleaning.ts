@@ -57,9 +57,11 @@ export function cleanDecryptedField(
   // Vérifier si c'est une valeur par défaut
   const isDefaultValue = defaultValues.includes(stringValue.trim());
 
-  // Vérifier les caractères de remplacement UTF-8 ou caractères non imprimables
-  const hasInvalidChars = stringValue.includes('�') ||
-                         stringValue.match(/[^\x20-\x7E\u00C0-\u017F\u0100-\u024F\u0400-\u04FF]/);
+  // Vérifier les caractères de remplacement UTF-8 ou caractères de contrôle non autorisés
+  // Autoriser les sauts de ligne (\n), retours chariot (\r) et tabulations (\t) pour les textes multi-lignes
+  const hasInvalidUtfReplacement = stringValue.includes('�');
+  const hasDisallowedControlChars = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(stringValue);
+  const hasInvalidChars = hasInvalidUtfReplacement || hasDisallowedControlChars;
 
   // Si c'est pour l'édition et qu'il y a un problème, retourner une chaîne vide
   if (forEditing && (hasErrorMarker || isDefaultValue || hasInvalidChars)) {
@@ -101,7 +103,7 @@ export function isCorruptedData(value: any): boolean {
   
   return errorMarkers.some(marker => stringValue.includes(marker)) ||
          stringValue.includes('�') ||
-         !!stringValue.match(/[^\x20-\x7E\u00C0-\u017F\u0100-\u024F\u0400-\u04FF]/);
+         /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(stringValue);
 }
 
 /**
